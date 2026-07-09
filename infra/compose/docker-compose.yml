@@ -1,0 +1,365 @@
+name: justmail
+
+x-logging: &default-logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+services:
+  # ── core ──────────────────────────────────────────────────────────────────
+  traefik:
+    # v3.4's docker provider pins API 1.24; Docker 29 requires >=1.40
+    image: traefik:v3.7
+    profiles: [core]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=justmail_edge
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --certificatesresolvers.cloudflare.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.cloudflare.acme.storage=/acme/acme.json
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+      # No resolvers= override: lego then checks the domain's authoritative
+      # Cloudflare NS directly, which avoids public-recursive NXDOMAIN caching.
+      # delaybeforecheck gives Cloudflare a moment to propagate.
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.delaybeforecheck=15s
+      - --log.level=INFO
+      - --accesslog=true
+    environment:
+      CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../services/traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-acme:/acme
+    networks: [edge]
+    logging: *default-logging
+
+  postgres:
+    image: postgres:17-alpine
+    profiles: [core]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MAILPLANE_DB_PASSWORD: ${MAILPLANE_DB_PASSWORD}
+    command: >-
+      postgres -c shared_buffers=1GB -c effective_cache_size=4GB
+      -c max_connections=200 -c wal_compression=zstd
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../services/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    profiles: [core]
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    volumes: [redisdata:/data]
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    logging: *default-logging
+
+  # ── mail data plane ───────────────────────────────────────────────────────
+  postfix:
+    build: { context: ../docker/postfix }
+    profiles: [mail]
+    restart: unless-stopped
+    hostname: ${JM_HOSTNAME}
+    ports: ["25:25", "465:465", "587:587"]
+    environment:
+      JM_HOSTNAME: ${JM_HOSTNAME}
+      JM_DOMAIN: ${JM_DOMAIN}
+      MAILPLANE_DB_PASSWORD: ${MAILPLANE_DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      OUTBOUND_MODE: ${OUTBOUND_MODE}
+      RELAYHOST: ${RELAYHOST}
+      RELAYHOST_USER: ${RELAYHOST_USER}
+      RELAYHOST_PASSWORD: ${RELAYHOST_PASSWORD}
+      MESSAGE_SIZE_LIMIT: ${MESSAGE_SIZE_LIMIT}
+    volumes:
+      - ../services/postfix:/opt/justmail/templates:ro
+      - postfix-spool:/var/spool/postfix
+      - certs:/certs:ro
+    networks: [mail, data]
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *default-logging
+
+  dovecot:
+    build: { context: ../docker/dovecot }
+    profiles: [mail]
+    restart: unless-stopped
+    hostname: ${JM_HOSTNAME}
+    ports: ["993:993", "995:995", "4190:4190"]
+    environment:
+      JM_HOSTNAME: ${JM_HOSTNAME}
+      MAILPLANE_DB_PASSWORD: ${MAILPLANE_DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ../services/dovecot:/opt/justmail/templates:ro
+      - vmail:/var/vmail
+      - certs:/certs:ro
+    networks: [mail, data]
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *default-logging
+
+  rspamd:
+    image: rspamd/rspamd:3.11
+    profiles: [mail]
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - ../services/rspamd:/etc/rspamd/local.d:ro
+      - rspamd-data:/var/lib/rspamd
+      - dkim-keys:/var/lib/rspamd/dkim
+    networks: [mail, data]
+    logging: *default-logging
+
+  clamav:
+    image: clamav/clamav:stable
+    profiles: [mail]
+    restart: unless-stopped
+    volumes: [clamav-db:/var/lib/clamav]
+    networks: [mail]
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh"]
+      interval: 60s
+      start_period: 300s
+    logging: *default-logging
+
+  certd:
+    build: { context: ../docker/certd }
+    profiles: [certs]
+    restart: unless-stopped
+    environment:
+      CF_Token: ${CLOUDFLARE_API_TOKEN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      JM_HOSTNAME: ${JM_HOSTNAME}
+      JM_DOMAIN: ${JM_DOMAIN}
+    volumes: [certs:/certs, acme-state:/acme.sh]
+    networks: [edge]
+    logging: *default-logging
+
+  # ── application (built in Phase 11) ──────────────────────────────────────
+  api:
+    build: { context: ../.., dockerfile: infra/docker/api/Dockerfile }
+    profiles: [app]
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      NODE_ENV: production
+    volumes: [dkim-keys:/var/lib/justmail/dkim]
+    networks: [edge, data, mail]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.api.rule: Host(`${JM_API_HOST}`)
+      traefik.http.routers.api.entrypoints: websecure
+      traefik.http.routers.api.tls.certresolver: cloudflare
+      traefik.http.services.api.loadbalancer.server.port: "4000"
+      # MTA-STS policy is served by the API from /.well-known/mta-sts.txt.
+      # For every hosted mail domain we host mta-sts.<domain> (single-host cert per).
+      traefik.http.routers.mtasts.rule: HostRegexp(`^mta-sts\..+$`)
+      traefik.http.routers.mtasts.entrypoints: websecure
+      traefik.http.routers.mtasts.tls.certresolver: cloudflare
+      traefik.http.routers.mtasts.service: api
+    logging: *default-logging
+
+  worker:
+    build: { context: ../.., dockerfile: infra/docker/api/Dockerfile }
+    profiles: [app]
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      NODE_ENV: production
+    volumes: [dkim-keys:/var/lib/justmail/dkim]
+    networks: [data, mail]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    logging: *default-logging
+
+  web:
+    build: { context: ../.., dockerfile: infra/docker/web/Dockerfile }
+    profiles: [app]
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: https://${JM_API_HOST}
+    networks: [edge]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.web.rule: Host(`${JM_WEB_HOST}`)
+      traefik.http.routers.web.entrypoints: websecure
+      traefik.http.routers.web.tls.certresolver: cloudflare
+      traefik.http.services.web.loadbalancer.server.port: "3000"
+    logging: *default-logging
+
+  # ── observability ─────────────────────────────────────────────────────────
+  vector:
+    image: timberio/vector:0.47.0-alpine
+    profiles: [obs]
+    restart: unless-stopped
+    environment:
+      EVENTS_INGEST_TOKEN: ${EVENTS_INGEST_TOKEN}
+    volumes:
+      - ../services/vector/vector.yaml:/etc/vector/vector.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - maillog:/var/log/justmail
+    networks: [observability, edge]
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:3.4.2
+    profiles: [obs]
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ../services/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    networks: [observability]
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:v3.3.0
+    profiles: [obs]
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=30d"]
+    volumes:
+      - ../services/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    networks: [observability, mail, data]
+    logging: *default-logging
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    profiles: [obs]
+    restart: unless-stopped
+    pid: host
+    volumes: ["/:/host:ro,rslave"]
+    command: ["--path.rootfs=/host"]
+    networks: [observability]
+    logging: *default-logging
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    profiles: [obs]
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [observability]
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    profiles: [obs]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: https://${JM_GRAFANA_HOST}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../services/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks: [observability, edge]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.grafana.rule: Host(`${JM_GRAFANA_HOST}`)
+      traefik.http.routers.grafana.entrypoints: websecure
+      traefik.http.routers.grafana.tls.certresolver: cloudflare
+      traefik.http.services.grafana.loadbalancer.server.port: "3000"
+    logging: *default-logging
+
+  # ── security ──────────────────────────────────────────────────────────────
+  fail2ban:
+    image: crazymax/fail2ban:latest
+    profiles: [sec]
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW]
+    volumes:
+      - ../services/fail2ban/justmail.conf:/data/jail.d/justmail.conf:ro
+      - ../services/fail2ban/filter.d:/data/filter.d:ro
+      - maillog:/var/log/justmail:ro
+      - fail2ban-data:/data/db
+    logging: *default-logging
+
+  # CalDAV/CardDAV sidecar. Auth passes through to the API which brokers to
+  # Dovecot's userdb, so mail credentials also unlock calendar/contacts at
+  # https://caldav.<JM_DOMAIN>/dav/<user>/.
+  radicale:
+    # Upstream tomsquest/docker-radicale doesn't publish an explicit :3 tag;
+    # `latest` tracks the 3.x line.
+    image: tomsquest/docker-radicale:latest
+    profiles: [app]
+    restart: unless-stopped
+    environment:
+      RADICALE_CONFIG: /etc/radicale/config
+    volumes:
+      - ../services/radicale/config:/etc/radicale/config:ro
+      - radicale-data:/data
+    networks: [edge, data]
+    depends_on:
+      api: { condition: service_started }
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.caldav.rule: Host(`caldav.${JM_DOMAIN}`)
+      traefik.http.routers.caldav.entrypoints: websecure
+      traefik.http.routers.caldav.tls.certresolver: cloudflare
+      traefik.http.services.caldav.loadbalancer.server.port: "5232"
+    logging: *default-logging
+
+networks:
+  edge: {}
+  mail: {}
+  data: {}
+  observability: {}
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  vmail: {}
+  postfix-spool: {}
+  certs: {}
+  acme-state: {}
+  traefik-acme: {}
+  rspamd-data: {}
+  dkim-keys: {}
+  clamav-db: {}
+  loki-data: {}
+  prom-data: {}
+  grafana-data: {}
+  maillog: {}
+  fail2ban-data: {}
+  radicale-data: {}

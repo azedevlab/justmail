@@ -1,0 +1,62 @@
+# Vector: ships mail-stack container logs to Loki (raw) and the API (parsed events),
+# and writes auth-failure lines to a file for Fail2Ban.
+
+sources:
+  docker:
+    type: docker_logs
+    include_labels: ["com.docker.compose.project=justmail"]
+
+transforms:
+  # docker_logs exposes container labels under .label (singular).
+  # string() is fallible on untyped fields, so `??` is required there;
+  # VRL rejects `??` on infallible expressions (E651).
+  mail_only:
+    type: filter
+    inputs: [docker]
+    condition: >-
+      includes(["postfix","dovecot","rspamd"], string(.label."com.docker.compose.service") ?? "")
+
+  tag_service:
+    type: remap
+    inputs: [mail_only]
+    source: |
+      .service = string(.label."com.docker.compose.service") ?? "unknown"
+      .message = string(.message) ?? ""
+
+  auth_failures:
+    type: filter
+    inputs: [tag_service]
+    condition: >-
+      contains(string(.message) ?? "", "auth failed") ||
+      contains(string(.message) ?? "", "authentication failure") ||
+      contains(string(.message) ?? "", "SASL LOGIN authentication failed") ||
+      contains(string(.message) ?? "", "SASL PLAIN authentication failed")
+
+sinks:
+  loki:
+    type: loki
+    inputs: [tag_service]
+    endpoint: http://loki:3100
+    encoding: { codec: text }
+    labels:
+      job: mail
+      service: "{{ service }}"
+
+  api_events:
+    type: http
+    inputs: [tag_service]
+    uri: http://api:4000/internal/events/ingest
+    method: post
+    # only_fields: full docker_logs events carry label/host metadata that
+    # blows past the API's JSON body limit when batched
+    encoding: { codec: json, only_fields: [service, message, timestamp] }
+    batch: { max_events: 100, timeout_secs: 2 }
+    request:
+      headers:
+        x-ingest-token: "${EVENTS_INGEST_TOKEN}"
+
+  fail2ban_file:
+    type: file
+    inputs: [auth_failures]
+    path: /var/log/justmail/auth-failures.log
+    encoding: { codec: text }

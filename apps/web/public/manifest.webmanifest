@@ -1,0 +1,13 @@
+{
+  "name": "JustMail",
+  "short_name": "JustMail",
+  "description": "Self-hosted mail platform admin console and webmail.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

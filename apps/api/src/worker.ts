@@ -1,0 +1,53 @@
+import "reflect-metadata";
+import { NestFactory } from "@nestjs/core";
+import { Logger } from "@nestjs/common";
+import { AppModule } from "./app.module";
+import { Db } from "./db/db.service";
+import { runMigrations } from "./db/migrate";
+import { WebhooksService } from "./webhooks/webhooks.service";
+import { QueueSnapshotService } from "./worker/queue-snapshot.service";
+import { DnsblService } from "./worker/dnsbl.service";
+
+// Ticks: webhook deliveries every 5s, queue snapshot every 60s, DNSBL check
+// every 30 minutes.
+const WEBHOOK_MS = 5_000;
+const QUEUE_MS = 60_000;
+const DNSBL_MS = 30 * 60_000;
+
+async function main(): Promise<void> {
+  const logger = new Logger("worker");
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    bufferLogs: false,
+  });
+  await runMigrations(app.get(Db).pool);
+  const webhooks = app.get(WebhooksService);
+  const queueSnap = app.get(QueueSnapshotService);
+  const dnsbl = app.get(DnsblService);
+  logger.log("justmail worker up");
+
+  const runners: Array<{ label: string; ms: number; fn: () => Promise<unknown> }> = [
+    { label: "webhooks", ms: WEBHOOK_MS, fn: () => webhooks.tick() },
+    { label: "queue", ms: QUEUE_MS, fn: () => queueSnap.tick() },
+    { label: "dnsbl", ms: DNSBL_MS, fn: () => dnsbl.tick() },
+  ];
+
+  const timers = runners.map((r) =>
+    setInterval(async () => {
+      try {
+        await r.fn();
+      } catch (err) {
+        logger.warn(`${r.label} tick failed: ${(err as Error).message}`);
+      }
+    }, r.ms),
+  );
+
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.on(signal, async () => {
+      timers.forEach(clearInterval);
+      await app.close();
+      process.exit(0);
+    });
+  }
+}
+
+void main();

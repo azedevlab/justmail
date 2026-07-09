@@ -1,0 +1,15 @@
+http:
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        referrerPolicy: strict-origin-when-cross-origin
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true
