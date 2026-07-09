@@ -1,0 +1,5 @@
+hosts = postgres
+user = mailplane
+password = ${MAILPLANE_DB_PASSWORD}
+dbname = ${POSTGRES_DB}
+query = SELECT destinations FROM mail_aliases WHERE source = '%s'

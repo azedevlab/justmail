@@ -1,0 +1,24 @@
+[server]
+hosts = 0.0.0.0:5232
+max_connections = 20
+timeout = 30
+
+[auth]
+# HTTP auth callback: Radicale posts to the API which verifies against Dovecot,
+# so any active mailbox with SMTP enabled can log in with the same credentials.
+type = http_x_remote_user
+htpasswd_filename = /dev/null
+
+[rights]
+type = owner_only
+
+[storage]
+type = multifilesystem
+filesystem_folder = /data/collections
+hook = git add -A && (git diff --cached --quiet || git commit -m "sync") || true
+
+[web]
+type = internal
+
+[logging]
+level = info

@@ -1,0 +1,5 @@
+hosts = postgres
+user = mailplane
+password = ${MAILPLANE_DB_PASSWORD}
+dbname = ${POSTGRES_DB}
+query = SELECT login FROM mail_sender_login WHERE sender = '%s'

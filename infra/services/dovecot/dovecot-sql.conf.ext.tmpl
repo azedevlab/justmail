@@ -1,0 +1,20 @@
+driver = pgsql
+connect = host=postgres dbname=${POSTGRES_DB} user=mailplane password=${MAILPLANE_DB_PASSWORD}
+default_pass_scheme = ARGON2ID
+
+password_query = \
+  SELECT "user", password, \
+    '/var/vmail/' || domain_name || '/' || local_part AS userdb_home, \
+    5000 AS userdb_uid, 5000 AS userdb_gid, \
+    'maildir:/var/vmail/' || domain_name || '/' || local_part || '/Maildir' AS userdb_mail, \
+    '*:storage=' || quota_mb || 'M' AS userdb_quota_rule \
+  FROM mail_auth WHERE "user" = '%u'
+
+user_query = \
+  SELECT '/var/vmail/' || domain_name || '/' || local_part AS home, \
+    'maildir:/var/vmail/' || domain_name || '/' || local_part || '/Maildir' AS mail, \
+    5000 AS uid, 5000 AS gid, \
+    '*:storage=' || quota_mb || 'M' AS quota_rule \
+  FROM mail_auth WHERE "user" = '%u'
+
+iterate_query = SELECT "user" FROM mail_auth
