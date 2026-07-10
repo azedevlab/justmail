@@ -37,6 +37,8 @@ import type {
   Attachment,
   Contact,
   ContactRequest,
+  CalendarEvent,
+  CalendarEventRequest,
 } from "@justmail/contracts";
 import { ApiError, useHotkey } from "@justmail/shared-utils";
 import {
@@ -64,6 +66,7 @@ import {
   Archive,
   ArrowLeft,
   Bold,
+  CalendarDays,
   ChevronRight,
   Clock,
   Download,
@@ -150,6 +153,7 @@ export default function MailboxView() {
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [listW, setListW] = useState(360);
@@ -517,6 +521,15 @@ export default function MailboxView() {
             <RefreshCw size={14} />
           </button>
         </Tooltip>
+        <Tooltip content="Calendar">
+          <button
+            onClick={() => setCalendarOpen(true)}
+            className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
+            aria-label="Calendar"
+          >
+            <CalendarDays size={14} />
+          </button>
+        </Tooltip>
         <Tooltip content="Contacts">
           <button
             onClick={() => setContactsOpen(true)}
@@ -841,6 +854,14 @@ export default function MailboxView() {
           orgId={orgId}
           mailboxId={mailboxId}
           onClose={() => setContactsOpen(false)}
+        />
+      )}
+
+      {calendarOpen && orgId && (
+        <CalendarModal
+          orgId={orgId}
+          mailboxId={mailboxId}
+          onClose={() => setCalendarOpen(false)}
         />
       )}
 
@@ -2500,6 +2521,303 @@ function MultiTextField({
         </Button>
       </div>
     </FormField>
+  );
+}
+
+// ISO instant -> value for <input type="datetime-local"> in the viewer's local
+// time. All-day events are stored at midnight UTC, so their date component is
+// read back in UTC to avoid a timezone-induced off-by-one day.
+function isoToLocalDateTime(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(
+    d.getHours(),
+  )}:${p(d.getMinutes())}`;
+}
+function isoToUtcDate(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+}
+function localDateTimeToIso(v: string): string {
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+function dateToIso(v: string): string {
+  return `${v}T00:00:00.000Z`;
+}
+
+function formatEventWhen(ev: CalendarEvent): string {
+  const start = new Date(ev.starts_at);
+  if (ev.all_day) {
+    return start.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  }
+  return start.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function CalendarModal({
+  orgId,
+  mailboxId,
+  onClose,
+}: {
+  orgId: string;
+  mailboxId: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/calendar/events`;
+  const key = ["calendar", orgId, mailboxId];
+  const list = useQuery({
+    queryKey: key,
+    queryFn: () => api.get<CalendarEvent[]>(base),
+  });
+  const [editing, setEditing] = useState<CalendarEvent | "new" | null>(null);
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/${encodeURIComponent(id)}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      toast({ title: "Event deleted", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Delete failed",
+        tone: "bad",
+      }),
+  });
+
+  const events = list.data ?? [];
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title="Calendar"
+      description="Your events, synced over CalDAV."
+    >
+      {editing !== null ? (
+        <EventForm
+          orgId={orgId}
+          mailboxId={mailboxId}
+          event={editing === "new" ? null : editing}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: key });
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-[var(--color-neutral-800)]">
+              {events.length} {events.length === 1 ? "event" : "events"}
+            </span>
+            <Button
+              variant="primary"
+              size="sm"
+              leadingIcon={<Plus size={13} />}
+              onClick={() => setEditing("new")}
+            >
+              New event
+            </Button>
+          </div>
+          {list.isLoading ? (
+            <div className="py-8 grid place-items-center">
+              <Spinner size={18} />
+            </div>
+          ) : events.length === 0 ? (
+            <Empty
+              icon={<CalendarDays size={20} />}
+              title="No events yet"
+              description="Create your first event to start planning."
+            />
+          ) : (
+            <ul className="max-h-[50vh] overflow-y-auto divide-y divide-[var(--color-border)]">
+              {events.map((ev) => (
+                <li key={ev.id} className="flex items-center gap-3 py-2.5 group">
+                  <div className="w-1 self-stretch rounded-full bg-[var(--color-accent)] shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-medium truncate">
+                      {ev.summary || "(no title)"}
+                    </div>
+                    <div className="text-xs text-[var(--color-neutral-800)] truncate flex items-center gap-1.5">
+                      <Clock size={11} />
+                      {formatEventWhen(ev)}
+                      {ev.location ? ` · ${ev.location}` : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <IconButton
+                      size="sm"
+                      aria-label={`Edit ${ev.summary}`}
+                      onClick={() => setEditing(ev)}
+                    >
+                      <PenLine size={13} />
+                    </IconButton>
+                    <IconButton
+                      size="sm"
+                      aria-label={`Delete ${ev.summary}`}
+                      onClick={() => remove.mutate(ev.id)}
+                    >
+                      <Trash2 size={13} />
+                    </IconButton>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function EventForm({
+  orgId,
+  mailboxId,
+  event,
+  onDone,
+  onCancel,
+}: {
+  orgId: string;
+  mailboxId: string;
+  event: CalendarEvent | null;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { toast } = useToast();
+  const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/calendar/events`;
+  const now = new Date();
+  const defaultStart = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+  const defaultEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+
+  const [summary, setSummary] = useState(event?.summary ?? "");
+  const [allDay, setAllDay] = useState(event?.all_day ?? false);
+  const [startsAt, setStartsAt] = useState(event?.starts_at ?? defaultStart);
+  const [endsAt, setEndsAt] = useState(event?.ends_at ?? defaultEnd);
+  const [location, setLocation] = useState(event?.location ?? "");
+  const [description, setDescription] = useState(event?.description ?? "");
+
+  const save = useMutation({
+    mutationFn: (body: CalendarEventRequest) =>
+      event
+        ? api.put<CalendarEvent>(`${base}/${encodeURIComponent(event.id)}`, body)
+        : api.post<CalendarEvent>(base, body),
+    onSuccess: () => {
+      toast({ title: "Event saved", tone: "ok" });
+      onDone();
+    },
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Save failed",
+        tone: "bad",
+      }),
+  });
+
+  const submit = () => {
+    if (!summary.trim()) return toast({ title: "Title is required", tone: "bad" });
+    if (new Date(endsAt) < new Date(startsAt))
+      return toast({ title: "End must be after start", tone: "bad" });
+    save.mutate({
+      summary: summary.trim(),
+      starts_at: startsAt,
+      ends_at: endsAt,
+      all_day: allDay,
+      location: location.trim() || undefined,
+      description: description.trim() || undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <FormField label="Title">
+        <Input
+          value={summary}
+          onChange={(e) => setSummary(e.target.value)}
+          placeholder="Event title"
+          autoFocus
+        />
+      </FormField>
+      <label className="flex items-center gap-2 text-[13px] select-none cursor-pointer">
+        <input
+          type="checkbox"
+          checked={allDay}
+          onChange={(e) => setAllDay(e.target.checked)}
+          className="accent-[var(--color-accent)]"
+        />
+        All day
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Starts">
+          <input
+            type={allDay ? "date" : "datetime-local"}
+            value={allDay ? isoToUtcDate(startsAt) : isoToLocalDateTime(startsAt)}
+            onChange={(e) =>
+              setStartsAt(
+                allDay ? dateToIso(e.target.value) : localDateTimeToIso(e.target.value),
+              )
+            }
+            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors"
+          />
+        </FormField>
+        <FormField label="Ends">
+          <input
+            type={allDay ? "date" : "datetime-local"}
+            value={allDay ? isoToUtcDate(endsAt) : isoToLocalDateTime(endsAt)}
+            onChange={(e) =>
+              setEndsAt(
+                allDay ? dateToIso(e.target.value) : localDateTimeToIso(e.target.value),
+              )
+            }
+            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors"
+          />
+        </FormField>
+      </div>
+      <FormField label="Location">
+        <Input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="(optional)"
+        />
+      </FormField>
+      <FormField label="Description">
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          placeholder="(optional)"
+          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors resize-y"
+        />
+      </FormField>
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <Button variant="secondary" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={submit}
+          disabled={save.isPending}
+        >
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -29,3 +29,4 @@ export * from "./themes.js";
 export * from "./webmail.js";
 export * from "./events.js";
 export * from "./contacts.js";
+export * from "./calendar.js";
