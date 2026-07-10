@@ -11,7 +11,7 @@ export function Empty({ title, description, action, icon }: EmptyProps) {
   return (
     <div className="rounded-2xl p-12 text-center bg-[var(--color-surface-1)] border border-[var(--color-border)] shadow-[var(--shadow-1)]">
       {icon && (
-        <div className="mx-auto mb-4 w-12 h-12 grid place-items-center rounded-xl bg-[color:rgb(124_92_255/0.10)] text-[var(--color-accent)]">
+        <div className="mx-auto mb-4 w-12 h-12 grid place-items-center rounded-xl bg-[color:rgb(10_132_255/0.10)] text-[var(--color-accent)]">
           {icon}
         </div>
       )}

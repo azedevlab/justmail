@@ -54,20 +54,20 @@ export const neutralLight = [
   "#0B0D10",
 ] as const;
 
-// 12-step brand ramp (purple)
+// 12-step brand ramp (Apple-style blue)
 export const brand = [
-  "#F5F1FF",
-  "#E7DDFF",
-  "#D2BFFF",
-  "#B99CFF",
-  "#9B83FF",
-  "#7C5CFF",
-  "#5C3DFF",
-  "#4B2FE3",
-  "#3A24BE",
-  "#2A1B95",
-  "#1D126D",
-  "#120B4A",
+  "#F2F8FF",
+  "#E3F0FF",
+  "#BFDFFF",
+  "#7ABBFF",
+  "#3D9BFF",
+  "#0A84FF",
+  "#0071E3",
+  "#005CBC",
+  "#004A99",
+  "#003876",
+  "#082B56",
+  "#051E3C",
 ] as const;
 
 export const semantic = {
@@ -126,14 +126,15 @@ export const fontSize = {
 } as const;
 
 export const fontFamily = {
-  sans: '"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-  mono: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace',
-  serif: '"Source Serif Pro", ui-serif, Georgia, serif',
+  sans: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, ui-sans-serif, sans-serif',
+  mono: 'ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Monaco, "Cascadia Mono", "Roboto Mono", monospace',
+  serif: '"New York", ui-serif, Georgia, serif',
 } as const;
 
+// SF Pro ships with optical tracking baked in — no negative body tracking.
 export const letterSpacing = {
-  body: "-0.011em",
-  heading: "-0.02em",
+  body: "0em",
+  heading: "-0.015em",
   label: "0.08em",
 } as const;
 
