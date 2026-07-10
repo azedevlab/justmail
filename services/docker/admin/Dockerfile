@@ -12,11 +12,8 @@ COPY packages/shared-utils/package.json packages/shared-utils/
 COPY packages/theme-engine/package.json packages/theme-engine/
 RUN pnpm install --frozen-lockfile --filter @justmail/admin...
 COPY packages packages
-RUN pnpm --filter '@justmail/contracts' \
-      --filter '@justmail/design-tokens' \
-      --filter '@justmail/shared-utils' \
-      --filter '@justmail/theme-engine' \
-      --filter '@justmail/shared-ui' build
+# Build packages in topological order (pnpm -r honours the dependency graph)
+RUN pnpm -r --filter='./packages/**' build
 COPY apps/admin apps/admin
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @justmail/admin build
