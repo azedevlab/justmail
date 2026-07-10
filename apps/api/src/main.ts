@@ -15,9 +15,9 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
-  // vector batches up to 100 log events (docker caps lines at 16KB) — the
-  // express default of 100kb rejects them with 413
-  app.useBodyParser("json", { limit: "2mb" });
+  // Big enough for vector log batches and webmail sends with base64
+  // attachments (15MB binary ≈ 20MB base64 + JSON overhead).
+  app.useBodyParser("json", { limit: "32mb" });
   // Raw binary chunks for tus.io uploads.
   app.useBodyParser("raw", {
     type: "application/offset+octet-stream",

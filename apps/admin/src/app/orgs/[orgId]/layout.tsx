@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Archive,
@@ -98,6 +98,61 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 const ALL_NAV = NAV_GROUPS.flatMap((g) => g.items);
+
+function timeAgo(iso: string): string {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function NotificationsMenu({ orgId }: { orgId: string }) {
+  const router = useRouter();
+  const recent = useQuery({
+    queryKey: ["audit-recent", orgId],
+    queryFn: () =>
+      api
+        .get<
+          { id: string; action: string; target_type: string | null; created_at: string }[]
+        >(`/v1/orgs/${orgId}/audit?limit=8`)
+        .catch(() => []),
+    refetchInterval: 60_000,
+  });
+  return (
+    <DropdownMenu
+      trigger={
+        <IconButton aria-label="Recent activity">
+          <Bell size={15} />
+        </IconButton>
+      }
+    >
+      <DropdownLabel>Recent activity</DropdownLabel>
+      {(recent.data ?? []).length === 0 && (
+        <div className="px-3 py-4 text-xs text-[var(--color-neutral-800)]">
+          Nothing yet — actions across the org land here.
+        </div>
+      )}
+      {(recent.data ?? []).map((e) => (
+        <DropdownItem
+          key={e.id}
+          onSelect={() => router.push(`/orgs/${orgId}/audit`)}
+        >
+          <span className="flex-1 min-w-0">
+            <span className="block mono text-xs truncate">{e.action}</span>
+            <span className="block text-[11px] text-[var(--color-neutral-800)]">
+              {e.target_type ?? "org"} · {timeAgo(e.created_at)}
+            </span>
+          </span>
+        </DropdownItem>
+      ))}
+      <DropdownSeparator />
+      <DropdownItem onSelect={() => router.push(`/orgs/${orgId}/audit`)}>
+        <FileClock size={14} /> View audit log
+      </DropdownItem>
+    </DropdownMenu>
+  );
+}
 
 export default function OrgLayout({ children }: { children: ReactNode }) {
   const { orgId } = useParams<{ orgId: string }>();
@@ -308,10 +363,10 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
             <Search size={15} />
           </IconButton>
 
-          <Tooltip content="Notifications">
-            <IconButton aria-label="Notifications">
-              <Bell size={15} />
-            </IconButton>
+          <Tooltip content="Recent activity">
+            <span>
+              <NotificationsMenu orgId={orgId} />
+            </span>
           </Tooltip>
 
           <DropdownMenu

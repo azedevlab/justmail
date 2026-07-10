@@ -8,8 +8,10 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { z } from "zod";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
@@ -90,6 +92,33 @@ export class WebmailController {
       decodeURIComponent(folder),
       uid,
     );
+  }
+
+  @Get("folders/:folder/messages/:uid/attachments/:idx")
+  async attachment(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("folder") folder: string,
+    @Param("uid", ParseIntPipe) uid: number,
+    @Param("idx", ParseIntPipe) idx: number,
+    @Res() res: Response,
+  ) {
+    const a = await this.svc.getAttachment(
+      principal,
+      orgId,
+      mailboxId,
+      decodeURIComponent(folder),
+      uid,
+      idx,
+    );
+    res.setHeader("Content-Type", a.mime);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(a.filename)}`,
+    );
+    res.setHeader("Content-Length", String(a.content.length));
+    res.send(a.content);
   }
 
   @Post("folders/:folder/messages/:uid/flags")
