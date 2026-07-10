@@ -24,6 +24,7 @@ import type { SessionPrincipal } from "../auth/auth.service";
 import { AttachmentsService } from "../attachments/attachments.service";
 import { StorageService } from "../storage/storage.service";
 import { ClamavService } from "../av/clamav.service";
+import { SettingsService } from "../settings/settings.service";
 import {
   type CachedCreds,
   WebmailCredentialStore,
@@ -72,6 +73,7 @@ export class WebmailService {
     private readonly attachments: AttachmentsService,
     private readonly storage: StorageService,
     private readonly av: ClamavService,
+    private readonly settings: SettingsService,
   ) {}
 
   /** Arm IDLE-based realtime notifications for the open folder. */
@@ -563,17 +565,17 @@ export class WebmailService {
     );
     const storedBytes = stored.reduce((sum, s) => sum + s.size_bytes, 0);
     const totalCount = (input.attachments?.length ?? 0) + stored.length;
-    if (totalCount > config.WEBMAIL_ATTACHMENT_MAX_COUNT) {
+    const limits = await this.settings.attachmentLimits(orgId);
+    if (totalCount > limits.maxCount) {
       throw new BadRequestException({
         title: "Too many attachments",
-        detail: `Attach at most ${config.WEBMAIL_ATTACHMENT_MAX_COUNT} files.`,
+        detail: `Attach at most ${limits.maxCount} files.`,
       });
     }
-    const maxTotal = config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES;
-    if (inlineBytes + storedBytes > maxTotal) {
+    if (inlineBytes + storedBytes > limits.maxTotalBytes) {
       throw new BadRequestException({
         title: "Attachments too large",
-        detail: `Total attachment size must stay under ${Math.floor(maxTotal / 1_000_000)} MB.`,
+        detail: `Total attachment size must stay under ${Math.floor(limits.maxTotalBytes / 1_000_000)} MB.`,
       });
     }
     const creds = await this.creds(principal, orgId, mailboxId);
