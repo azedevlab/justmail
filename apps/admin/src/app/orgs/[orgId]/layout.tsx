@@ -380,6 +380,10 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
           >
             <DropdownLabel>{me.data.email}</DropdownLabel>
             <DropdownSeparator />
+            <DropdownItem onSelect={() => router.push(`${orgBase}/account`)}>
+              <ShieldCheck size={14} /> Account & security
+            </DropdownItem>
+            <DropdownSeparator />
             <DropdownItem onSelect={() => logout.mutate()} destructive>
               <LogOut size={14} /> Sign out
             </DropdownItem>

@@ -3,7 +3,12 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import type { BootstrapRequest, LoginRequest } from "@justmail/contracts";
+import { startAuthentication } from "@simplewebauthn/browser";
+import type {
+  BootstrapRequest,
+  LoginRequest,
+  PasskeyAuthOptionsResponse,
+} from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
 import {
   AuroraBackdrop,
@@ -74,6 +79,7 @@ function LoginForm({ onDone }: { onDone: () => void }) {
   const [needsTotp, setNeedsTotp] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ssoBusy, setSsoBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const mut = useMutation({
     mutationFn: (body: LoginRequest) => api.post("/v1/auth/login", body),
     onSuccess: onDone,
@@ -86,6 +92,43 @@ function LoginForm({ onDone }: { onDone: () => void }) {
       else setErr((e as Error).message);
     },
   });
+
+  async function continueWithPasskey() {
+    setErr(null);
+    const email = f.getValues("email").trim();
+    if (!email) {
+      setErr("Enter your email to sign in with a passkey.");
+      return;
+    }
+    setPasskeyBusy(true);
+    try {
+      const { challenge_id, options } =
+        await api.post<PasskeyAuthOptionsResponse>(
+          "/v1/auth/passkeys/login/options",
+          { email },
+        );
+      const response = await startAuthentication({
+        optionsJSON: options as Parameters<
+          typeof startAuthentication
+        >[0]["optionsJSON"],
+      });
+      await api.post("/v1/auth/passkeys/login/verify", {
+        challenge_id,
+        response,
+      });
+      onDone();
+    } catch (e) {
+      if ((e as Error)?.name !== "NotAllowedError") {
+        setErr(
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        );
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
 
   async function continueWithSso() {
     setErr(null);
@@ -149,6 +192,15 @@ function LoginForm({ onDone }: { onDone: () => void }) {
       <Button
         type="button"
         variant="secondary"
+        className="w-full"
+        loading={passkeyBusy}
+        onClick={continueWithPasskey}
+      >
+        Sign in with a passkey
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
         className="w-full"
         loading={ssoBusy}
         onClick={continueWithSso}

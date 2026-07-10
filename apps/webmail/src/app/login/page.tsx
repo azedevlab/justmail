@@ -3,7 +3,11 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import type { LoginRequest } from "@justmail/contracts";
+import { startAuthentication } from "@simplewebauthn/browser";
+import type {
+  LoginRequest,
+  PasskeyAuthOptionsResponse,
+} from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
 import {
   AuroraBackdrop,
@@ -26,6 +30,7 @@ export default function LoginPage() {
   const f = useForm<LoginRequest>({ defaultValues: { email: "", password: "" } });
   const [err, setErr] = useState<string | null>(null);
   const [ssoBusy, setSsoBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const mut = useMutation({
     mutationFn: (b: LoginRequest) => api.post("/v1/auth/login", b),
     onSuccess: () => me.refetch(),
@@ -34,6 +39,43 @@ export default function LoginPage() {
         e instanceof ApiError ? e.problem.detail ?? e.problem.title : (e as Error).message,
       ),
   });
+
+  async function continueWithPasskey() {
+    setErr(null);
+    const email = f.getValues("email").trim();
+    if (!email) {
+      setErr("Enter your email to sign in with a passkey.");
+      return;
+    }
+    setPasskeyBusy(true);
+    try {
+      const { challenge_id, options } =
+        await api.post<PasskeyAuthOptionsResponse>(
+          "/v1/auth/passkeys/login/options",
+          { email },
+        );
+      const response = await startAuthentication({
+        optionsJSON: options as Parameters<
+          typeof startAuthentication
+        >[0]["optionsJSON"],
+      });
+      await api.post("/v1/auth/passkeys/login/verify", {
+        challenge_id,
+        response,
+      });
+      me.refetch();
+    } catch (e) {
+      if ((e as Error)?.name !== "NotAllowedError") {
+        setErr(
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        );
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
 
   async function continueWithSso() {
     setErr(null);
@@ -112,6 +154,15 @@ export default function LoginPage() {
           <Button
             type="button"
             variant="secondary"
+            className="w-full"
+            loading={passkeyBusy}
+            onClick={continueWithPasskey}
+          >
+            Sign in with a passkey
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
             className="w-full"
             loading={ssoBusy}
             onClick={continueWithSso}
