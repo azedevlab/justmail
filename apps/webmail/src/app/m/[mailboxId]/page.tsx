@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
@@ -149,6 +150,8 @@ export default function MailboxView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [listW, setListW] = useState(360);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const toggleThread = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -184,6 +187,24 @@ export default function MailboxView() {
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+  };
+
+  // Keyboard resizing for the list/read splitter (WAI-ARIA separator pattern).
+  const nudgeListW = (delta: number) => {
+    setListW((prev) => {
+      const w = Math.min(560, Math.max(280, prev + delta));
+      localStorage.setItem("jm.listWidth", String(w));
+      return w;
+    });
+  };
+  const resizeKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const STEP = 24;
+    if (e.key === "ArrowLeft") nudgeListW(-STEP);
+    else if (e.key === "ArrowRight") nudgeListW(STEP);
+    else if (e.key === "Home") nudgeListW(-560);
+    else if (e.key === "End") nudgeListW(560);
+    else return;
+    e.preventDefault();
   };
 
   const orgId = me.data?.orgs[0]?.id;
@@ -393,11 +414,28 @@ export default function MailboxView() {
   };
 
   useHotkey("c", () => setCompose({}));
-  useHotkey("#", () => openUid && remove.mutate(openUid), { deps: [openUid] });
+  useHotkey("#", () => openUid && setConfirmDelete(true), { deps: [openUid] });
   useHotkey("s", () =>
     openUid && flag.mutate({ uid: openUid, action: "star" }),
     { deps: [openUid] },
   );
+  // `?` carries an implicit Shift, which useHotkey's modifier match rejects, so
+  // bind it directly. Skip while typing in a field.
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => {
+      if (e.key !== "?") return;
+      const t = e.target;
+      if (
+        t instanceof HTMLElement &&
+        (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable)
+      )
+        return;
+      e.preventDefault();
+      setShortcutsOpen((v) => !v);
+    };
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
 
   // While searching, the server returns the matched set; otherwise the loaded
   // folder listing drives the list. Threading and virtualization run over
@@ -641,10 +679,15 @@ export default function MailboxView() {
 
         <div
           role="separator"
+          tabIndex={0}
           aria-orientation="vertical"
           aria-label="Resize message list"
+          aria-valuenow={listW}
+          aria-valuemin={280}
+          aria-valuemax={560}
           onPointerDown={startResize}
-          className="w-[5px] shrink-0 cursor-col-resize border-l border-[var(--color-border)] hover:bg-[color:rgb(10_132_255/0.25)] transition-colors"
+          onKeyDown={resizeKey}
+          className="w-[5px] shrink-0 cursor-col-resize border-l border-[var(--color-border)] hover:bg-[color:rgb(10_132_255/0.25)] focus-visible:bg-[color:rgb(10_132_255/0.4)] focus-visible:outline-none transition-colors"
         />
 
         {/* Read pane */}
@@ -720,9 +763,7 @@ export default function MailboxView() {
                   )}
                   <Tooltip content="Delete (#)">
                     <button
-                      onClick={() => {
-                        if (confirm("Delete this message?")) remove.mutate(openUid);
-                      }}
+                      onClick={() => setConfirmDelete(true)}
                       className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[color:rgb(239_68_68/0.12)] hover:text-[var(--color-bad)] transition-colors"
                       aria-label="Delete"
                     >
@@ -781,7 +822,86 @@ export default function MailboxView() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete message?"
+        description="This moves the message to Trash."
+        confirmLabel="Delete"
+        loading={remove.isPending}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          if (openUid !== null) remove.mutate(openUid);
+          setConfirmDelete(false);
+        }}
+      />
+
+      <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
+  );
+}
+
+function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <Modal open onClose={onCancel} size="sm" title={title} description={description}>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="danger" loading={loading} onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+const SHORTCUTS: { keys: string; label: string }[] = [
+  { keys: "c", label: "Compose new message" },
+  { keys: "s", label: "Star / unstar open message" },
+  { keys: "#", label: "Delete open message" },
+  { keys: "?", label: "Toggle this shortcuts sheet" },
+  { keys: "Esc", label: "Close dialogs and compose" },
+];
+
+function ShortcutsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="sm"
+      title="Keyboard shortcuts"
+      description="Work faster without leaving the keyboard."
+    >
+      <ul className="space-y-1.5">
+        {SHORTCUTS.map((s) => (
+          <li key={s.keys} className="flex items-center justify-between gap-4">
+            <span className="text-[13px] text-[var(--color-neutral-1000)]">
+              {s.label}
+            </span>
+            <KeyHint combo={s.keys} />
+          </li>
+        ))}
+      </ul>
+    </Modal>
   );
 }
 
@@ -1923,6 +2043,37 @@ function ComposePanel({
   const [scheduleAt, setScheduleAt] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Keep Tab cycling within the compose panel while it is focused. Compose is
+  // non-modal (the mailbox stays clickable), so this only wraps at the edges
+  // rather than blocking pointer interaction elsewhere.
+  useEffect(() => {
+    if (minimized) return;
+    const el = panelRef.current;
+    if (!el) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusables = Array.from(
+        el.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((n) => n.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    el.addEventListener("keydown", onKey);
+    return () => el.removeEventListener("keydown", onKey);
+  }, [minimized]);
   // Bumped on every edit so autosave re-runs; the body itself is read from the
   // contentEditable DOM at save time rather than mirrored into React state.
   const [bodyRev, setBodyRev] = useState(0);
@@ -2203,6 +2354,7 @@ function ComposePanel({
 
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-label="Compose message"
       className="fixed bottom-4 right-4 z-[var(--z-overlay)] w-[560px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden rounded-2xl bg-[var(--color-surface-1)] border border-[var(--color-border-strong)] shadow-[var(--shadow-5)] animate-in fade-in-0 slide-in-from-bottom-3 duration-200"
