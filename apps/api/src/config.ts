@@ -24,6 +24,13 @@ const Env = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
 
+  // ManageSieve (RFC 5804) for uploading per-user filter scripts. STARTTLS is
+  // negotiated on the plaintext port; auth reuses the unlocked mailbox creds.
+  SIEVE_HOST: z.string().default("dovecot"),
+  SIEVE_PORT: z.coerce.number().int().positive().default(4190),
+  SIEVE_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
+  SIEVE_SCRIPT_NAME: z.string().default("justmail"),
+
   // Thumbnail generation (sharp) for image attachments.
   THUMBNAIL_ENABLED: z.coerce.boolean().default(true),
   THUMBNAIL_MAX_DIM: z.coerce.number().int().positive().default(320),
