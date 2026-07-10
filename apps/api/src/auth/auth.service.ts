@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import * as argon2 from "argon2";
 import { authenticator } from "otplib";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import type {
   BootstrapRequest,
   LoginRequest,
@@ -208,6 +208,30 @@ export class AuthService {
       totp_enabled: user.rows[0]?.totp_enabled ?? false,
       passkey_enabled: false,
       orgs: orgs.rows as Me["orgs"],
+    };
+  }
+
+  /** Issue a short-lived signed ticket the client uses to authenticate on
+   *  the WebSocket handshake. HMAC-signed with the platform master key. */
+  async wsTicket(principal: SessionPrincipal): Promise<{ ticket: string; expires_at: string }> {
+    const { rows } = await this.db.query<{ org_id: string }>(
+      "SELECT org_id FROM org_members WHERE user_id = $1",
+      [principal.userId],
+    );
+    const exp = Math.floor(Date.now() / 1000) + 60;
+    const payload = {
+      sessionId: principal.sessionId,
+      userId: principal.userId,
+      orgIds: rows.map((r) => r.org_id),
+      exp,
+    };
+    const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
+    const sig = createHmac("sha256", config.ENCRYPTION_KEY)
+      .update(payloadB64)
+      .digest("base64url");
+    return {
+      ticket: `${payloadB64}.${sig}`,
+      expires_at: new Date(exp * 1000).toISOString(),
     };
   }
 

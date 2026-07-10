@@ -93,6 +93,12 @@ export class AuthController {
     return this.auth.me(principal);
   }
 
+  @Post("ws-ticket")
+  @UseGuards(SessionGuard)
+  wsTicket(@Principal() principal: SessionPrincipal) {
+    return this.auth.wsTicket(principal);
+  }
+
   @Get("sessions")
   @UseGuards(SessionGuard)
   sessions(@Principal() principal: SessionPrincipal) {

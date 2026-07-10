@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
+import { WsAdapter } from "@nestjs/platform-ws";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { config } from "./config";
@@ -17,6 +18,11 @@ async function bootstrap(): Promise<void> {
   // vector batches up to 100 log events (docker caps lines at 16KB) — the
   // express default of 100kb rejects them with 413
   app.useBodyParser("json", { limit: "2mb" });
+  // Raw binary chunks for tus.io uploads.
+  app.useBodyParser("raw", {
+    type: "application/offset+octet-stream",
+    limit: "10mb",
+  });
 
   const ran = await runMigrations(app.get(Db).pool);
   if (ran.length > 0) logger.log(`applied migrations: ${ran.join(", ")}`);
@@ -33,11 +39,18 @@ async function bootstrap(): Promise<void> {
     ],
   });
   app.useGlobalFilters(new ProblemFilter());
-  if (config.JM_WEB_HOST) {
-    app.enableCors({
-      origin: `https://${config.JM_WEB_HOST}`,
-      credentials: true,
-    });
+  app.useWebSocketAdapter(new WsAdapter(app));
+
+  const corsOrigins = [
+    config.JM_WEB_HOST,
+    (config as unknown as { JM_ADMIN_HOST?: string }).JM_ADMIN_HOST,
+    (config as unknown as { JM_WEBMAIL_HOST?: string }).JM_WEBMAIL_HOST,
+    (config as unknown as { JM_LANDING_HOST?: string }).JM_LANDING_HOST,
+  ]
+    .filter((h): h is string => !!h)
+    .map((h) => `https://${h}`);
+  if (corsOrigins.length > 0) {
+    app.enableCors({ origin: corsOrigins, credentials: true });
   }
   app.enableShutdownHooks();
 
