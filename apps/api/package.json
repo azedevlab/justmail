@@ -31,6 +31,7 @@
     "express": "^5.1.0",
     "imapflow": "^1.0.180",
     "ioredis": "^5.4.1",
+    "ldapts": "^8.1.8",
     "nodemailer": "^6.9.16",
     "otplib": "^12.0.1",
     "pg": "^8.16.0",

@@ -20,6 +20,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  Network,
   Palette,
   Puzzle,
   Search,
@@ -76,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/security", label: "Security", icon: <ShieldCheck size={15} /> },
       { href: "/sso", label: "SSO", icon: <Fingerprint size={15} /> },
+      { href: "/ldap", label: "Directory", icon: <Network size={15} /> },
       { href: "/backups", label: "Backups", icon: <Archive size={15} /> },
       { href: "/audit", label: "Audit log", icon: <FileClock size={15} /> },
     ],
