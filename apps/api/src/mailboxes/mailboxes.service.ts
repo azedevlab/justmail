@@ -94,7 +94,8 @@ export class MailboxesService {
   ): Promise<Mailbox> {
     await this.orgs.requireRole(orgId, principal.userId, "admin");
     await this.assertDomain(orgId, domainId, principal.userId);
-    await this.enforceLimits(orgId, domainId);
+    await this.enforceLimits(domainId);
+    await this.orgs.assertQuota(orgId, req.quota_mb);
 
     const passwordHash = await argon2.hash(req.password, ARGON2_OPTS);
     const inserted = await this.db
@@ -139,6 +140,9 @@ export class MailboxesService {
   ): Promise<Mailbox> {
     await this.orgs.requireRole(orgId, principal.userId, "admin");
     await this.get(orgId, id, principal.userId);
+    if (req.quota_mb !== undefined) {
+      await this.orgs.assertQuota(orgId, req.quota_mb, id);
+    }
 
     const sets: string[] = ["updated_at = now()"];
     const values: unknown[] = [id];
@@ -254,7 +258,7 @@ export class MailboxesService {
     if (!rows[0]) throw new NotFoundException({ title: "Domain not found" });
   }
 
-  private async enforceLimits(orgId: string, domainId: string) {
+  private async enforceLimits(domainId: string) {
     const { rows } = await this.db.query<{ n: string; max: number | null }>(
       `SELECT (SELECT count(*) FROM mailboxes WHERE domain_id = $1) AS n,
               (SELECT max_mailboxes FROM domains WHERE id = $1) AS max`,
@@ -267,7 +271,6 @@ export class MailboxesService {
         detail: `Domain caps at ${cap} mailboxes.`,
       });
     }
-    void orgId;
   }
 }
 

@@ -22,6 +22,23 @@ export const UpdateOrgRequest = z.object({
 });
 export type UpdateOrgRequest = z.infer<typeof UpdateOrgRequest>;
 
+export const OrgQuota = z.object({
+  org_id: Uuid,
+  // Allocation ceiling in MB; null means unlimited.
+  storage_quota_mb: z.number().int().nonnegative().nullable(),
+  // Sum of every mailbox's quota_mb in the org (allocated capacity).
+  allocated_mb: z.number().int().nonnegative(),
+  // Sum of actual bytes stored across the org's mailboxes.
+  used_bytes: z.number().int().nonnegative(),
+  mailbox_count: z.number().int().nonnegative(),
+});
+export type OrgQuota = z.infer<typeof OrgQuota>;
+
+export const UpdateQuotaRequest = z.object({
+  storage_quota_mb: z.number().int().nonnegative().nullable(),
+});
+export type UpdateQuotaRequest = z.infer<typeof UpdateQuotaRequest>;
+
 export const OrgMember = z.object({
   user_id: Uuid,
   email: Email,

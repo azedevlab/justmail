@@ -9,6 +9,7 @@ import type {
   CreateOrgRequest,
   Org,
   OrgMember,
+  OrgQuota,
   OrgRole,
   UpdateOrgRequest,
 } from "@justmail/contracts";
@@ -287,6 +288,101 @@ export class OrgsService {
       targetId: userId,
       ip,
     });
+  }
+
+  async getQuota(orgId: string, userId: string): Promise<OrgQuota> {
+    await this.requireRole(orgId, userId, "viewer");
+    return this.computeQuota(orgId);
+  }
+
+  async setQuota(
+    principal: SessionPrincipal,
+    orgId: string,
+    storageQuotaMb: number | null,
+    ip?: string,
+  ): Promise<OrgQuota> {
+    await this.requireRole(orgId, principal.userId, "admin");
+    const usage = await this.computeQuota(orgId);
+    if (storageQuotaMb !== null && storageQuotaMb < usage.allocated_mb) {
+      throw new ConflictException({
+        title: "Quota below current allocation",
+        detail: `Org already allocates ${usage.allocated_mb} MB across ${usage.mailbox_count} mailbox(es).`,
+      });
+    }
+    const { rowCount } = await this.db.query(
+      "UPDATE organizations SET storage_quota_mb = $2, updated_at = now() WHERE id = $1",
+      [orgId, storageQuotaMb],
+    );
+    if (!rowCount) throw new NotFoundException({ title: "Organization not found" });
+    this.audit.log({
+      orgId,
+      actorType: "user",
+      actorId: principal.userId,
+      action: "org.quota.update",
+      targetType: "organization",
+      targetId: orgId,
+      ip,
+      meta: { storage_quota_mb: storageQuotaMb },
+    });
+    return { ...usage, storage_quota_mb: storageQuotaMb };
+  }
+
+  /**
+   * Throws if adding `addMb` of mailbox allocation would push the org past its
+   * storage ceiling. `excludeMailboxId` lets an update recompute without
+   * double-counting the mailbox being resized. No-op when the org is unlimited.
+   */
+  async assertQuota(
+    orgId: string,
+    addMb: number,
+    excludeMailboxId?: string,
+  ): Promise<void> {
+    const { rows } = await this.db.query<{ cap: string | null; used: string }>(
+      `SELECT o.storage_quota_mb AS cap,
+              COALESCE((SELECT sum(m.quota_mb) FROM mailboxes m
+                        JOIN domains d ON d.id = m.domain_id
+                        WHERE d.org_id = $1 AND ($2::uuid IS NULL OR m.id <> $2)), 0) AS used
+       FROM organizations o WHERE o.id = $1`,
+      [orgId, excludeMailboxId ?? null],
+    );
+    const cap = rows[0]?.cap;
+    if (cap === null || cap === undefined) return;
+    const capMb = Number(cap);
+    const projected = Number(rows[0]!.used) + addMb;
+    if (projected > capMb) {
+      throw new ConflictException({
+        title: "Org storage quota exceeded",
+        detail: `Allocating ${addMb} MB would use ${projected} MB of the ${capMb} MB org quota.`,
+      });
+    }
+  }
+
+  private async computeQuota(orgId: string): Promise<OrgQuota> {
+    const { rows } = await this.db.query<{
+      cap: string | null;
+      allocated: string;
+      used: string;
+      n: string;
+    }>(
+      `SELECT o.storage_quota_mb AS cap,
+              COALESCE(sum(m.quota_mb), 0) AS allocated,
+              COALESCE(sum(m.quota_used_bytes), 0) AS used,
+              count(m.id) AS n
+       FROM organizations o
+       LEFT JOIN domains d ON d.org_id = o.id
+       LEFT JOIN mailboxes m ON m.domain_id = d.id
+       WHERE o.id = $1
+       GROUP BY o.storage_quota_mb`,
+      [orgId],
+    );
+    if (!rows[0]) throw new NotFoundException({ title: "Organization not found" });
+    return {
+      org_id: orgId,
+      storage_quota_mb: rows[0].cap === null ? null : Number(rows[0].cap),
+      allocated_mb: Number(rows[0].allocated),
+      used_bytes: Number(rows[0].used),
+      mailbox_count: Number(rows[0].n),
+    };
   }
 
   private async guardLastOwner(orgId: string, userId: string): Promise<void> {
