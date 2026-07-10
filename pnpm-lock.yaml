@@ -129,6 +129,9 @@ importers:
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
       imapflow:
         specifier: ^1.0.180
         version: 1.4.6
