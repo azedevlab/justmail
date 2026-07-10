@@ -9,6 +9,8 @@ import {
   useState,
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type RefObject,
 } from "react";
 import { useForm } from "react-hook-form";
 import type {
@@ -20,6 +22,8 @@ import type {
   ComposeRequest,
   SavedDraft,
   SendResult,
+  Signature,
+  Template,
   Upload,
   Attachment,
 } from "@justmail/contracts";
@@ -34,9 +38,13 @@ import {
   IconButton,
   Input,
   KeyHint,
+  Modal,
   Skeleton,
   Spinner,
-  Textarea,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Tooltip,
   useToast,
   Wordmark,
@@ -44,6 +52,7 @@ import {
 import {
   Archive,
   ArrowLeft,
+  Bold,
   ChevronRight,
   Clock,
   Download,
@@ -52,14 +61,22 @@ import {
   Folder as FolderIcon,
   Forward,
   Inbox,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
   MailOpen,
   Minus,
   Paperclip,
+  PenLine,
+  Plus,
   RefreshCw,
   Reply,
   Search,
+  Settings,
   Star,
   Trash2,
+  Underline,
   X,
 } from "lucide-react";
 import { useMe } from "@/lib/session";
@@ -118,6 +135,7 @@ export default function MailboxView() {
   const [folder, setFolder] = useState("INBOX");
   const [openUid, setOpenUid] = useState<number | null>(null);
   const [compose, setCompose] = useState<ComposeInit | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [listW, setListW] = useState(360);
@@ -448,6 +466,15 @@ export default function MailboxView() {
             <RefreshCw size={14} />
           </button>
         </Tooltip>
+        <Tooltip content="Signatures & templates">
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
+            aria-label="Signatures and templates"
+          >
+            <Settings size={14} />
+          </button>
+        </Tooltip>
         <Button
           variant="primary"
           size="sm"
@@ -735,6 +762,14 @@ export default function MailboxView() {
           mailboxId={mailboxId}
           initial={compose}
           onClose={() => setCompose(null)}
+        />
+      )}
+
+      {settingsOpen && orgId && (
+        <PersonalizationModal
+          orgId={orgId}
+          mailboxId={mailboxId}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </div>
@@ -1052,6 +1087,467 @@ const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 // Idle delay before a compose draft is autosaved to \Drafts.
 const DRAFT_AUTOSAVE_MS = 2500;
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Seed the contentEditable from plain text (reply/forward quotes) preserving
+// line breaks. Rich content is authored in-place thereafter.
+function textToHtml(text: string): string {
+  if (!text) return "";
+  return escapeHtml(text).replace(/\r?\n/g, "<br>");
+}
+
+interface InsertItem {
+  id: string;
+  name: string;
+  onSelect: () => void;
+}
+
+// Compact toolbar dropdown for inserting a signature or template.
+function InsertMenu({
+  icon,
+  label,
+  items,
+  empty,
+}: {
+  icon: ReactNode;
+  label: string;
+  items: InsertItem[];
+  empty: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <Tooltip content={label}>
+        <IconButton
+          size="sm"
+          aria-label={label}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setOpen((o) => !o)}
+        >
+          {icon}
+        </IconButton>
+      </Tooltip>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 w-52 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] py-1 shadow-[var(--shadow-3)] animate-in fade-in-0 slide-in-from-top-1">
+            {items.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-[var(--color-neutral-700)]">
+                {empty}
+              </div>
+            ) : (
+              items.map((it) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    it.onSelect();
+                    setOpen(false);
+                  }}
+                  className="block w-full truncate px-3 py-1.5 text-left text-[13px] hover:bg-[var(--color-surface-3)]"
+                >
+                  {it.name}
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Lightweight rich-text field over a contentEditable region. Formatting uses
+// execCommand — deprecated but still universally implemented and the pragmatic
+// choice for a small composer. Output HTML is sanitized server-side on send.
+function RichTextEditor({
+  editorRef,
+  initialHtml,
+  onInput,
+  toolbarExtra,
+}: {
+  editorRef: RefObject<HTMLDivElement | null>;
+  initialHtml: string;
+  onInput: () => void;
+  toolbarExtra?: ReactNode;
+}) {
+  const exec = (command: string, value?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
+    onInput();
+  };
+  const addLink = () => {
+    const url = window.prompt("Link URL");
+    if (url) exec("createLink", url);
+  };
+  const btn = (
+    aria: string,
+    node: ReactNode,
+    onClick: () => void,
+  ) => (
+    <IconButton
+      size="sm"
+      aria-label={aria}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+    >
+      {node}
+    </IconButton>
+  );
+  return (
+    <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden">
+      <div className="flex items-center gap-0.5 border-b border-[var(--color-border)] px-1.5 py-1">
+        {btn("Bold", <Bold size={14} />, () => exec("bold"))}
+        {btn("Italic", <Italic size={14} />, () => exec("italic"))}
+        {btn("Underline", <Underline size={14} />, () => exec("underline"))}
+        <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
+        {btn("Bulleted list", <List size={14} />, () =>
+          exec("insertUnorderedList"),
+        )}
+        {btn("Numbered list", <ListOrdered size={14} />, () =>
+          exec("insertOrderedList"),
+        )}
+        {btn("Insert link", <Link2 size={14} />, addLink)}
+        <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
+        {toolbarExtra}
+      </div>
+      <div
+        ref={editorRef}
+        role="textbox"
+        aria-multiline="true"
+        aria-label="Message body"
+        contentEditable
+        suppressContentEditableWarning
+        onInput={onInput}
+        dangerouslySetInnerHTML={{ __html: initialHtml }}
+        className="min-h-[220px] max-h-[420px] overflow-y-auto px-3 py-2 text-[14px] leading-relaxed outline-none [&_a]:text-[var(--color-accent)] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+      />
+    </div>
+  );
+}
+
+function PersonalizationModal({
+  orgId,
+  mailboxId,
+  onClose,
+}: {
+  orgId: string;
+  mailboxId: string;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState("signatures");
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title="Signatures & templates"
+      description="Reusable content for the composer, scoped to this mailbox."
+    >
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="signatures">Signatures</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
+        </TabsList>
+        <TabsContent value="signatures">
+          <SignatureManager orgId={orgId} mailboxId={mailboxId} />
+        </TabsContent>
+        <TabsContent value="templates">
+          <TemplateManager orgId={orgId} mailboxId={mailboxId} />
+        </TabsContent>
+      </Tabs>
+    </Modal>
+  );
+}
+
+function SignatureManager({
+  orgId,
+  mailboxId,
+}: {
+  orgId: string;
+  mailboxId: string;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/signatures`;
+  const key = ["signatures", orgId, mailboxId];
+  const list = useQuery({ queryKey: key, queryFn: () => api.get<Signature[]>(base) });
+  const [editing, setEditing] = useState<Signature | "new" | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [isDefault, setIsDefault] = useState(false);
+
+  const startEdit = (s: Signature | "new") => {
+    setEditing(s);
+    setIsDefault(s !== "new" && s.is_default);
+  };
+
+  const save = useMutation({
+    mutationFn: (body: {
+      name: string;
+      html: string;
+      text: string;
+      is_default: boolean;
+    }) =>
+      editing === "new" || editing === null
+        ? api.post<Signature>(base, body)
+        : api.put<Signature>(`${base}/${editing.id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      setEditing(null);
+      toast({ title: "Saved", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title: e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Save failed",
+        tone: "bad",
+      }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      toast({ title: "Deleted", tone: "ok" });
+    },
+  });
+
+  const submit = () => {
+    const name = nameRef.current?.value.trim();
+    if (!name) return toast({ title: "Name is required", tone: "bad" });
+    save.mutate({
+      name,
+      html: editorRef.current?.innerHTML ?? "",
+      text: editorRef.current?.innerText ?? "",
+      is_default: isDefault,
+    });
+  };
+
+  if (editing !== null) {
+    const initialHtml =
+      editing === "new" ? "" : editing.html || textToHtml(editing.text);
+    return (
+      <div className="space-y-3">
+        <FormField label="Name">
+          <Input
+            ref={nameRef}
+            defaultValue={editing === "new" ? "" : editing.name}
+            placeholder="e.g. Work"
+          />
+        </FormField>
+        <FormField label="Signature">
+          <RichTextEditor
+            editorRef={editorRef}
+            initialHtml={initialHtml}
+            onInput={() => {}}
+          />
+        </FormField>
+        <label className="flex items-center gap-2 text-[13px] text-[var(--color-neutral-1000)]">
+          <input
+            type="checkbox"
+            checked={isDefault}
+            onChange={(e) => setIsDefault(e.target.checked)}
+          />
+          Use as default signature
+        </label>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={save.isPending} onClick={submit}>
+            Save
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {list.data?.length === 0 && (
+        <Empty title="No signatures" description="Create one to reuse in the composer." />
+      )}
+      {list.data?.map((s) => (
+        <div
+          key={s.id}
+          className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium truncate">
+              {s.name}
+              {s.is_default && (
+                <span className="ml-2 rounded bg-[var(--color-surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--color-neutral-800)]">
+                  Default
+                </span>
+              )}
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => startEdit(s)}>
+            Edit
+          </Button>
+          <IconButton
+            size="sm"
+            aria-label="Delete signature"
+            onClick={() => remove.mutate(s.id)}
+          >
+            <Trash2 size={14} />
+          </IconButton>
+        </div>
+      ))}
+      <Button
+        variant="secondary"
+        size="sm"
+        leadingIcon={<Plus size={13} />}
+        onClick={() => startEdit("new")}
+      >
+        New signature
+      </Button>
+    </div>
+  );
+}
+
+function TemplateManager({
+  orgId,
+  mailboxId,
+}: {
+  orgId: string;
+  mailboxId: string;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/templates`;
+  const key = ["templates", orgId, mailboxId];
+  const list = useQuery({ queryKey: key, queryFn: () => api.get<Template[]>(base) });
+  const [editing, setEditing] = useState<Template | "new" | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const subjectRef = useRef<HTMLInputElement>(null);
+
+  const save = useMutation({
+    mutationFn: (body: {
+      name: string;
+      subject: string;
+      html: string;
+      text: string;
+    }) =>
+      editing === "new" || editing === null
+        ? api.post<Template>(base, body)
+        : api.put<Template>(`${base}/${editing.id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      setEditing(null);
+      toast({ title: "Saved", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title: e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Save failed",
+        tone: "bad",
+      }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      toast({ title: "Deleted", tone: "ok" });
+    },
+  });
+
+  const submit = () => {
+    const name = nameRef.current?.value.trim();
+    if (!name) return toast({ title: "Name is required", tone: "bad" });
+    save.mutate({
+      name,
+      subject: subjectRef.current?.value ?? "",
+      html: editorRef.current?.innerHTML ?? "",
+      text: editorRef.current?.innerText ?? "",
+    });
+  };
+
+  if (editing !== null) {
+    const initialHtml =
+      editing === "new" ? "" : editing.html || textToHtml(editing.text);
+    return (
+      <div className="space-y-3">
+        <FormField label="Name">
+          <Input
+            ref={nameRef}
+            defaultValue={editing === "new" ? "" : editing.name}
+            placeholder="e.g. Meeting follow-up"
+          />
+        </FormField>
+        <FormField label="Subject">
+          <Input
+            ref={subjectRef}
+            defaultValue={editing === "new" ? "" : editing.subject}
+            placeholder="(optional)"
+          />
+        </FormField>
+        <FormField label="Body">
+          <RichTextEditor
+            editorRef={editorRef}
+            initialHtml={initialHtml}
+            onInput={() => {}}
+          />
+        </FormField>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={save.isPending} onClick={submit}>
+            Save
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {list.data?.length === 0 && (
+        <Empty title="No templates" description="Create one to reuse in the composer." />
+      )}
+      {list.data?.map((t) => (
+        <div
+          key={t.id}
+          className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium truncate">{t.name}</div>
+            {t.subject && (
+              <div className="text-[11px] text-[var(--color-neutral-700)] truncate">
+                {t.subject}
+              </div>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(t)}>
+            Edit
+          </Button>
+          <IconButton
+            size="sm"
+            aria-label="Delete template"
+            onClick={() => remove.mutate(t.id)}
+          >
+            <Trash2 size={14} />
+          </IconButton>
+        </div>
+      ))}
+      <Button
+        variant="secondary"
+        size="sm"
+        leadingIcon={<Plus size={13} />}
+        onClick={() => setEditing("new")}
+      >
+        New template
+      </Button>
+    </div>
+  );
+}
+
 function splitAddresses(value: string): string[] {
   return value
     .split(/[,\s]+/)
@@ -1074,13 +1570,11 @@ function ComposePanel({
     to: string;
     cc: string;
     subject: string;
-    text: string;
   }>({
     defaultValues: {
       to: initial?.to ?? "",
       cc: initial?.cc ?? "",
       subject: initial?.subject ?? "",
-      text: initial?.text ?? "",
     },
   });
   const { toast } = useToast();
@@ -1094,6 +1588,36 @@ function ComposePanel({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  // Bumped on every edit so autosave re-runs; the body itself is read from the
+  // contentEditable DOM at save time rather than mirrored into React state.
+  const [bodyRev, setBodyRev] = useState(0);
+  const initialHtml = useMemo(() => textToHtml(initial?.text ?? ""), [initial]);
+  const bodyText = () => editorRef.current?.innerText ?? "";
+  const bodyHtml = () => editorRef.current?.innerHTML ?? "";
+
+  const signatures = useQuery({
+    queryKey: ["signatures", orgId, mailboxId],
+    queryFn: () =>
+      api.get<Signature[]>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/signatures`,
+      ),
+  });
+  const templates = useQuery({
+    queryKey: ["templates", orgId, mailboxId],
+    queryFn: () =>
+      api.get<Template[]>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/templates`,
+      ),
+  });
+
+  const insertHtml = (html: string) => {
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    document.execCommand("insertHTML", false, html);
+    setBodyRev((r) => r + 1);
+  };
   // Live UID of this compose session's draft, carried across autosaves.
   const draftUidRef = useRef<number | undefined>(initial?.draftUid);
   const savingRef = useRef(false);
@@ -1229,14 +1753,23 @@ function ComposePanel({
   const subject = f.watch("subject");
   const toVal = f.watch("to");
   const ccVal = f.watch("cc");
-  const textVal = f.watch("text");
+
+  // Drop a default signature into a fresh compose once signatures load.
+  const signatureSeeded = useRef(false);
+  useEffect(() => {
+    if (signatureSeeded.current) return;
+    const def = signatures.data?.find((s) => s.is_default);
+    if (!def || !editorRef.current) return;
+    signatureSeeded.current = true;
+    if (def.html) insertHtml(`<br><br>${def.html}`);
+  }, [signatures.data]);
 
   // Autosave to \Drafts after a pause in typing, replacing the prior version so
   // the folder keeps a single live draft per compose session.
   useEffect(() => {
-    const hasContent = [toVal, ccVal, subject, textVal].some((v) =>
-      (v ?? "").trim(),
-    );
+    const hasContent =
+      [toVal, ccVal, subject].some((v) => (v ?? "").trim()) ||
+      bodyText().trim().length > 0;
     if (!hasContent) return;
     const timer = setTimeout(async () => {
       if (savingRef.current) return;
@@ -1248,7 +1781,8 @@ function ComposePanel({
             to: splitAddresses(toVal),
             cc: splitAddresses(ccVal),
             subject,
-            text: textVal,
+            text: bodyText(),
+            html: bodyHtml() || undefined,
             in_reply_to: initial?.in_reply_to,
             references: initial?.references,
             replace_uid: draftUidRef.current,
@@ -1265,7 +1799,7 @@ function ComposePanel({
       }
     }, DRAFT_AUTOSAVE_MS);
     return () => clearTimeout(timer);
-  }, [toVal, ccVal, subject, textVal, orgId, mailboxId, initial]);
+  }, [toVal, ccVal, subject, bodyRev, orgId, mailboxId, initial]);
 
   const submit = (sendAt?: string) =>
     f.handleSubmit(async (v) => {
@@ -1294,11 +1828,13 @@ function ComposePanel({
         }
         setUploading(false);
       }
+      const html = bodyHtml();
       mut.mutate({
         to,
         cc: cc.length > 0 ? cc : undefined,
         subject: v.subject,
-        text: v.text,
+        text: bodyText(),
+        html: html.trim() ? html : undefined,
         attachment_ids: attachmentIds,
         in_reply_to: initial?.in_reply_to,
         references: initial?.references,
@@ -1373,7 +1909,38 @@ function ComposePanel({
           <Input {...f.register("subject")} />
         </FormField>
         <FormField label="Message">
-          <Textarea rows={10} {...f.register("text")} />
+          <RichTextEditor
+            editorRef={editorRef}
+            initialHtml={initialHtml}
+            onInput={() => setBodyRev((r) => r + 1)}
+            toolbarExtra={
+              <>
+                <InsertMenu
+                  icon={<PenLine size={14} />}
+                  label="Signature"
+                  items={(signatures.data ?? []).map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    onSelect: () => insertHtml(s.html || escapeHtml(s.text)),
+                  }))}
+                  empty="No signatures yet"
+                />
+                <InsertMenu
+                  icon={<FileText size={14} />}
+                  label="Template"
+                  items={(templates.data ?? []).map((t) => ({
+                    id: t.id,
+                    name: t.name,
+                    onSelect: () => {
+                      if (t.subject) f.setValue("subject", t.subject);
+                      insertHtml(t.html || escapeHtml(t.text));
+                    },
+                  }))}
+                  empty="No templates yet"
+                />
+              </>
+            }
+          />
         </FormField>
         {files.length > 0 && (
           <ul className="flex flex-wrap gap-2">

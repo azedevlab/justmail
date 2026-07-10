@@ -5,10 +5,11 @@ import { AttachmentsModule } from "../attachments/attachments.module";
 import { SettingsModule } from "../settings/settings.module";
 import { WebmailController } from "./webmail.controller";
 import { WebmailService } from "./webmail.service";
+import { PersonalizationService } from "./personalization.service";
 
 @Module({
   imports: [AuthModule, OrgsModule, AttachmentsModule, SettingsModule],
   controllers: [WebmailController],
-  providers: [WebmailService],
+  providers: [WebmailService, PersonalizationService],
 })
 export class WebmailModule {}

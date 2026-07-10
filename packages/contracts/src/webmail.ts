@@ -199,6 +199,15 @@ export const Signature = z.object({
 });
 export type Signature = z.infer<typeof Signature>;
 
+// html is sanitized server-side on save; the client sends author HTML as-is.
+export const SignatureRequest = z.object({
+  name: z.string().min(1).max(120),
+  html: z.string().max(100_000).default(""),
+  text: z.string().max(50_000).default(""),
+  is_default: z.boolean().default(false),
+});
+export type SignatureRequest = z.infer<typeof SignatureRequest>;
+
 export const Template = z.object({
   id: Uuid,
   name: z.string(),
@@ -207,6 +216,14 @@ export const Template = z.object({
   text: z.string(),
 });
 export type Template = z.infer<typeof Template>;
+
+export const TemplateRequest = z.object({
+  name: z.string().min(1).max(120),
+  subject: z.string().max(998).default(""),
+  html: z.string().max(100_000).default(""),
+  text: z.string().max(50_000).default(""),
+});
+export type TemplateRequest = z.infer<typeof TemplateRequest>;
 
 export const SieveRule = z.object({
   id: Uuid,

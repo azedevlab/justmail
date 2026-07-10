@@ -27,6 +27,7 @@ import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
 import { config } from "../config";
 import { open, seal } from "../common/secretbox";
+import { sanitizeMailHtml } from "../common/html-sanitize";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { AttachmentsService } from "../attachments/attachments.service";
 import { StorageService } from "../storage/storage.service";
@@ -669,6 +670,12 @@ export class WebmailService {
       });
     }
     const creds = await this.creds(principal, orgId, mailboxId);
+    // Sanitize once, at the boundary: the stored payload is what the worker
+    // dispatches, so the wire never carries unsanitized author HTML.
+    const payload: ComposeRequest = {
+      ...input,
+      html: input.html ? sanitizeMailHtml(input.html) : input.html,
+    };
     const scheduled = !!input.send_at;
     const sendAt = resolveSendAt(
       input.send_at ?? null,
@@ -688,7 +695,7 @@ export class WebmailService {
         principal.sessionId,
         creds.address,
         seal(creds.password),
-        JSON.stringify(input),
+        JSON.stringify(payload),
         sendAt.toISOString(),
       ],
     );
@@ -912,7 +919,11 @@ export class WebmailService {
             detail: "This mailbox has no Drafts folder to save into.",
           });
         }
-        const message = await buildDraftMime({ from: creds.address, ...input });
+        const message = await buildDraftMime({
+          from: creds.address,
+          ...input,
+          html: input.html ? sanitizeMailHtml(input.html) : input.html,
+        });
         const appended = await client.append(drafts, message, [
           "\\Draft",
           "\\Seen",
