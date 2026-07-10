@@ -20,7 +20,12 @@ import { Throttle } from "../common/throttle.decorator";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { ComposeRequest, FlagAction, SaveDraftRequest } from "@justmail/contracts";
-import { MoveRequest, UnlockRequest, WebmailService } from "./webmail.service";
+import {
+  MoveRequest,
+  SearchRequest,
+  UnlockRequest,
+  WebmailService,
+} from "./webmail.service";
 
 const FlagBody = z.object({ action: FlagAction });
 
@@ -78,6 +83,23 @@ export class WebmailController {
       mailboxId,
       decodeURIComponent(folder),
       Math.min(Number(limit) || 50, config.WEBMAIL_MESSAGE_LIST_MAX),
+    );
+  }
+
+  @Get("folders/:folder/search")
+  search(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("folder") folder: string,
+    @Query(new ZodPipe(SearchRequest)) query: z.infer<typeof SearchRequest>,
+  ) {
+    return this.svc.search(
+      principal,
+      orgId,
+      mailboxId,
+      decodeURIComponent(folder),
+      query,
     );
   }
 

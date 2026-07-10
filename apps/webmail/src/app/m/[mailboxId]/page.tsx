@@ -75,6 +75,9 @@ type ComposeInit = {
   draftUid?: number;
 };
 
+// Idle delay before the search box issues a server-side IMAP SEARCH.
+const SEARCH_DEBOUNCE_MS = 300;
+
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
@@ -114,6 +117,7 @@ export default function MailboxView() {
   const [openUid, setOpenUid] = useState<number | null>(null);
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const [search, setSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [listW, setListW] = useState(360);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleThread = (id: string) =>
@@ -128,6 +132,12 @@ export default function MailboxView() {
     const saved = Number(localStorage.getItem("jm.listWidth"));
     if (saved >= 280 && saved <= 560) setListW(saved);
   }, []);
+
+  // Debounce the search box so each keystroke doesn't fire an IMAP SEARCH.
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const startResize = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -168,6 +178,16 @@ export default function MailboxView() {
       ),
   });
 
+  const searching = searchTerm.length > 0;
+  const searchResults = useQuery({
+    queryKey: ["search", orgId, mailboxId, folder, searchTerm],
+    enabled: !!orgId && !!folders.data && searching,
+    queryFn: () =>
+      api.get<MessageList>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(folder)}/search?q=${encodeURIComponent(searchTerm)}`,
+      ),
+  });
+
   const message = useQuery({
     queryKey: ["message", orgId, mailboxId, folder, openUid],
     enabled: openUid !== null,
@@ -177,8 +197,10 @@ export default function MailboxView() {
       ),
   });
 
-  const invalidate = () =>
+  const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["messages", orgId, mailboxId, folder] });
+    qc.invalidateQueries({ queryKey: ["search", orgId, mailboxId, folder] });
+  };
 
   const listKey = ["messages", orgId, mailboxId, folder] as const;
   // A flag change (read/star/…) is the highest-frequency event; rather than
@@ -348,18 +370,13 @@ export default function MailboxView() {
     { deps: [openUid] },
   );
 
-  const q = search.trim().toLowerCase();
-  const filtered = (messages.data?.messages ?? []).filter((m) => {
-    if (!q) return true;
-    const sender =
-      m.envelope.from?.[0]?.name ?? m.envelope.from?.[0]?.address ?? "";
-    return (
-      sender.toLowerCase().includes(q) ||
-      (m.envelope.subject ?? "").toLowerCase().includes(q)
-    );
-  });
+  // While searching, the server returns the matched set; otherwise the loaded
+  // folder listing drives the list. Threading and virtualization run over
+  // whichever set is active.
+  const list = searching ? searchResults : messages;
+  const listItems = list.data?.messages ?? [];
 
-  const threads = useMemo(() => groupThreads(filtered), [filtered]);
+  const threads = useMemo(() => groupThreads(listItems), [listItems]);
   // Flatten threads into render rows: each head, plus its older messages when
   // the conversation is expanded.
   const rows = useMemo<Row[]>(() => {
@@ -510,18 +527,17 @@ export default function MailboxView() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search sender or subject…"
+              placeholder="Search — try from: subject: has:attachment"
               aria-label="Search messages"
               className="flex-1 min-w-0 bg-transparent outline-none text-[13px] placeholder:text-[var(--color-neutral-700)]"
             />
+            {searching && list.isFetching && <Spinner size={12} />}
             <span className="text-[11px] tabular-nums text-[var(--color-neutral-800)] shrink-0">
-              {messages.data
-                ? `${filtered.length} of ${messages.data.total}`
-                : "…"}
+              {list.data ? `${listItems.length} of ${list.data.total}` : "…"}
             </span>
           </div>
           <div ref={listParentRef} className="flex-1 min-h-0 overflow-y-auto">
-            {messages.isLoading ? (
+            {list.isLoading ? (
               <ul>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <li
@@ -533,14 +549,14 @@ export default function MailboxView() {
                   </li>
                 ))}
               </ul>
-            ) : messages.data && filtered.length === 0 ? (
+            ) : list.data && listItems.length === 0 ? (
               <div className="p-6">
                 <Empty
-                  title={q ? "No matches" : "This folder is empty"}
+                  title={searching ? "No matches" : "This folder is empty"}
                   description={
-                    q ? `Nothing matches “${search.trim()}”.` : undefined
+                    searching ? `Nothing matches “${searchTerm}”.` : undefined
                   }
-                  icon={q ? <Search size={20} /> : <MailOpen size={20} />}
+                  icon={searching ? <Search size={20} /> : <MailOpen size={20} />}
                 />
               </div>
             ) : (
