@@ -102,6 +102,7 @@ export class RealtimeGateway implements OnModuleInit {
       return !!orgId && jm.orgIds.includes(orgId);
     }
     if (topic.startsWith(`user:${jm.userId}`)) return true;
+    if (topic === `session:${jm.sessionId}`) return true;
     return false;
   }
 

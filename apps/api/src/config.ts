@@ -16,6 +16,10 @@ const Env = z.object({
   IMAP_HOST: z.string().default("dovecot"),
   IMAP_PORT: z.coerce.number().int().positive().default(993),
   IMAP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
+  // Pooled IMAP connections: cap total open clients and evict ones idle beyond
+  // the TTL. Sized for a small deployment; raise for higher concurrency.
+  IMAP_POOL_MAX: z.coerce.number().int().positive().default(256),
+  IMAP_POOL_IDLE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SMTP_HOST: z.string().default("postfix"),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),

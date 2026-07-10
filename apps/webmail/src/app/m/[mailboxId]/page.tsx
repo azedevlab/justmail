@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { useMe } from "@/lib/session";
 import { api, API_BASE } from "@/lib/api";
+import { useMailboxRealtime } from "@/lib/realtime";
 
 type ComposeInit = {
   to?: string;
@@ -130,6 +131,28 @@ export default function MailboxView() {
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: ["messages", orgId, mailboxId, folder] });
+
+  useMailboxRealtime({
+    orgId,
+    mailboxId,
+    folder,
+    enabled: !!orgId && !!folders.data,
+    onChange: (event) => {
+      if (event.type === "mail:flags") {
+        const uid = event.data.uid;
+        if (typeof uid === "number") {
+          qc.invalidateQueries({
+            queryKey: ["message", orgId, mailboxId, folder, uid],
+          });
+        }
+        invalidate();
+        return;
+      }
+      // mail:new / mail:expunge: refresh the list and folder unread counts.
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+    },
+  });
 
   const flag = useMutation({
     mutationFn: (v: { uid: number; action: string }) =>
