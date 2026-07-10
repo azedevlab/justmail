@@ -29,6 +29,7 @@ import { OpenApiModule } from "./openapi/openapi.module";
 import { WebmailModule } from "./webmail/webmail.module";
 import { CaldavModule } from "./caldav/caldav.module";
 import { StorageModule } from "./storage/storage.module";
+import { AvModule } from "./av/av.module";
 import { AttachmentsModule } from "./attachments/attachments.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { RealtimeModule } from "./realtime/realtime.module";
@@ -68,6 +69,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     WebmailModule,
     CaldavModule,
     StorageModule,
+    AvModule,
     AttachmentsModule,
     NotificationsModule,
     RealtimeModule,

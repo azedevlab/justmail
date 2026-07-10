@@ -234,6 +234,17 @@ export class AttachmentsService {
     return toAttachment(rows[0]);
   }
 
+  async markVirusStatus(
+    orgId: string,
+    id: string,
+    status: Attachment["virus_status"],
+  ): Promise<void> {
+    await this.db.query(
+      "UPDATE attachments SET virus_status = $3 WHERE id = $1 AND org_id = $2",
+      [id, orgId, status],
+    );
+  }
+
   async signedDownload(orgId: string, id: string, userId: string) {
     const att = await this.get(orgId, id, userId);
     if (att.virus_status === "infected")

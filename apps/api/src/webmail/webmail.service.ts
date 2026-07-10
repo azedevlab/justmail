@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
+import type { Readable } from "node:stream";
 import { ImapFlow, type MessageStructureObject } from "imapflow";
 import { parseMime } from "@justmail/mail-parser";
 import nodemailer from "nodemailer";
@@ -20,6 +21,9 @@ import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
 import { config } from "../config";
 import type { SessionPrincipal } from "../auth/auth.service";
+import { AttachmentsService } from "../attachments/attachments.service";
+import { StorageService } from "../storage/storage.service";
+import { ClamavService } from "../av/clamav.service";
 import {
   type CachedCreds,
   WebmailCredentialStore,
@@ -39,6 +43,20 @@ interface MailboxAccess {
   orgId: string;
 }
 
+interface StoredAttachment {
+  id: string;
+  filename: string;
+  mime: string;
+  content_hash: string;
+  size_bytes: number;
+}
+
+interface StoredNodemailerAttachment {
+  filename: string;
+  contentType: string;
+  content: Readable;
+}
+
 @Injectable()
 export class WebmailService {
   private readonly logger = new Logger(WebmailService.name);
@@ -51,6 +69,9 @@ export class WebmailService {
     private readonly sessions: ImapSessionManager,
     private readonly idle: ImapIdleWatcher,
     private readonly cache: WebmailCache,
+    private readonly attachments: AttachmentsService,
+    private readonly storage: StorageService,
+    private readonly av: ClamavService,
   ) {}
 
   /** Arm IDLE-based realtime notifications for the open folder. */
@@ -524,26 +545,32 @@ export class WebmailService {
     mailboxId: string,
     input: ComposeRequest,
   ) {
-    // Guard fields the contract accepts but this milestone can't fulfil yet, so
-    // a client never believes a scheduled/stored-attachment send succeeded.
-    if (input.attachment_ids?.length) {
-      throw new BadRequestException({
-        title: "Stored attachments not supported yet",
-        detail: "Send attachments inline; attachment_ids lands with storage-backed uploads.",
-      });
-    }
     if (input.send_at) {
       throw new BadRequestException({
         title: "Scheduled send not supported yet",
         detail: "Remove send_at; scheduled delivery is not available yet.",
       });
     }
-    const totalBytes = (input.attachments ?? []).reduce(
+    // Resolve + virus-scan stored attachments before we touch SMTP.
+    const stored = await this.resolveStoredAttachments(
+      principal,
+      orgId,
+      input.attachment_ids ?? [],
+    );
+    const inlineBytes = (input.attachments ?? []).reduce(
       (sum, a) => sum + Math.ceil(a.content_base64.length * 0.75),
       0,
     );
+    const storedBytes = stored.reduce((sum, s) => sum + s.size_bytes, 0);
+    const totalCount = (input.attachments?.length ?? 0) + stored.length;
+    if (totalCount > config.WEBMAIL_ATTACHMENT_MAX_COUNT) {
+      throw new BadRequestException({
+        title: "Too many attachments",
+        detail: `Attach at most ${config.WEBMAIL_ATTACHMENT_MAX_COUNT} files.`,
+      });
+    }
     const maxTotal = config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES;
-    if (totalBytes > maxTotal) {
+    if (inlineBytes + storedBytes > maxTotal) {
       throw new BadRequestException({
         title: "Attachments too large",
         detail: `Total attachment size must stay under ${Math.floor(maxTotal / 1_000_000)} MB.`,
@@ -568,7 +595,10 @@ export class WebmailService {
       html: input.html,
       inReplyTo: input.in_reply_to,
       references: input.references,
-      attachments: toNodemailerAttachments(input.attachments),
+      attachments: [
+        ...(toNodemailerAttachments(input.attachments) ?? []),
+        ...(await this.storedNodemailerAttachments(orgId, stored)),
+      ],
     });
     // Append to Sent for a proper "sent" trail.
     try {
@@ -579,10 +609,11 @@ export class WebmailService {
         async (client) => {
           const sent = await findSentBox(client);
           if (sent) {
-            const message = await buildMimeMessage({
-              from: creds.address,
-              ...input,
-            });
+            const message = await buildMimeMessage(
+              { from: creds.address, ...input },
+              // Fresh streams: the send transport already consumed the first set.
+              await this.storedNodemailerAttachments(orgId, stored),
+            );
             await client.append(sent, message, ["\\Seen"]);
           }
         },
@@ -602,6 +633,75 @@ export class WebmailService {
       meta: { subject: input.subject, to: input.to.length },
     });
     return { messageId: info.messageId };
+  }
+
+  /**
+   * Load stored attachments by id, enforce ownership, and virus-scan any that
+   * are not yet marked clean. Throws before SMTP is touched if any is infected
+   * or unscannable.
+   */
+  private async resolveStoredAttachments(
+    principal: SessionPrincipal,
+    orgId: string,
+    ids: string[],
+  ): Promise<StoredAttachment[]> {
+    const out: StoredAttachment[] = [];
+    for (const id of ids) {
+      const att = await this.attachments.get(orgId, id, principal.userId);
+      if (att.virus_status === "infected") {
+        throw new BadRequestException({
+          title: "Attachment blocked",
+          detail: `"${att.filename}" was flagged by the virus scanner.`,
+        });
+      }
+      if (this.av.enabled && att.virus_status !== "clean") {
+        const key = `attachments/${att.content_hash}`;
+        let clean = false;
+        let signature: string | undefined;
+        try {
+          const stream = await this.storage.stream(orgId, key);
+          const result = await this.av.scan(stream);
+          clean = result.clean;
+          signature = result.signature;
+        } catch (err) {
+          this.logger.warn(`virus scan failed: ${(err as Error).message}`);
+          throw new BadRequestException({
+            title: "Virus scan unavailable",
+            detail: "An attachment could not be scanned. Please try again.",
+          });
+        }
+        if (!clean) {
+          await this.attachments.markVirusStatus(orgId, att.id, "infected");
+          throw new BadRequestException({
+            title: "Attachment blocked",
+            detail: `"${att.filename}" was flagged as ${signature ?? "malware"}.`,
+          });
+        }
+        await this.attachments.markVirusStatus(orgId, att.id, "clean");
+      }
+      out.push({
+        id: att.id,
+        filename: att.filename,
+        mime: att.mime,
+        content_hash: att.content_hash,
+        size_bytes: att.size_bytes,
+      });
+    }
+    return out;
+  }
+
+  /** Fresh storage streams for nodemailer; each call re-opens (streams are single-use). */
+  private async storedNodemailerAttachments(
+    orgId: string,
+    stored: StoredAttachment[],
+  ) {
+    return Promise.all(
+      stored.map(async (s) => ({
+        filename: s.filename,
+        contentType: s.mime,
+        content: await this.storage.stream(orgId, `attachments/${s.content_hash}`),
+      })),
+    );
   }
 
   private async creds(
@@ -755,6 +855,7 @@ async function findSentBox(client: ImapFlow): Promise<string | null> {
 
 async function buildMimeMessage(
   input: ComposeRequest & { from: string },
+  storedAttachments: StoredNodemailerAttachment[] = [],
 ): Promise<Buffer> {
   // Reuse nodemailer's compiler so we get a spec-compliant MIME body without
   // pulling in a second library.
@@ -773,7 +874,10 @@ async function buildMimeMessage(
     html: input.html,
     inReplyTo: input.in_reply_to,
     references: input.references,
-    attachments: toNodemailerAttachments(input.attachments),
+    attachments: [
+      ...(toNodemailerAttachments(input.attachments) ?? []),
+      ...storedAttachments,
+    ],
   });
   return compiled.message as Buffer;
 }
