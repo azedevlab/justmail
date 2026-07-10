@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -41,6 +42,7 @@ import {
 import {
   Archive,
   ArrowLeft,
+  ChevronRight,
   Download,
   Edit3,
   FileText,
@@ -75,6 +77,30 @@ function fmtSize(n: number): string {
   return `${(n / 1_048_576).toFixed(1)} MB`;
 }
 
+type Thread = { id: string; messages: MessageSummary[] };
+
+// Group a newest-first message list into conversations by server thread_id,
+// preserving list order. Messages without a thread_id stand alone.
+function groupThreads(messages: MessageSummary[]): Thread[] {
+  const order: string[] = [];
+  const map = new Map<string, MessageSummary[]>();
+  for (const m of messages) {
+    const key = m.thread_id ?? `uid:${m.uid}`;
+    const bucket = map.get(key);
+    if (bucket) bucket.push(m);
+    else {
+      map.set(key, [m]);
+      order.push(key);
+    }
+  }
+  return order.map((id) => ({ id, messages: map.get(id)! }));
+}
+
+// Flattened virtual rows: a thread head, plus child rows when it is expanded.
+type Row =
+  | { kind: "head"; thread: Thread }
+  | { kind: "child"; m: MessageSummary };
+
 export default function MailboxView() {
   const { mailboxId } = useParams<{ mailboxId: string }>();
   const me = useMe();
@@ -85,6 +111,14 @@ export default function MailboxView() {
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const [search, setSearch] = useState("");
   const [listW, setListW] = useState(360);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleThread = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   useEffect(() => {
     const saved = Number(localStorage.getItem("jm.listWidth"));
@@ -294,16 +328,33 @@ export default function MailboxView() {
     );
   });
 
+  const threads = useMemo(() => groupThreads(filtered), [filtered]);
+  // Flatten threads into render rows: each head, plus its older messages when
+  // the conversation is expanded.
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
+    for (const t of threads) {
+      out.push({ kind: "head", thread: t });
+      if (t.messages.length > 1 && expanded.has(t.id)) {
+        for (const m of t.messages.slice(1)) out.push({ kind: "child", m });
+      }
+    }
+    return out;
+  }, [threads, expanded]);
+
   // Virtualize the message list so a folder with thousands of messages only
   // mounts the rows in view. Rows have variable height (optional preview line),
   // so measureElement corrects the estimate after mount.
   const listParentRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
-    count: filtered.length,
+    count: rows.length,
     getScrollElement: () => listParentRef.current,
     estimateSize: () => 76,
     overscan: 10,
-    getItemKey: (i) => filtered[i]!.uid,
+    getItemKey: (i) => {
+      const r = rows[i]!;
+      return r.kind === "head" ? `h:${r.thread.id}` : `c:${r.m.uid}`;
+    },
   });
 
   if (folders.isError && (folders.error as ApiError)?.status === 403) {
@@ -467,7 +518,16 @@ export default function MailboxView() {
                 style={{ height: rowVirtualizer.getTotalSize() }}
               >
                 {rowVirtualizer.getVirtualItems().map((vi) => {
-                  const m = filtered[vi.index]!;
+                  const row = rows[vi.index]!;
+                  const m =
+                    row.kind === "head" ? row.thread.messages[0]! : row.m;
+                  const count =
+                    row.kind === "head" ? row.thread.messages.length : 1;
+                  const open = (uid: number, flags: string[]) => {
+                    setOpenUid(uid);
+                    if (!flags.includes("\\Seen"))
+                      flag.mutate({ uid, action: "read" });
+                  };
                   return (
                     <li
                       key={vi.key}
@@ -478,12 +538,18 @@ export default function MailboxView() {
                     >
                       <MessageRow
                         m={m}
+                        count={count}
+                        child={row.kind === "child"}
+                        expanded={
+                          row.kind === "head" && expanded.has(row.thread.id)
+                        }
                         selected={openUid === m.uid}
-                        onOpen={() => {
-                          setOpenUid(m.uid);
-                          if (!m.flags.includes("\\Seen"))
-                            flag.mutate({ uid: m.uid, action: "read" });
-                        }}
+                        onOpen={() => open(m.uid, m.flags)}
+                        onToggle={
+                          row.kind === "head" && count > 1
+                            ? () => toggleThread(row.thread.id)
+                            : undefined
+                        }
                       />
                     </li>
                   );
@@ -750,12 +816,20 @@ function AttachmentItem({
 
 function MessageRow({
   m,
+  count,
+  child,
+  expanded,
   selected,
   onOpen,
+  onToggle,
 }: {
   m: MessageSummary;
+  count: number;
+  child: boolean;
+  expanded: boolean;
   selected: boolean;
   onOpen: () => void;
+  onToggle?: () => void;
 }) {
   const unread = !m.flags.includes("\\Seen");
   const starred = m.flags.includes("\\Flagged");
@@ -765,14 +839,22 @@ function MessageRow({
     <button
       onClick={onOpen}
       className={
-        "relative w-full text-left px-4 py-3 border-b border-[var(--color-border)] transition-colors " +
+        "relative w-full text-left py-3 border-b border-[var(--color-border)] transition-colors " +
+        (child ? "pl-9 pr-4 bg-[var(--color-surface-1)] " : "px-4 ") +
         (selected
           ? "bg-[color:rgb(10_132_255/0.1)]"
           : "hover:bg-[var(--hover-overlay-faint)]")
       }
     >
-      {selected && (
-        <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-[var(--color-brand-500)]" />
+      {(selected || child) && (
+        <span
+          className={
+            "absolute left-0 top-0 bottom-0 w-[2px] " +
+            (selected
+              ? "bg-[var(--color-brand-500)]"
+              : "bg-[var(--color-border-strong)]")
+          }
+        />
       )}
       <span className="flex items-center gap-2">
         {unread && (
@@ -788,6 +870,34 @@ function MessageRow({
         >
           {sender}
         </span>
+        {onToggle && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label={expanded ? "Collapse conversation" : "Expand conversation"}
+            aria-expanded={expanded}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggle();
+              }
+            }}
+            className="flex items-center gap-0.5 shrink-0 rounded-full pl-1.5 pr-1 py-px text-[10px] font-medium tabular-nums bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-neutral-800)] hover:text-[var(--color-neutral-1100)] hover:border-[var(--color-border-strong)] transition-colors cursor-pointer"
+          >
+            {count}
+            <ChevronRight
+              size={11}
+              className={
+                "transition-transform " + (expanded ? "rotate-90" : "")
+              }
+            />
+          </span>
+        )}
         <span className="text-[11px] tabular-nums text-[var(--color-neutral-700)] shrink-0">
           {m.date &&
             new Date(m.date).toLocaleDateString(undefined, {
