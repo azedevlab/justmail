@@ -3,8 +3,8 @@ import { Badge, Card, PageBody, PageHeader } from "@justmail/shared-ui";
 import { Check } from "lucide-react";
 
 const SWATCHES: { name: string; vars: [string, string, string]; active?: boolean }[] = [
-  { name: "Meridian Light", vars: ["#F7F8FA", "#FFFFFF", "#7C5CFF"], active: true },
-  { name: "Aurora Dark", vars: ["#0B0D12", "#13161C", "#9D85FF"] },
+  { name: "Meridian Light", vars: ["#F7F8FA", "#FFFFFF", "#0071E3"], active: true },
+  { name: "Aurora Dark", vars: ["#0B0D12", "#13161C", "#3D9BFF"] },
   { name: "Custom", vars: ["#F7F8FA", "#FFFFFF", "#0EA5E9"] },
 ];
 

@@ -222,7 +222,7 @@ export default function MailboxView() {
                 className={
                   "w-full flex items-center gap-2.5 h-8 px-2 rounded-[7px] text-[13px] transition-colors " +
                   (active
-                    ? "bg-[color:rgb(124_92_255/0.14)] text-[var(--color-neutral-1100)]"
+                    ? "bg-[color:rgb(10_132_255/0.14)] text-[var(--color-neutral-1100)]"
                     : "text-[var(--color-neutral-1000)] hover:bg-[var(--hover-overlay)]")
                 }
               >
@@ -241,7 +241,7 @@ export default function MailboxView() {
                 </span>
                 <span className="flex-1 text-left truncate">{f.name}</span>
                 {f.unread > 0 && (
-                  <span className="text-[10px] font-medium tabular-nums px-1.5 py-px rounded-full bg-[color:rgb(124_92_255/0.16)] text-[var(--color-accent)]">
+                  <span className="text-[10px] font-medium tabular-nums px-1.5 py-px rounded-full bg-[color:rgb(10_132_255/0.16)] text-[var(--color-accent)]">
                     {f.unread}
                   </span>
                 )}
@@ -319,7 +319,7 @@ export default function MailboxView() {
                     className={
                       "relative w-full text-left px-4 py-3 border-b border-[var(--color-border)] transition-colors " +
                       (selected
-                        ? "bg-[color:rgb(124_92_255/0.1)]"
+                        ? "bg-[color:rgb(10_132_255/0.1)]"
                         : "hover:bg-[var(--hover-overlay-faint)]")
                     }
                   >
@@ -380,7 +380,7 @@ export default function MailboxView() {
           aria-orientation="vertical"
           aria-label="Resize message list"
           onPointerDown={startResize}
-          className="w-[5px] shrink-0 cursor-col-resize border-l border-[var(--color-border)] hover:bg-[color:rgb(124_92_255/0.25)] transition-colors"
+          className="w-[5px] shrink-0 cursor-col-resize border-l border-[var(--color-border)] hover:bg-[color:rgb(10_132_255/0.25)] transition-colors"
         />
 
         {/* Read pane */}

@@ -19,7 +19,7 @@ const toneClasses: Record<BadgeTone, string> = {
   neutral:
     "bg-[var(--hover-overlay-faint)] text-[var(--color-neutral-1100)] border border-[var(--color-border)]",
   brand:
-    "bg-[color:rgb(124_92_255/0.12)] text-[var(--color-accent)] border border-[color:rgb(124_92_255/0.25)]",
+    "bg-[color:rgb(10_132_255/0.12)] text-[var(--color-accent)] border border-[color:rgb(10_132_255/0.25)]",
   ok: "bg-[color:rgb(34_197_94/0.12)] text-[var(--color-ok)] border border-[color:rgb(34_197_94/0.25)]",
   warn: "bg-[color:rgb(245_158_11/0.12)] text-[var(--color-warn)] border border-[color:rgb(245_158_11/0.25)]",
   bad: "bg-[color:rgb(239_68_68/0.12)] text-[var(--color-bad)] border border-[color:rgb(239_68_68/0.25)]",

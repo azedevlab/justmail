@@ -24,7 +24,7 @@ const PLANNED = [
 function Step({ n, children }: { n: number; children: ReactNode }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="w-5 h-5 shrink-0 grid place-items-center rounded-full bg-[color:rgb(124_92_255/0.10)] text-[var(--color-accent)] text-[11px] font-semibold tabular-nums mt-px">
+      <span className="w-5 h-5 shrink-0 grid place-items-center rounded-full bg-[color:rgb(10_132_255/0.10)] text-[var(--color-accent)] text-[11px] font-semibold tabular-nums mt-px">
         {n}
       </span>
       <span className="text-sm text-[var(--color-neutral-1000)]">{children}</span>
@@ -44,7 +44,7 @@ export default function PluginsPage() {
         <div className="grid gap-4 md:grid-cols-3">
           {PLANNED.map((p) => (
             <Card key={p.title} className="p-5">
-              <span className="w-9 h-9 grid place-items-center rounded-lg bg-[color:rgb(124_92_255/0.10)] text-[var(--color-accent)] mb-3">
+              <span className="w-9 h-9 grid place-items-center rounded-lg bg-[color:rgb(10_132_255/0.10)] text-[var(--color-accent)] mb-3">
                 {p.icon}
               </span>
               <h3 className="text-sm font-semibold text-[var(--color-neutral-1100)]">

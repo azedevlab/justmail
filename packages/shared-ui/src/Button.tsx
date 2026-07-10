@@ -14,7 +14,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: cn(
-    "text-white border border-[color:rgb(92_61_255/0.6)]",
+    "text-white border border-[color:rgb(0_113_227/0.6)]",
     "bg-[linear-gradient(180deg,var(--color-brand-400),var(--color-brand-600))]",
     "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.24)]",
     "hover:bg-[linear-gradient(180deg,var(--color-brand-300),var(--color-brand-500))]",
@@ -68,7 +68,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         "inline-flex items-center justify-center font-medium select-none whitespace-nowrap",
         "tracking-[-0.006em]",
         "transition-[background,border-color,box-shadow,transform,color] duration-[var(--motion-base)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:rgb(124_92_255/0.55)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:rgb(10_132_255/0.55)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         variantClasses[variant],
         sizeClasses[size],

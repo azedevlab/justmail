@@ -103,7 +103,7 @@ export function CommandPalette({
                     }}
                     className={cn(
                       "flex items-center justify-between gap-3 px-2 py-2 rounded-md text-sm cursor-pointer",
-                      "aria-selected:bg-[color:rgb(124_92_255/0.14)] text-[var(--color-neutral-1100)]",
+                      "aria-selected:bg-[color:rgb(10_132_255/0.14)] text-[var(--color-neutral-1100)]",
                     )}
                   >
                     <div className="flex items-center gap-2 flex-1">

@@ -8,7 +8,7 @@ const inputClass = cn(
   "placeholder:text-[var(--color-neutral-700)]",
   "transition-[border-color,box-shadow,background] duration-[var(--motion-base)]",
   "hover:border-[var(--color-border-strong)]",
-  "focus:outline-none focus:border-[color:rgb(124_92_255/0.6)] focus:ring-[3px] focus:ring-[color:rgb(124_92_255/0.18)]",
+  "focus:outline-none focus:border-[color:rgb(10_132_255/0.6)] focus:ring-[3px] focus:ring-[color:rgb(10_132_255/0.18)]",
   "disabled:opacity-50 disabled:cursor-not-allowed",
   "font-[var(--font-sans)]",
 );

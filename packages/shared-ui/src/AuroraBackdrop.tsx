@@ -29,7 +29,7 @@ export function AuroraBackdrop({ className }: { className?: string }) {
         className="absolute -top-[20%] left-[15%] w-[45vw] h-[45vw] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(124,92,255,0.12) 0%, transparent 65%)",
+            "radial-gradient(circle, rgba(10,132,255,0.10) 0%, transparent 65%)",
           filter: "blur(40px)",
         }}
       />
