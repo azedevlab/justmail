@@ -225,11 +225,68 @@ export const TemplateRequest = z.object({
 });
 export type TemplateRequest = z.infer<typeof TemplateRequest>;
 
+// A structured mail filter. Rules are stored structured (not as raw Sieve) so
+// the UI can round-trip them; the server compiles all enabled rules, ordered by
+// priority, into a single Sieve script uploaded over ManageSieve.
+export const SieveConditionField = z.enum([
+  "from",
+  "to",
+  "cc",
+  "subject",
+  "any",
+]);
+export type SieveConditionField = z.infer<typeof SieveConditionField>;
+
+export const SieveConditionOp = z.enum(["contains", "is", "matches"]);
+export type SieveConditionOp = z.infer<typeof SieveConditionOp>;
+
+export const SieveCondition = z.object({
+  field: SieveConditionField,
+  op: SieveConditionOp,
+  value: z.string().min(1).max(500),
+});
+export type SieveCondition = z.infer<typeof SieveCondition>;
+
+export const SieveActionType = z.enum([
+  "fileinto",
+  "keep",
+  "discard",
+  "seen",
+  "flag",
+  "redirect",
+  "stop",
+]);
+export type SieveActionType = z.infer<typeof SieveActionType>;
+
+// arg carries the action's parameter: folder path (fileinto), address
+// (redirect), or flag name (flag). Ignored for keep/discard/seen/stop.
+export const SieveAction = z.object({
+  type: SieveActionType,
+  arg: z.string().max(500).optional(),
+});
+export type SieveAction = z.infer<typeof SieveAction>;
+
+export const SieveMatch = z.enum(["all", "any"]);
+export type SieveMatch = z.infer<typeof SieveMatch>;
+
+export const SieveRuleRequest = z.object({
+  name: z.string().min(1).max(120),
+  enabled: z.boolean().default(true),
+  match: SieveMatch.default("all"),
+  conditions: z.array(SieveCondition).max(20).default([]),
+  actions: z.array(SieveAction).min(1).max(10),
+});
+export type SieveRuleRequest = z.infer<typeof SieveRuleRequest>;
+
 export const SieveRule = z.object({
   id: Uuid,
   name: z.string(),
   priority: z.number().int(),
-  script_source: z.string(),
   enabled: z.boolean(),
+  match: SieveMatch,
+  conditions: z.array(SieveCondition),
+  actions: z.array(SieveAction),
+  // Server-compiled Sieve for this rule; read-only preview for the UI.
+  script_source: z.string(),
 });
 export type SieveRule = z.infer<typeof SieveRule>;

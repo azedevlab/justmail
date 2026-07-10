@@ -6,10 +6,11 @@ import { SettingsModule } from "../settings/settings.module";
 import { WebmailController } from "./webmail.controller";
 import { WebmailService } from "./webmail.service";
 import { PersonalizationService } from "./personalization.service";
+import { SieveService } from "./sieve.service";
 
 @Module({
   imports: [AuthModule, OrgsModule, AttachmentsModule, SettingsModule],
   controllers: [WebmailController],
-  providers: [WebmailService, PersonalizationService],
+  providers: [WebmailService, PersonalizationService, SieveService],
 })
 export class WebmailModule {}

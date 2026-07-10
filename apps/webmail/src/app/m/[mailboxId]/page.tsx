@@ -24,6 +24,14 @@ import type {
   SendResult,
   Signature,
   Template,
+  SieveRule,
+  SieveRuleRequest,
+  SieveCondition,
+  SieveAction,
+  SieveConditionField,
+  SieveConditionOp,
+  SieveActionType,
+  SieveMatch,
   Upload,
   Attachment,
 } from "@justmail/contracts";
@@ -58,6 +66,7 @@ import {
   Download,
   Edit3,
   FileText,
+  Filter,
   Folder as FolderIcon,
   Forward,
   Inbox,
@@ -1247,19 +1256,23 @@ function PersonalizationModal({
       open
       onClose={onClose}
       size="lg"
-      title="Signatures & templates"
-      description="Reusable content for the composer, scoped to this mailbox."
+      title="Mailbox settings"
+      description="Signatures, templates, and filters, scoped to this mailbox."
     >
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="signatures">Signatures</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
+          <TabsTrigger value="filters">Filters</TabsTrigger>
         </TabsList>
         <TabsContent value="signatures">
           <SignatureManager orgId={orgId} mailboxId={mailboxId} />
         </TabsContent>
         <TabsContent value="templates">
           <TemplateManager orgId={orgId} mailboxId={mailboxId} />
+        </TabsContent>
+        <TabsContent value="filters">
+          <FilterManager orgId={orgId} mailboxId={mailboxId} />
         </TabsContent>
       </Tabs>
     </Modal>
@@ -1543,6 +1556,327 @@ function TemplateManager({
         onClick={() => setEditing("new")}
       >
         New template
+      </Button>
+    </div>
+  );
+}
+
+const FIELD_OPTIONS: { value: SieveConditionField; label: string }[] = [
+  { value: "from", label: "From" },
+  { value: "to", label: "To" },
+  { value: "cc", label: "Cc" },
+  { value: "subject", label: "Subject" },
+  { value: "any", label: "Any header" },
+];
+
+const OP_OPTIONS: { value: SieveConditionOp; label: string }[] = [
+  { value: "contains", label: "contains" },
+  { value: "is", label: "is exactly" },
+  { value: "matches", label: "matches (wildcards)" },
+];
+
+const ACTION_OPTIONS: { value: SieveActionType; label: string; arg?: string }[] = [
+  { value: "fileinto", label: "Move to folder", arg: "Folder path" },
+  { value: "flag", label: "Add flag", arg: "Flag (e.g. \\Flagged)" },
+  { value: "seen", label: "Mark as read" },
+  { value: "redirect", label: "Forward to", arg: "Address" },
+  { value: "keep", label: "Keep in Inbox" },
+  { value: "discard", label: "Discard silently" },
+  { value: "stop", label: "Stop processing" },
+];
+
+const filterSelectClass =
+  "h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 text-[13px] text-[var(--color-neutral-1000)] outline-none focus:border-[var(--color-accent)]";
+
+function actionNeedsArg(type: SieveActionType): string | null {
+  return ACTION_OPTIONS.find((o) => o.value === type)?.arg ?? null;
+}
+
+function FilterManager({
+  orgId,
+  mailboxId,
+}: {
+  orgId: string;
+  mailboxId: string;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/filters`;
+  const key = ["filters", orgId, mailboxId];
+  const list = useQuery({ queryKey: key, queryFn: () => api.get<SieveRule[]>(base) });
+  const [editing, setEditing] = useState<SieveRule | "new" | null>(null);
+  const [name, setName] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [match, setMatch] = useState<SieveMatch>("all");
+  const [conditions, setConditions] = useState<SieveCondition[]>([]);
+  const [actions, setActions] = useState<SieveAction[]>([]);
+
+  const startEdit = (r: SieveRule | "new") => {
+    setEditing(r);
+    setName(r === "new" ? "" : r.name);
+    setEnabled(r === "new" ? true : r.enabled);
+    setMatch(r === "new" ? "all" : r.match);
+    setConditions(
+      r === "new"
+        ? [{ field: "from", op: "contains", value: "" }]
+        : r.conditions,
+    );
+    setActions(r === "new" ? [{ type: "fileinto", arg: "" }] : r.actions);
+  };
+
+  const save = useMutation({
+    mutationFn: (body: SieveRuleRequest) =>
+      editing === "new" || editing === null
+        ? api.post<SieveRule>(base, body)
+        : api.put<SieveRule>(`${base}/${editing.id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      setEditing(null);
+      toast({ title: "Filter saved", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title: e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Save failed",
+        tone: "bad",
+      }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      toast({ title: "Deleted", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title: e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Delete failed",
+        tone: "bad",
+      }),
+  });
+
+  const submit = () => {
+    if (!name.trim()) return toast({ title: "Name is required", tone: "bad" });
+    if (actions.length === 0)
+      return toast({ title: "Add at least one action", tone: "bad" });
+    const cleaned = conditions.filter((c) => c.value.trim().length > 0);
+    save.mutate({
+      name: name.trim(),
+      enabled,
+      match,
+      conditions: cleaned,
+      actions: actions.map((a) => ({
+        type: a.type,
+        ...(actionNeedsArg(a.type) ? { arg: a.arg ?? "" } : {}),
+      })),
+    });
+  };
+
+  if (editing !== null) {
+    return (
+      <div className="space-y-3">
+        <FormField label="Name">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Newsletters to Archive"
+          />
+        </FormField>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-[13px]">
+            <span className="text-[var(--color-neutral-700)]">Match</span>
+            <select
+              className={filterSelectClass}
+              value={match}
+              onChange={(e) => setMatch(e.target.value as SieveMatch)}
+            >
+              <option value="all">all conditions</option>
+              <option value="any">any condition</option>
+            </select>
+          </div>
+          {conditions.map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                className={filterSelectClass}
+                value={c.field}
+                onChange={(e) =>
+                  setConditions((cs) =>
+                    cs.map((x, j) =>
+                      j === i ? { ...x, field: e.target.value as SieveConditionField } : x,
+                    ),
+                  )
+                }
+              >
+                {FIELD_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={filterSelectClass}
+                value={c.op}
+                onChange={(e) =>
+                  setConditions((cs) =>
+                    cs.map((x, j) =>
+                      j === i ? { ...x, op: e.target.value as SieveConditionOp } : x,
+                    ),
+                  )
+                }
+              >
+                {OP_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <Input
+                value={c.value}
+                onChange={(e) =>
+                  setConditions((cs) =>
+                    cs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)),
+                  )
+                }
+                placeholder="value"
+              />
+              <IconButton
+                size="sm"
+                aria-label="Remove condition"
+                onClick={() => setConditions((cs) => cs.filter((_, j) => j !== i))}
+              >
+                <X size={14} />
+              </IconButton>
+            </div>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            leadingIcon={<Plus size={13} />}
+            onClick={() =>
+              setConditions((cs) => [...cs, { field: "from", op: "contains", value: "" }])
+            }
+          >
+            Add condition
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[13px] text-[var(--color-neutral-700)]">Then</div>
+          {actions.map((a, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                className={filterSelectClass}
+                value={a.type}
+                onChange={(e) =>
+                  setActions((as) =>
+                    as.map((x, j) =>
+                      j === i ? { type: e.target.value as SieveActionType, arg: "" } : x,
+                    ),
+                  )
+                }
+              >
+                {ACTION_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              {actionNeedsArg(a.type) && (
+                <Input
+                  value={a.arg ?? ""}
+                  onChange={(e) =>
+                    setActions((as) =>
+                      as.map((x, j) => (j === i ? { ...x, arg: e.target.value } : x)),
+                    )
+                  }
+                  placeholder={actionNeedsArg(a.type) ?? ""}
+                />
+              )}
+              <IconButton
+                size="sm"
+                aria-label="Remove action"
+                onClick={() => setActions((as) => as.filter((_, j) => j !== i))}
+              >
+                <X size={14} />
+              </IconButton>
+            </div>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            leadingIcon={<Plus size={13} />}
+            onClick={() => setActions((as) => [...as, { type: "fileinto", arg: "" }])}
+          >
+            Add action
+          </Button>
+        </div>
+
+        <label className="flex items-center gap-2 text-[13px] text-[var(--color-neutral-1000)]">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+          />
+          Enabled
+        </label>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={save.isPending} onClick={submit}>
+            Save
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {list.data?.length === 0 && (
+        <Empty
+          title="No filters"
+          description="Create rules to automatically sort incoming mail."
+        />
+      )}
+      {list.data?.map((r) => (
+        <div
+          key={r.id}
+          className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2"
+        >
+          <Filter size={14} className="text-[var(--color-neutral-700)]" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium truncate">
+              {r.name}
+              {!r.enabled && (
+                <span className="ml-2 rounded bg-[var(--color-surface-3)] px-1.5 py-0.5 text-[10px] text-[var(--color-neutral-800)]">
+                  Off
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-[var(--color-neutral-700)] truncate">
+              {r.conditions.length} condition{r.conditions.length === 1 ? "" : "s"} ·{" "}
+              {r.actions.length} action{r.actions.length === 1 ? "" : "s"}
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => startEdit(r)}>
+            Edit
+          </Button>
+          <IconButton
+            size="sm"
+            aria-label="Delete filter"
+            onClick={() => remove.mutate(r.id)}
+          >
+            <Trash2 size={14} />
+          </IconButton>
+        </div>
+      ))}
+      <Button
+        variant="secondary"
+        size="sm"
+        leadingIcon={<Plus size={13} />}
+        onClick={() => startEdit("new")}
+      >
+        New filter
       </Button>
     </div>
   );

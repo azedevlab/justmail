@@ -25,6 +25,7 @@ import {
   ComposeRequest,
   FlagAction,
   SaveDraftRequest,
+  SieveRuleRequest,
   SignatureRequest,
   TemplateRequest,
 } from "@justmail/contracts";
@@ -35,6 +36,7 @@ import {
   WebmailService,
 } from "./webmail.service";
 import { PersonalizationService } from "./personalization.service";
+import { SieveService } from "./sieve.service";
 
 const FlagBody = z.object({ action: FlagAction });
 
@@ -49,6 +51,7 @@ export class WebmailController {
   constructor(
     private readonly svc: WebmailService,
     private readonly personalization: PersonalizationService,
+    private readonly sieve: SieveService,
   ) {}
 
   @Post("unlock")
@@ -416,6 +419,47 @@ export class WebmailController {
     @Param("id", ParseUUIDPipe) id: string,
   ) {
     return this.personalization.deleteTemplate(principal, orgId, mailboxId, id);
+  }
+
+  @Get("filters")
+  listFilters(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+  ) {
+    return this.sieve.listRules(principal, orgId, mailboxId);
+  }
+
+  @Post("filters")
+  createFilter(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Body(new ZodPipe(SieveRuleRequest)) body: SieveRuleRequest,
+  ) {
+    return this.sieve.createRule(principal, orgId, mailboxId, body);
+  }
+
+  @Put("filters/:id")
+  updateFilter(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(SieveRuleRequest)) body: SieveRuleRequest,
+  ) {
+    return this.sieve.updateRule(principal, orgId, mailboxId, id, body);
+  }
+
+  @Delete("filters/:id")
+  @HttpCode(204)
+  deleteFilter(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.sieve.deleteRule(principal, orgId, mailboxId, id);
   }
 }
 
