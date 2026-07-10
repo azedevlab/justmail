@@ -15,6 +15,9 @@ import { Request, Response } from "express";
 import {
   BootstrapRequest,
   LoginRequest,
+  PasskeyAuthOptionsRequest,
+  PasskeyAuthVerifyRequest,
+  PasskeyRegisterVerifyRequest,
   TwoFaDisableRequest,
   TwoFaVerifyRequest,
 } from "@justmail/contracts";
@@ -151,5 +154,74 @@ export class AuthController {
     @Req() req: Request,
   ) {
     await this.auth.disableTwoFa(principal, body.password, req.ip);
+  }
+
+  @Get("passkeys")
+  @UseGuards(SessionGuard)
+  listPasskeys(@Principal() principal: SessionPrincipal) {
+    return this.auth.listPasskeys(principal);
+  }
+
+  @Post("passkeys/register/options")
+  @UseGuards(SessionGuard)
+  passkeyRegisterOptions(@Principal() principal: SessionPrincipal) {
+    return this.auth.passkeyRegisterOptions(principal);
+  }
+
+  @Post("passkeys/register/verify")
+  @HttpCode(201)
+  @UseGuards(SessionGuard)
+  passkeyRegisterVerify(
+    @Principal() principal: SessionPrincipal,
+    @Body(new ZodPipe(PasskeyRegisterVerifyRequest))
+    body: PasskeyRegisterVerifyRequest,
+    @Req() req: Request,
+  ) {
+    return this.auth.passkeyRegisterVerify(
+      principal,
+      body.name,
+      body.response,
+      req.ip,
+    );
+  }
+
+  @Delete("passkeys/:id")
+  @HttpCode(204)
+  @UseGuards(SessionGuard)
+  async removePasskey(
+    @Principal() principal: SessionPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ) {
+    await this.auth.removePasskey(principal, id, req.ip);
+  }
+
+  @Post("passkeys/login/options")
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(200)
+  passkeyLoginOptions(
+    @Body(new ZodPipe(PasskeyAuthOptionsRequest))
+    body: PasskeyAuthOptionsRequest,
+  ) {
+    return this.auth.passkeyAuthOptions(body.email);
+  }
+
+  @Post("passkeys/login/verify")
+  @Throttle(AUTH_THROTTLE)
+  @HttpCode(200)
+  async passkeyLoginVerify(
+    @Body(new ZodPipe(PasskeyAuthVerifyRequest))
+    body: PasskeyAuthVerifyRequest,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { token, expiresAt } = await this.auth.passkeyAuthVerify(
+      body.challenge_id,
+      body.response,
+      req.ip,
+      req.get("user-agent") ?? undefined,
+    );
+    this.setCookie(res, token, expiresAt);
+    return { ok: true };
   }
 }

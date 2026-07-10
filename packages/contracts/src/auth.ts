@@ -42,6 +42,46 @@ export const PasskeyChallenge = z.object({
 });
 export type PasskeyChallenge = z.infer<typeof PasskeyChallenge>;
 
+// The WebAuthn ceremony JSON is produced/consumed by @simplewebauthn on both
+// ends; it is validated cryptographically by the server, so the transport
+// schema only needs to carry it through opaquely.
+export const PasskeyRegisterVerifyRequest = z.object({
+  name: z.string().min(1).max(100),
+  response: z.unknown(),
+});
+export type PasskeyRegisterVerifyRequest = z.infer<
+  typeof PasskeyRegisterVerifyRequest
+>;
+
+export const PasskeyAuthOptionsRequest = z.object({ email: Email });
+export type PasskeyAuthOptionsRequest = z.infer<
+  typeof PasskeyAuthOptionsRequest
+>;
+
+export const PasskeyAuthVerifyRequest = z.object({
+  challenge_id: Uuid,
+  response: z.unknown(),
+});
+export type PasskeyAuthVerifyRequest = z.infer<typeof PasskeyAuthVerifyRequest>;
+
+export const PasskeyAuthOptionsResponse = z.object({
+  challenge_id: Uuid,
+  options: z.unknown(),
+});
+export type PasskeyAuthOptionsResponse = z.infer<
+  typeof PasskeyAuthOptionsResponse
+>;
+
+export const PasskeyInfo = z.object({
+  id: Uuid,
+  name: z.string(),
+  device_type: z.string().nullable(),
+  backed_up: z.boolean(),
+  created_at: IsoDate,
+  last_used_at: IsoDate.nullable(),
+});
+export type PasskeyInfo = z.infer<typeof PasskeyInfo>;
+
 export const SessionOrg = z.object({
   id: Uuid,
   name: z.string(),

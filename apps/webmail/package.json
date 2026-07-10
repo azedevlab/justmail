@@ -16,6 +16,7 @@
     "@justmail/design-tokens": "workspace:*",
     "@justmail/shared-ui": "workspace:*",
     "@justmail/shared-utils": "workspace:*",
+    "@simplewebauthn/browser": "^13.3.0",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-virtual": "^3.10.0",
     "lucide-react": "^0.469.0",

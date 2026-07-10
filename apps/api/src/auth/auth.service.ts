@@ -12,6 +12,8 @@ import type {
   BootstrapRequest,
   LoginRequest,
   Me,
+  PasskeyAuthOptionsResponse,
+  PasskeyInfo,
   SessionInfo,
   TwoFaSetupResponse,
 } from "@justmail/contracts";
@@ -22,6 +24,13 @@ import { open, seal } from "../common/secretbox";
 import { WebmailCredentialStore } from "../webmail/credential.store";
 import { ImapSessionManager } from "../webmail/imap-session.manager";
 import { ImapIdleWatcher } from "../webmail/imap-idle.watcher";
+import {
+  authenticationOptions,
+  registrationOptions,
+  verifyAuthentication,
+  verifyRegistration,
+  type StoredCredential,
+} from "./webauthn";
 
 const ARGON2_OPTS: argon2.Options = {
   type: argon2.argon2id,
@@ -64,11 +73,17 @@ export class AuthService {
     private readonly imapIdle: ImapIdleWatcher,
   ) {}
 
-  async status(): Promise<{ bootstrapped: boolean }> {
+  async status() {
     const { rows } = await this.db.query<{ n: string }>(
       "SELECT count(*) AS n FROM users",
     );
-    return { bootstrapped: Number(rows[0]?.n ?? 0) > 0 };
+    // SSO providers are discovered per email domain (not advertised globally) to
+    // avoid leaking every tenant's IdP, so the public list stays empty here.
+    return {
+      bootstrapped: Number(rows[0]?.n ?? 0) > 0,
+      passkeys_supported: true,
+      sso_providers: [] as { id: string; name: string; kind: "oidc" | "saml" }[],
+    };
   }
 
   async bootstrap(req: BootstrapRequest, ip?: string, userAgent?: string) {
@@ -195,7 +210,7 @@ export class AuthService {
   }
 
   async me(principal: SessionPrincipal): Promise<Me> {
-    const [user, orgs] = await Promise.all([
+    const [user, orgs, passkeys] = await Promise.all([
       this.db.query<{ totp_enabled: boolean }>(
         "SELECT totp_enabled FROM users WHERE id = $1",
         [principal.userId],
@@ -206,13 +221,17 @@ export class AuthService {
          WHERE m.user_id = $1 ORDER BY o.created_at`,
         [principal.userId],
       ),
+      this.db.query<{ n: string }>(
+        "SELECT count(*) AS n FROM webauthn_credentials WHERE user_id = $1",
+        [principal.userId],
+      ),
     ]);
     return {
       id: principal.userId,
       email: principal.email,
       name: principal.name,
       totp_enabled: user.rows[0]?.totp_enabled ?? false,
-      passkey_enabled: false,
+      passkey_enabled: Number(passkeys.rows[0]?.n ?? 0) > 0,
       orgs: orgs.rows as Me["orgs"],
     };
   }
@@ -365,6 +384,251 @@ export class AuthService {
       action: "auth.2fa.disable",
       ip,
     });
+  }
+
+  private async loadCredentials(userId: string): Promise<StoredCredential[]> {
+    const { rows } = await this.db.query<{
+      credential_id: string;
+      public_key: Buffer;
+      counter: string;
+      transports: string[];
+    }>(
+      "SELECT credential_id, public_key, counter, transports FROM webauthn_credentials WHERE user_id = $1",
+      [userId],
+    );
+    return rows.map((r) => ({
+      credentialId: r.credential_id,
+      publicKey: r.public_key,
+      counter: Number(r.counter),
+      transports: r.transports,
+    }));
+  }
+
+  private async storeChallenge(
+    kind: "register" | "auth",
+    userId: string | null,
+    challenge: string,
+  ): Promise<string> {
+    const expires = new Date(
+      Date.now() + config.WEBAUTHN_CHALLENGE_TTL_SECONDS * 1000,
+    );
+    const { rows } = await this.db.query<{ id: string }>(
+      `INSERT INTO webauthn_challenges (user_id, kind, challenge, expires_at)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [userId, kind, challenge, expires],
+    );
+    return rows[0]!.id;
+  }
+
+  async passkeyRegisterOptions(principal: SessionPrincipal) {
+    const existing = await this.loadCredentials(principal.userId);
+    const options = await registrationOptions({
+      userId: principal.userId,
+      userName: principal.email,
+      userDisplayName: principal.name || principal.email,
+      existing,
+    });
+    await this.storeChallenge("register", principal.userId, options.challenge);
+    return options;
+  }
+
+  async passkeyRegisterVerify(
+    principal: SessionPrincipal,
+    name: string,
+    response: unknown,
+    ip?: string,
+  ): Promise<PasskeyInfo> {
+    const { rows } = await this.db.query<{ id: string; challenge: string }>(
+      `DELETE FROM webauthn_challenges
+       WHERE id = (
+         SELECT id FROM webauthn_challenges
+         WHERE user_id = $1 AND kind = 'register' AND expires_at > now()
+         ORDER BY created_at DESC LIMIT 1
+       ) RETURNING id, challenge`,
+      [principal.userId],
+    );
+    const pending = rows[0];
+    if (!pending) {
+      throw new UnauthorizedException({ title: "Passkey challenge expired" });
+    }
+    const result = await verifyRegistration({
+      response,
+      expectedChallenge: pending.challenge,
+    });
+    if (!result.verified || !result.registrationInfo) {
+      throw new UnauthorizedException({ title: "Passkey registration failed" });
+    }
+    const info = result.registrationInfo;
+    const cred = info.credential;
+    const inserted = await this.db.query<{
+      id: string;
+      name: string;
+      device_type: string | null;
+      backed_up: boolean;
+      created_at: Date;
+      last_used_at: Date | null;
+    }>(
+      `INSERT INTO webauthn_credentials
+         (user_id, credential_id, public_key, counter, transports, device_type, backed_up, name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name, device_type, backed_up, created_at, last_used_at`,
+      [
+        principal.userId,
+        cred.id,
+        Buffer.from(cred.publicKey),
+        cred.counter,
+        cred.transports ?? [],
+        info.credentialDeviceType ?? null,
+        info.credentialBackedUp ?? false,
+        name,
+      ],
+    );
+    this.audit.log({
+      actorType: "user",
+      actorId: principal.userId,
+      action: "auth.passkey.register",
+      targetType: "passkey",
+      targetId: inserted.rows[0]!.id,
+      ip,
+    });
+    const r = inserted.rows[0]!;
+    return {
+      id: r.id,
+      name: r.name,
+      device_type: r.device_type,
+      backed_up: r.backed_up,
+      created_at: r.created_at.toISOString(),
+      last_used_at: r.last_used_at ? r.last_used_at.toISOString() : null,
+    };
+  }
+
+  async listPasskeys(principal: SessionPrincipal): Promise<PasskeyInfo[]> {
+    const { rows } = await this.db.query<{
+      id: string;
+      name: string;
+      device_type: string | null;
+      backed_up: boolean;
+      created_at: Date;
+      last_used_at: Date | null;
+    }>(
+      `SELECT id, name, device_type, backed_up, created_at, last_used_at
+       FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at DESC`,
+      [principal.userId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      device_type: r.device_type,
+      backed_up: r.backed_up,
+      created_at: r.created_at.toISOString(),
+      last_used_at: r.last_used_at ? r.last_used_at.toISOString() : null,
+    }));
+  }
+
+  async removePasskey(
+    principal: SessionPrincipal,
+    id: string,
+    ip?: string,
+  ): Promise<void> {
+    const { rowCount } = await this.db.query(
+      "DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2",
+      [id, principal.userId],
+    );
+    if (!rowCount) throw new NotFoundException({ title: "Passkey not found" });
+    this.audit.log({
+      actorType: "user",
+      actorId: principal.userId,
+      action: "auth.passkey.remove",
+      targetType: "passkey",
+      targetId: id,
+      ip,
+    });
+  }
+
+  async passkeyAuthOptions(email: string): Promise<PasskeyAuthOptionsResponse> {
+    const { rows } = await this.db.query<{ id: string }>(
+      "SELECT id FROM users WHERE email = $1 AND status = 'active'",
+      [email],
+    );
+    const userId = rows[0]?.id ?? null;
+    const allow = userId ? await this.loadCredentials(userId) : [];
+    const options = await authenticationOptions({ allow });
+    // Store the challenge even for unknown accounts so the response shape and
+    // timing don't reveal whether the email exists or has passkeys.
+    const challengeId = await this.storeChallenge(
+      "auth",
+      userId,
+      options.challenge,
+    );
+    return { challenge_id: challengeId, options };
+  }
+
+  async passkeyAuthVerify(
+    challengeId: string,
+    response: unknown,
+    ip?: string,
+    userAgent?: string,
+  ) {
+    const { rows } = await this.db.query<{
+      user_id: string | null;
+      challenge: string;
+    }>(
+      `DELETE FROM webauthn_challenges
+       WHERE id = $1 AND kind = 'auth' AND expires_at > now()
+       RETURNING user_id, challenge`,
+      [challengeId],
+    );
+    const pending = rows[0];
+    if (!pending || !pending.user_id) {
+      throw new UnauthorizedException({ title: "Passkey login failed" });
+    }
+    const credentialId =
+      typeof response === "object" && response !== null
+        ? (response as { id?: string }).id
+        : undefined;
+    if (!credentialId) {
+      throw new UnauthorizedException({ title: "Passkey login failed" });
+    }
+    const credRows = await this.db.query<{
+      id: string;
+      public_key: Buffer;
+      counter: string;
+      transports: string[];
+    }>(
+      `SELECT id, public_key, counter, transports FROM webauthn_credentials
+       WHERE user_id = $1 AND credential_id = $2`,
+      [pending.user_id, credentialId],
+    );
+    const stored = credRows.rows[0];
+    if (!stored) {
+      throw new UnauthorizedException({ title: "Passkey login failed" });
+    }
+    const result = await verifyAuthentication({
+      response,
+      expectedChallenge: pending.challenge,
+      credential: {
+        credentialId,
+        publicKey: stored.public_key,
+        counter: Number(stored.counter),
+        transports: stored.transports,
+      },
+    });
+    if (!result.verified) {
+      throw new UnauthorizedException({ title: "Passkey login failed" });
+    }
+    await this.db.query(
+      "UPDATE webauthn_credentials SET counter = $1, last_used_at = now() WHERE id = $2",
+      [result.authenticationInfo.newCounter, stored.id],
+    );
+    this.audit.log({
+      actorType: "user",
+      actorId: pending.user_id,
+      action: "auth.passkey.login",
+      targetType: "user",
+      targetId: pending.user_id,
+      ip,
+    });
+    return this.createSession(pending.user_id, ip, userAgent);
   }
 }
 

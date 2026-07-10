@@ -107,6 +107,15 @@ const Env = z.object({
   JM_LANDING_HOST: z.string().optional(),
   JM_API_HOST: z.string().optional(),
 
+  // WebAuthn / passkeys. RP ID must be a registrable suffix shared by the admin
+  // and webmail origins; defaults to the parent cookie domain (JM_WEB_HOST) or
+  // "localhost" in dev. Extra allowed browser origins can be listed
+  // comma-separated (defaults to the https origins of the app hosts).
+  WEBAUTHN_RP_ID: z.string().optional(),
+  WEBAUTHN_RP_NAME: z.string().default("JustMail"),
+  WEBAUTHN_ORIGINS: z.string().optional(),
+  WEBAUTHN_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+
   // DNS provider
   DNS_PROVIDER: z.enum(["cloudflare", "route53", "desec", "none"]).default("cloudflare"),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
