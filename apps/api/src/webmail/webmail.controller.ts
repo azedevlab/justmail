@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -8,6 +9,7 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
@@ -19,13 +21,20 @@ import { ZodPipe } from "../common/zod.pipe";
 import { Throttle } from "../common/throttle.decorator";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
-import { ComposeRequest, FlagAction, SaveDraftRequest } from "@justmail/contracts";
+import {
+  ComposeRequest,
+  FlagAction,
+  SaveDraftRequest,
+  SignatureRequest,
+  TemplateRequest,
+} from "@justmail/contracts";
 import {
   MoveRequest,
   SearchRequest,
   UnlockRequest,
   WebmailService,
 } from "./webmail.service";
+import { PersonalizationService } from "./personalization.service";
 
 const FlagBody = z.object({ action: FlagAction });
 
@@ -37,7 +46,10 @@ const AUTH_THROTTLE = {
 @Controller("orgs/:orgId/webmail/mailboxes/:mailboxId")
 @UseGuards(SessionGuard)
 export class WebmailController {
-  constructor(private readonly svc: WebmailService) {}
+  constructor(
+    private readonly svc: WebmailService,
+    private readonly personalization: PersonalizationService,
+  ) {}
 
   @Post("unlock")
   @Throttle(AUTH_THROTTLE)
@@ -322,6 +334,88 @@ export class WebmailController {
     @Param("uid", ParseIntPipe) uid: number,
   ) {
     return this.svc.discardDraft(principal, orgId, mailboxId, uid);
+  }
+
+  @Get("signatures")
+  listSignatures(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+  ) {
+    return this.personalization.listSignatures(principal, orgId, mailboxId);
+  }
+
+  @Post("signatures")
+  createSignature(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Body(new ZodPipe(SignatureRequest)) body: SignatureRequest,
+  ) {
+    return this.personalization.createSignature(principal, orgId, mailboxId, body);
+  }
+
+  @Put("signatures/:id")
+  updateSignature(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(SignatureRequest)) body: SignatureRequest,
+  ) {
+    return this.personalization.updateSignature(principal, orgId, mailboxId, id, body);
+  }
+
+  @Delete("signatures/:id")
+  @HttpCode(204)
+  deleteSignature(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.personalization.deleteSignature(principal, orgId, mailboxId, id);
+  }
+
+  @Get("templates")
+  listTemplates(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+  ) {
+    return this.personalization.listTemplates(principal, orgId, mailboxId);
+  }
+
+  @Post("templates")
+  createTemplate(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Body(new ZodPipe(TemplateRequest)) body: TemplateRequest,
+  ) {
+    return this.personalization.createTemplate(principal, orgId, mailboxId, body);
+  }
+
+  @Put("templates/:id")
+  updateTemplate(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(TemplateRequest)) body: TemplateRequest,
+  ) {
+    return this.personalization.updateTemplate(principal, orgId, mailboxId, id, body);
+  }
+
+  @Delete("templates/:id")
+  @HttpCode(204)
+  deleteTemplate(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.personalization.deleteTemplate(principal, orgId, mailboxId, id);
   }
 }
 
