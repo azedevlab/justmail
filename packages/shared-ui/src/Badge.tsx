@@ -17,15 +17,15 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 
 const toneClasses: Record<BadgeTone, string> = {
   neutral:
-    "bg-white/5 text-[var(--color-neutral-1100)] border border-[var(--color-border)]",
+    "bg-[var(--hover-overlay-faint)] text-[var(--color-neutral-1100)] border border-[var(--color-border)]",
   brand:
-    "bg-[color:rgb(124_92_255/0.12)] text-[var(--color-brand-400)] border border-[color:rgb(124_92_255/0.25)]",
+    "bg-[color:rgb(124_92_255/0.12)] text-[var(--color-accent)] border border-[color:rgb(124_92_255/0.25)]",
   ok: "bg-[color:rgb(34_197_94/0.12)] text-[var(--color-ok)] border border-[color:rgb(34_197_94/0.25)]",
   warn: "bg-[color:rgb(245_158_11/0.12)] text-[var(--color-warn)] border border-[color:rgb(245_158_11/0.25)]",
   bad: "bg-[color:rgb(239_68_68/0.12)] text-[var(--color-bad)] border border-[color:rgb(239_68_68/0.25)]",
   info: "bg-[color:rgb(59_130_246/0.12)] text-[var(--color-info)] border border-[color:rgb(59_130_246/0.25)]",
   muted:
-    "bg-white/5 text-[var(--color-neutral-900)] border border-[var(--color-border)]",
+    "bg-[var(--hover-overlay-faint)] text-[var(--color-neutral-900)] border border-[var(--color-border)]",
 };
 
 export function Badge({

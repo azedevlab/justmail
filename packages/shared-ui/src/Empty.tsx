@@ -9,21 +9,25 @@ export interface EmptyProps {
 
 export function Empty({ title, description, action, icon }: EmptyProps) {
   return (
-    <div className="border border-dashed border-[var(--color-border)] rounded-xl p-10 text-center bg-transparent">
+    <div className="rounded-2xl p-12 text-center bg-[var(--color-surface-1)] border border-[var(--color-border)] shadow-[var(--shadow-1)]">
       {icon && (
-        <div className="mx-auto mb-3 w-10 h-10 grid place-items-center text-[var(--color-neutral-700)]">
+        <div className="mx-auto mb-4 w-12 h-12 grid place-items-center rounded-xl bg-[color:rgb(124_92_255/0.10)] text-[var(--color-accent)]">
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-medium text-[var(--color-neutral-1100)]">
+      <h3 className="text-sm font-semibold text-[var(--color-neutral-1100)]">
         {title}
       </h3>
       {description && (
-        <p className="text-xs text-[var(--color-neutral-900)] mt-1 max-w-sm mx-auto">
+        <p className="text-[13px] text-[var(--color-neutral-900)] mt-1.5 max-w-sm mx-auto leading-relaxed">
           {description}
         </p>
       )}
-      {action && <div className="mt-4 flex items-center justify-center gap-2">{action}</div>}
+      {action && (
+        <div className="mt-5 flex items-center justify-center gap-2">
+          {action}
+        </div>
+      )}
     </div>
   );
 }

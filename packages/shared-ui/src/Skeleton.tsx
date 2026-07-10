@@ -9,7 +9,7 @@ export function Skeleton({
     <div
       aria-busy="true"
       className={cn(
-        "animate-pulse rounded-md bg-white/[0.06]",
+        "animate-pulse rounded-md bg-[var(--hover-overlay)]",
         className,
       )}
       {...rest}

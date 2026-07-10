@@ -23,7 +23,7 @@ export default function DeveloperPortal() {
         description="OpenAPI 3.1 spec, endpoint reference, and copy-pastable examples."
         actions={
           <a
-            className="text-sm text-[var(--color-brand-400)] hover:underline"
+            className="text-sm text-[var(--color-accent)] hover:underline"
             href={`${API_BASE}/openapi.json`}
             download="justmail-openapi.json"
           >

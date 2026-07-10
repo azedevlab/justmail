@@ -21,5 +21,7 @@ export * from "./FormField.js";
 export * from "./ErrorState.js";
 export * from "./OfflineBanner.js";
 export * from "./Stat.js";
+export * from "./IconButton.js";
+export * from "./Progress.js";
 export * from "./AuroraBackdrop.js";
 export * from "./Wordmark.js";

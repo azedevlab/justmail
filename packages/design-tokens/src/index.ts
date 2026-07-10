@@ -30,10 +30,12 @@ export const surfaceDark = {
   "3": "#1A1E26",
 } as const;
 
+// Light theme: soft gray canvas, white raised surfaces (cards/sidebar),
+// gray recessed surface for hovers/wells, white popovers.
 export const surfaceLight = {
-  bg: "#FFFFFF",
-  "1": "#F7F8FA",
-  "2": "#EEF0F3",
+  bg: "#F7F8FA",
+  "1": "#FFFFFF",
+  "2": "#F2F3F6",
   "3": "#FFFFFF",
 } as const;
 
@@ -73,6 +75,14 @@ export const semantic = {
   warn: "#F59E0B",
   bad: "#EF4444",
   info: "#3B82F6",
+} as const;
+
+// Darker semantic set for light backgrounds (AA contrast on white).
+export const semanticLight = {
+  ok: "#15803D",
+  warn: "#B45309",
+  bad: "#DC2626",
+  info: "#1D4ED8",
 } as const;
 
 export const spacing = {
@@ -155,6 +165,16 @@ export const zIndex = {
   cmdk: 80,
 } as const;
 
+// Soft diffuse shadows for the light theme.
+export const elevationLight = {
+  "0": "none",
+  "1": "0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.04)",
+  "2": "0 2px 4px rgba(16,24,40,0.06), 0 2px 8px rgba(16,24,40,0.06)",
+  "3": "0 4px 12px rgba(16,24,40,0.08), 0 1px 3px rgba(16,24,40,0.05)",
+  "4": "0 12px 24px rgba(16,24,40,0.10), 0 2px 6px rgba(16,24,40,0.06)",
+  "5": "0 24px 48px rgba(16,24,40,0.16), 0 4px 10px rgba(16,24,40,0.06)",
+} as const;
+
 export type Tokens = {
   neutralDark: typeof neutralDark;
   neutralLight: typeof neutralLight;
@@ -162,6 +182,8 @@ export type Tokens = {
   surfaceLight: typeof surfaceLight;
   brand: typeof brand;
   semantic: typeof semantic;
+  semanticLight: typeof semanticLight;
+  elevationLight: typeof elevationLight;
   spacing: typeof spacing;
   radius: typeof radius;
   fontSize: typeof fontSize;
@@ -179,6 +201,8 @@ export const tokens: Tokens = {
   surfaceLight,
   brand,
   semantic,
+  semanticLight,
+  elevationLight,
   spacing,
   radius,
   fontSize,

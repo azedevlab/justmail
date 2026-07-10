@@ -26,7 +26,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="theme-dark">
+    <html lang="en" className="theme-light">
       <body>
         <Providers>{children}</Providers>
       </body>

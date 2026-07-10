@@ -143,7 +143,7 @@ export default function SecurityPage() {
                       </TD>
                       <TD className="text-right">
                         <button
-                          className="text-xs text-[var(--color-brand-400)] hover:underline"
+                          className="text-xs text-[var(--color-accent)] hover:underline"
                           onClick={() => unblock.mutate(b.id)}
                         >
                           Unblock

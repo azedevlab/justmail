@@ -96,7 +96,7 @@ export default function DomainsPage() {
                     <TD className="text-right">
                       <Link
                         href={`/orgs/${orgId}/domains/${d.id}`}
-                        className="text-xs text-[var(--color-brand-400)] hover:underline"
+                        className="text-xs text-[var(--color-accent)] hover:underline"
                       >
                         Manage →
                       </Link>

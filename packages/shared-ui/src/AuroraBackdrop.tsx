@@ -17,7 +17,7 @@ export function AuroraBackdrop({ className }: { className?: string }) {
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)",
+            "radial-gradient(var(--dot-grid) 1px, transparent 1px)",
           backgroundSize: "24px 24px",
           maskImage:
             "radial-gradient(ellipse 80% 60% at 50% 35%, black 30%, transparent 75%)",
@@ -29,7 +29,7 @@ export function AuroraBackdrop({ className }: { className?: string }) {
         className="absolute -top-[20%] left-[15%] w-[45vw] h-[45vw] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, rgba(124,92,255,0.16) 0%, transparent 65%)",
+            "radial-gradient(circle, rgba(124,92,255,0.12) 0%, transparent 65%)",
           filter: "blur(40px)",
         }}
       />
