@@ -81,7 +81,7 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 | M8-1 | P1 | OIDC + SAML SSO | XL | M2-1 | done |
 | M8-2 | P1 | 2FA (TOTP + passkeys) + session management UI | L | M2-1 | done |
 | M8-3 | P1 | LDAP/AD sync (OpenLDAP/AD/FreeIPA/AzureADDS), LDAPS, nested groups, attr mapping, provision/deactivate | XL | — | done |
-| M8-4 | P2 | SCIM provisioning | L | M8-3 | todo |
+| M8-4 | P2 | SCIM provisioning | L | M8-3 | done |
 | M8-5 | P2 | Per-org quotas (Dovecot) surfaced + enforced | M | — | todo |
 | M8-6 | P2 | Retention/legal-hold + mailbox export | L | — | todo |
 

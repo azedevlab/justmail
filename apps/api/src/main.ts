@@ -29,6 +29,12 @@ async function bootstrap(): Promise<void> {
   const sendParser = json({ limit: config.WEBMAIL_SEND_BODY_LIMIT });
   // SAML posts the assertion as application/x-www-form-urlencoded to the ACS.
   const acsParser = urlencoded({ extended: false, limit: "2mb" });
+  // SCIM clients send bodies as application/scim+json, which the default JSON
+  // parser ignores; accept both content types on the SCIM routes.
+  const scimParser = json({
+    type: ["application/json", "application/scim+json"],
+    limit: "2mb",
+  });
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (
       req.method === "POST" &&
@@ -38,6 +44,9 @@ async function bootstrap(): Promise<void> {
     }
     if (req.method === "POST" && /\/auth\/sso\/[^/]+\/acs$/.test(req.path)) {
       return acsParser(req, res, next);
+    }
+    if (/\/scim\/v2\//.test(req.path)) {
+      return scimParser(req, res, next);
     }
     return next();
   });
