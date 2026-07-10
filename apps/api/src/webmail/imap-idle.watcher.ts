@@ -9,6 +9,7 @@ import {
 import { ImapFlow } from "imapflow";
 import { config } from "../config";
 import { RealtimeService } from "../realtime/realtime.service";
+import { WebmailCache } from "./webmail.cache";
 import type { CachedCreds } from "./credential.store";
 
 interface Watcher {
@@ -36,7 +37,10 @@ export class ImapIdleWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly watchers = new Map<string, Watcher>();
   private sweepTimer?: ReturnType<typeof setInterval>;
 
-  constructor(private readonly realtime: RealtimeService) {}
+  constructor(
+    private readonly realtime: RealtimeService,
+    private readonly cache: WebmailCache,
+  ) {}
 
   onModuleInit(): void {
     const everyMs = Math.max(
@@ -78,11 +82,15 @@ export class ImapIdleWatcher implements OnModuleInit, OnModuleDestroy {
       logger: false,
     });
     const topic = `session:${sessionId}`;
-    const emit = (type: string, data: Record<string, unknown>) =>
+    const emit = (type: string, data: Record<string, unknown>) => {
+      // The mailbox changed under us; drop the cached views before the client's
+      // reaction refetches, so it never reads a stale snapshot.
+      void this.cache.bustMailbox(sessionId, mailboxId);
       this.realtime.publish(topic, [], {
         type,
         data: { mailbox_id: mailboxId, folder, ...data },
       });
+    };
     client.on("exists", (e) => {
       if (e.count > e.prevCount) emit("mail:new", { count: e.count });
     });

@@ -9,7 +9,12 @@ import { ImapFlow, type MessageStructureObject } from "imapflow";
 import { parseMime } from "@justmail/mail-parser";
 import nodemailer from "nodemailer";
 import { z } from "zod";
-import { ComposeRequest, FlagAction } from "@justmail/contracts";
+import {
+  ComposeRequest,
+  FlagAction,
+  type Folder,
+  type MessageList,
+} from "@justmail/contracts";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
@@ -21,6 +26,7 @@ import {
 } from "./credential.store";
 import { ImapSessionManager } from "./imap-session.manager";
 import { ImapIdleWatcher } from "./imap-idle.watcher";
+import { WebmailCache } from "./webmail.cache";
 
 const IMAP_HOST = config.IMAP_HOST;
 const IMAP_PORT = config.IMAP_PORT;
@@ -44,6 +50,7 @@ export class WebmailService {
     private readonly credStore: WebmailCredentialStore,
     private readonly sessions: ImapSessionManager,
     private readonly idle: ImapIdleWatcher,
+    private readonly cache: WebmailCache,
   ) {}
 
   /** Arm IDLE-based realtime notifications for the open folder. */
@@ -108,22 +115,34 @@ export class WebmailService {
   }
 
   async listFolders(principal: SessionPrincipal, orgId: string, mailboxId: string) {
+    const cached = await this.cache.getFolders<Folder[]>(
+      principal.sessionId,
+      mailboxId,
+    );
+    if (cached) return cached;
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
-      // LIST-STATUS (RFC 5819) folds STATUS into a single LIST round-trip when
-      // the server supports it (Dovecot does); ImapFlow falls back to per-folder
-      // STATUS commands otherwise. \Noselect folders surface status.error.
-      const boxes = await client.list({
-        statusQuery: { unseen: true, messages: true },
-      });
-      return boxes.map((b) => ({
-        path: b.path,
-        name: b.name,
-        special_use: b.specialUse ?? null,
-        unread: b.status?.unseen ?? 0,
-        total: b.status?.messages ?? 0,
-      }));
-    });
+    const out = await this.withImap(
+      principal.sessionId,
+      mailboxId,
+      creds,
+      async (client) => {
+        // LIST-STATUS (RFC 5819) folds STATUS into a single LIST round-trip when
+        // the server supports it (Dovecot does); ImapFlow falls back to per-folder
+        // STATUS commands otherwise. \Noselect folders surface status.error.
+        const boxes = await client.list({
+          statusQuery: { unseen: true, messages: true },
+        });
+        return boxes.map((b) => ({
+          path: b.path,
+          name: b.name,
+          special_use: b.specialUse ?? null,
+          unread: b.status?.unseen ?? 0,
+          total: b.status?.messages ?? 0,
+        }));
+      },
+    );
+    await this.cache.setFolders(principal.sessionId, mailboxId, out);
+    return out;
   }
 
   async listMessages(
@@ -133,8 +152,15 @@ export class WebmailService {
     folder: string,
     limit: number,
   ) {
+    const cached = await this.cache.getMessageList<MessageList>(
+      principal.sessionId,
+      mailboxId,
+      folder,
+      limit,
+    );
+    if (cached) return cached;
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
+    const out = await this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         const mb =
@@ -232,6 +258,14 @@ export class WebmailService {
         lock.release();
       }
     });
+    await this.cache.setMessageList(
+      principal.sessionId,
+      mailboxId,
+      folder,
+      limit,
+      out,
+    );
+    return out;
   }
 
   // CONDSTORE delta: returns flag changes since the client's last modseq so the
@@ -282,11 +316,19 @@ export class WebmailService {
     mailboxId: string,
     folder: string,
     uid: number,
+    ifNoneMatch?: string,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
     return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
+        // A UID's raw body is immutable within a uidvalidity generation, so the
+        // pair is a sound ETag. Checking it before download lets a conditional
+        // request skip the fetch + MIME parse entirely.
+        const etag = messageEtag(client, uid);
+        if (ifNoneMatch && ifNoneMatch === etag) {
+          return { etag, notModified: true as const };
+        }
         const raw = await client.download(String(uid), undefined, { uid: true });
         if (!raw) throw new NotFoundException({ title: "Message not found" });
         const parsed = await parseMime(raw.content);
@@ -308,23 +350,26 @@ export class WebmailService {
           }
         }
         return {
-          uid,
-          message_id: parsed.message_id,
-          subject: parsed.subject,
-          from: parsed.from,
-          to: parsed.to,
-          cc: parsed.cc,
-          date: parsed.date?.toISOString() ?? null,
-          text: parsed.text,
-          html,
-          attachments: parsed.attachments.map((a, i) => ({
-            id: String(i),
-            filename: a.filename,
-            size: a.size,
-            mime: a.contentType,
-            inline: a.disposition === "inline",
-          })),
-          headers: parsed.headers,
+          etag,
+          message: {
+            uid,
+            message_id: parsed.message_id,
+            subject: parsed.subject,
+            from: parsed.from,
+            to: parsed.to,
+            cc: parsed.cc,
+            date: parsed.date?.toISOString() ?? null,
+            text: parsed.text,
+            html,
+            attachments: parsed.attachments.map((a, i) => ({
+              id: String(i),
+              filename: a.filename,
+              size: a.size,
+              mime: a.contentType,
+              inline: a.disposition === "inline",
+            })),
+            headers: parsed.headers,
+          },
         };
       } finally {
         lock.release();
@@ -339,17 +384,29 @@ export class WebmailService {
     folder: string,
     uid: number,
     index: number,
-  ): Promise<{ filename: string; mime: string; content: Buffer }> {
+    ifNoneMatch?: string,
+  ): Promise<
+    | { notModified: true; etag: string }
+    | { notModified: false; etag: string; filename: string; mime: string; content: Buffer }
+  > {
     const creds = await this.creds(principal, orgId, mailboxId);
     return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
+        // Attachment bytes are immutable for a given uid+index within a
+        // uidvalidity generation, so this is a strong validator.
+        const etag = `"a-${uidValidityOf(client)}-${uid}-${index}"`;
+        if (ifNoneMatch && ifNoneMatch === etag) {
+          return { notModified: true as const, etag };
+        }
         const raw = await client.download(String(uid), undefined, { uid: true });
         if (!raw) throw new NotFoundException({ title: "Message not found" });
         const parsed = await parseMime(raw.content);
         const a = parsed.attachments[index];
         if (!a) throw new NotFoundException({ title: "Attachment not found" });
         return {
+          notModified: false as const,
+          etag,
           filename: a.filename || `attachment-${index}`,
           mime: a.contentType,
           content: a.content,
@@ -369,7 +426,7 @@ export class WebmailService {
     action: FlagAction,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
+    await this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       // spam/not_spam are folder moves (mark-as-spam == relocate to Junk), so
       // resolve destinations before taking the source lock.
       if (action === "spam" || action === "not_spam") {
@@ -408,6 +465,7 @@ export class WebmailService {
         lock.release();
       }
     });
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
   }
 
   private async resolveSpecialFolder(
@@ -430,7 +488,7 @@ export class WebmailService {
     dest: string,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
+    await this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         await client.messageMove(String(uid), dest, { uid: true });
@@ -438,6 +496,7 @@ export class WebmailService {
         lock.release();
       }
     });
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
   }
 
   async remove(
@@ -448,7 +507,7 @@ export class WebmailService {
     uid: number,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
+    await this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         await client.messageDelete(String(uid), { uid: true });
@@ -456,6 +515,7 @@ export class WebmailService {
         lock.release();
       }
     });
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
   }
 
   async send(
@@ -530,6 +590,8 @@ export class WebmailService {
     } catch (err) {
       this.logger.warn(`append to Sent failed: ${(err as Error).message}`);
     }
+    // The Sent folder gained a message; drop this session's cached views.
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
     this.audit.log({
       orgId,
       actorType: "user",
@@ -610,6 +672,20 @@ function toNodemailerAttachments(
     content: Buffer.from(a.content_base64, "base64"),
     contentType: a.mime,
   }));
+}
+
+// UIDVALIDITY of the currently-open mailbox, or "0" if the server withheld it.
+function uidValidityOf(client: ImapFlow): string {
+  const mb = client.mailbox;
+  return mb && typeof mb === "object" && mb.uidValidity != null
+    ? String(mb.uidValidity)
+    : "0";
+}
+
+// Weak ETag for a message body: content is fixed for a uid within a
+// uidvalidity generation, but the value is derived rather than byte-exact.
+function messageEtag(client: ImapFlow, uid: number): string {
+  return `W/"m-${uidValidityOf(client)}-${uid}"`;
 }
 
 function structureHasAttachments(node: MessageStructureObject): boolean {
