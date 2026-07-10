@@ -1,0 +1,15 @@
+{
+  "name": "@justmail/eslint-config",
+  "version": "1.0.0-alpha.1",
+  "description": "Shared ESLint configuration for JustMail packages.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./react": "./react.js"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
+  }
+}

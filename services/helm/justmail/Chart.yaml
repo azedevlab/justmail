@@ -1,0 +1,11 @@
+apiVersion: v2
+name: justmail
+description: JustMail self-hosted mail platform (HA topology).
+type: application
+version: 1.0.0-alpha.1
+appVersion: 1.0.0-alpha.1
+home: https://justmail.dev
+sources:
+  - https://github.com/justmaildev/justmail
+maintainers:
+  - name: JustMail contributors

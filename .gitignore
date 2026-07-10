@@ -1,18 +1,18 @@
-# deps
 node_modules/
 .pnpm-store/
-
-# builds
+.turbo/
 dist/
 .next/
-.turbo/
-*.tsbuildinfo
+coverage/
+storybook-static/
+playwright-report/
+test-results/
 
 # env & secrets
 .env
 .env.*
 !.env.example
-!infra/compose/.env.example
+!services/compose/.env.example
 *.pem
 *.key
 !**/testdata/**/*.key
@@ -20,8 +20,10 @@ dist/
 # runtime data
 data/
 *.log
+*.tsbuildinfo
 
 # os / editor
 .DS_Store
 .idea/
 .vscode/
+.claude/

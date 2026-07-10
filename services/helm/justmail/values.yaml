@@ -1,0 +1,52 @@
+domain: mail.example.com
+adminEmail: postmaster@example.com
+
+image:
+  api: ghcr.io/justmaildev/api:1.0.0-alpha.1
+  admin: ghcr.io/justmaildev/admin:1.0.0-alpha.1
+  webmail: ghcr.io/justmaildev/webmail:1.0.0-alpha.1
+  landing: ghcr.io/justmaildev/landing:1.0.0-alpha.1
+  pullPolicy: IfNotPresent
+
+api:
+  replicaCount: 2
+  resources:
+    requests: { cpu: "500m", memory: "512Mi" }
+    limits:   { cpu: "2",    memory: "2Gi" }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+
+admin:
+  replicaCount: 2
+webmail:
+  replicaCount: 2
+landing:
+  replicaCount: 1
+
+postgres:
+  operator: zalando
+  size: 100Gi
+  version: "17"
+
+redis:
+  mode: sentinel
+  size: 8Gi
+
+storage:
+  kind: s3
+  s3:
+    endpoint: https://s3.us-east-1.amazonaws.com
+    bucket: justmail-prod
+    region: us-east-1
+
+ingress:
+  className: nginx
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt
+
+serviceMonitor:
+  enabled: true

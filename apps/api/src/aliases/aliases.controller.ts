@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { Request } from "express";
-import { CreateAliasRequest, UpdateAliasRequest } from "@justmail/types";
+import { CreateAliasRequest, UpdateAliasRequest } from "@justmail/contracts";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";

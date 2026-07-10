@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
-import type { DmarcReport } from "@justmail/types";
+import type { DmarcReport } from "@justmail/contracts";
 
 /**
  * DMARC aggregate reports arrive as XML at ruf/rua addresses; a downstream

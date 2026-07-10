@@ -1,0 +1,80 @@
+import type { HTMLAttributes, ReactNode } from "react";
+import { cn } from "@justmail/shared-utils";
+
+export function PageHeader({
+  title,
+  description,
+  actions,
+  breadcrumbs,
+}: {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+  breadcrumbs?: ReactNode;
+}) {
+  return (
+    <header className="border-b border-[var(--color-border)] px-6 md:px-8 py-5 flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        {breadcrumbs && <div className="mb-2 text-xs">{breadcrumbs}</div>}
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-neutral-1100)]">
+          {title}
+        </h1>
+        {description && (
+          <p className="text-sm text-[var(--color-neutral-900)] mt-1 max-w-2xl">
+            {description}
+          </p>
+        )}
+      </div>
+      {actions && (
+        <div className="flex items-center gap-2 flex-wrap">{actions}</div>
+      )}
+    </header>
+  );
+}
+
+export function PageBody({
+  className,
+  ...rest
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("p-6 md:p-8 space-y-6 min-h-0", className)}
+      {...rest}
+    />
+  );
+}
+
+export function Section({
+  title,
+  description,
+  actions,
+  children,
+}: {
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      {(title || actions) && (
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            {title && (
+              <h2 className="text-sm font-semibold text-[var(--color-neutral-1100)]">
+                {title}
+              </h2>
+            )}
+            {description && (
+              <p className="text-xs text-[var(--color-neutral-900)] mt-0.5">
+                {description}
+              </p>
+            )}
+          </div>
+          {actions}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}

@@ -11,7 +11,7 @@ import type {
   OrgMember,
   OrgRole,
   UpdateOrgRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { randomBytes } from "node:crypto";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
@@ -52,7 +52,7 @@ export class OrgsService {
       if (keyRow.rows[0]?.org_id === orgId) role = "admin";
     }
     if (!role) throw new NotFoundException({ title: "Organization not found" });
-    if (ROLE_RANK[role] < ROLE_RANK[minRole]) {
+    if ((ROLE_RANK[role] ?? -1) < ROLE_RANK[minRole]) {
       throw new ForbiddenException({
         title: "Insufficient role",
         detail: `Requires ${minRole} or higher.`,
@@ -188,6 +188,7 @@ export class OrgsService {
       email: r.email,
       name: r.name,
       role: r.role,
+      team_id: null,
       created_at: r.created_at.toISOString(),
     }));
   }

@@ -3,7 +3,7 @@ import type {
   BackupRun,
   BackupSchedule,
   UpdateBackupScheduleRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
@@ -85,6 +85,7 @@ export class BackupsService {
       status: r.status,
       size_bytes: r.size_bytes ? Number(r.size_bytes) : null,
       snapshot_ref: r.snapshot_ref,
+      checksum: (r as { checksum?: string | null }).checksum ?? null,
       error: r.error,
       started_at: (r.started_at as Date).toISOString(),
       finished_at: r.finished_at ? (r.finished_at as Date).toISOString() : null,

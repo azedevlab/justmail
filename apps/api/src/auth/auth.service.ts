@@ -14,7 +14,7 @@ import type {
   Me,
   SessionInfo,
   TwoFaSetupResponse,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { config } from "../config";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
@@ -206,6 +206,7 @@ export class AuthService {
       email: principal.email,
       name: principal.name,
       totp_enabled: user.rows[0]?.totp_enabled ?? false,
+      passkey_enabled: false,
       orgs: orgs.rows as Me["orgs"],
     };
   }
@@ -239,8 +240,10 @@ export class AuthService {
       id: r.id,
       ip: r.ip,
       user_agent: r.user_agent,
+      device_fingerprint: null,
       created_at: r.created_at.toISOString(),
       expires_at: r.expires_at.toISOString(),
+      last_seen_at: r.created_at.toISOString(),
       current: r.id === principal.sessionId,
     }));
   }

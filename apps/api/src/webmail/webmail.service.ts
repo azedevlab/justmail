@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { ImapFlow } from "imapflow";
-import { simpleParser } from "mailparser";
+import { parseMime } from "@justmail/mail-parser";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import { Db } from "../db/db.service";
@@ -166,22 +166,18 @@ export class WebmailService {
       try {
         const raw = await client.download(String(uid), undefined, { uid: true });
         if (!raw) throw new NotFoundException({ title: "Message not found" });
-        const parsed = await simpleParser(raw.content);
+        const parsed = await parseMime(raw.content);
         return {
           uid,
-          subject: parsed.subject ?? "",
-          from: parsed.from?.text ?? "",
-          to: parsed.to
-            ? Array.isArray(parsed.to)
-              ? parsed.to.map((a) => a.text).join(", ")
-              : parsed.to.text
-            : "",
+          subject: parsed.subject,
+          from: parsed.from,
+          to: parsed.to,
           date: parsed.date?.toISOString() ?? null,
-          text: parsed.text ?? "",
-          html: parsed.html || null,
+          text: parsed.text,
+          html: parsed.html,
           attachments: parsed.attachments.map((a) => ({
-            filename: a.filename ?? "",
-            size: a.size ?? 0,
+            filename: a.filename,
+            size: a.size,
             mime: a.contentType,
           })),
         };

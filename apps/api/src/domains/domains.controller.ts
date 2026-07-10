@@ -15,7 +15,7 @@ import { Request } from "express";
 import {
   CreateDomainRequest,
   UpdateDomainRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";

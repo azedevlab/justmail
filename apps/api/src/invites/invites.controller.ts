@@ -15,7 +15,7 @@ import { Request, Response } from "express";
 import {
   AcceptInviteRequest,
   CreateInviteRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SESSION_COOKIE, SessionGuard } from "../auth/session.guard";

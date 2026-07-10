@@ -8,7 +8,7 @@ import type {
   CreateMailboxRequest,
   Mailbox,
   UpdateMailboxRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
@@ -276,6 +276,7 @@ function toMailbox(r: MailboxRow): Mailbox {
     id: r.id,
     domain_id: r.domain_id,
     domain_name: r.domain_name,
+    team_id: (r as unknown as { team_id?: string | null }).team_id ?? null,
     local_part: r.local_part,
     address: `${r.local_part}@${r.domain_name}`,
     name: r.name,

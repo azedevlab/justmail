@@ -8,7 +8,7 @@ import type {
   Domain,
   DomainVerifyResponse,
   UpdateDomainRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { resolveTxt } from "node:dns/promises";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
@@ -336,6 +336,7 @@ function toDomain(r: DomainRow): Domain {
     is_primary: r.is_primary,
     catch_all_target: r.catch_all_target,
     max_mailboxes: r.max_mailboxes,
+    retention_days: (r as unknown as { retention_days?: number | null }).retention_days ?? null,
     max_quota_mb: r.max_quota_mb === null ? null : Number(r.max_quota_mb),
     outbound_mode: r.outbound_mode,
     mailbox_count: Number(r.mailbox_count),
