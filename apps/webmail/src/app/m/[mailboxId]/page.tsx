@@ -17,6 +17,8 @@ import type {
   MessageSync,
   Message,
   ComposeRequest,
+  Upload,
+  Attachment,
 } from "@justmail/contracts";
 import { ApiError, useHotkey } from "@justmail/shared-utils";
 import {
@@ -889,6 +891,10 @@ function UnlockScreen({
   );
 }
 
+// Chunk size for tus uploads. Kept under the API's 10 MB raw-body cap so a
+// single chunk never trips the parser limit.
+const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+
 function ComposePanel({
   orgId,
   mailboxId,
@@ -918,6 +924,7 @@ function ComposePanel({
   const [minimized, setMinimized] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const mut = useMutation({
     mutationFn: (b: ComposeRequest) =>
@@ -965,13 +972,37 @@ function ComposePanel({
     setFiles(next);
   };
 
-  const toB64 = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve((r.result as string).split(",")[1] ?? "");
-      r.onerror = () => reject(new Error(`Could not read ${file.name}`));
-      r.readAsDataURL(file);
+  // Upload a file to storage via the tus-style endpoints and return its
+  // finalised attachment id. Chunked to stay under the raw-body limit.
+  const uploadFile = async (file: File): Promise<string> => {
+    const upload = await api.post<Upload>(`/v1/orgs/${orgId}/uploads`, {
+      filename: file.name,
+      mime: file.type || "application/octet-stream",
+      size_bytes: file.size,
     });
+    let offset = 0;
+    while (offset < file.size) {
+      const end = Math.min(offset + UPLOAD_CHUNK_BYTES, file.size);
+      const res = await fetch(
+        `${API_BASE}/v1/orgs/${orgId}/uploads/${upload.id}/chunks`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "content-type": "application/offset+octet-stream",
+            "upload-offset": String(offset),
+          },
+          body: file.slice(offset, end),
+        },
+      );
+      if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
+      offset = end;
+    }
+    const att = await api.post<Attachment>(
+      `/v1/orgs/${orgId}/uploads/${upload.id}/finalise`,
+    );
+    return att.id;
+  };
 
   const subject = f.watch("subject");
   const send = f.handleSubmit(async (v) => {
@@ -985,27 +1016,27 @@ function ComposePanel({
       .map((s) => s.trim())
       .filter(Boolean);
     if (to.length === 0) return setErr("At least one recipient required.");
-    let attachments: ComposeRequest["attachments"];
-    try {
-      attachments =
-        files.length > 0
-          ? await Promise.all(
-              files.map(async (file) => ({
-                filename: file.name,
-                mime: file.type || "application/octet-stream",
-                content_base64: await toB64(file),
-              })),
-            )
-          : undefined;
-    } catch (e) {
-      return setErr((e as Error).message);
+    let attachmentIds: string[] | undefined;
+    if (files.length > 0) {
+      setUploading(true);
+      try {
+        attachmentIds = await Promise.all(files.map(uploadFile));
+      } catch (e) {
+        setUploading(false);
+        return setErr(
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        );
+      }
+      setUploading(false);
     }
     mut.mutate({
       to,
       cc: cc.length > 0 ? cc : undefined,
       subject: v.subject,
       text: v.text,
-      attachments,
+      attachment_ids: attachmentIds,
       in_reply_to: initial?.in_reply_to,
       references: initial?.references,
     });
@@ -1131,8 +1162,12 @@ function ComposePanel({
           <Button variant="ghost" onClick={onClose}>
             Discard
           </Button>
-          <Button variant="primary" loading={mut.isPending} onClick={send}>
-            Send
+          <Button
+            variant="primary"
+            loading={mut.isPending || uploading}
+            onClick={send}
+          >
+            {uploading ? "Uploading…" : "Send"}
           </Button>
         </div>
       </footer>
