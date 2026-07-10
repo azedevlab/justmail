@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Headers,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
@@ -17,11 +18,15 @@ import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { AttachmentsService } from "./attachments.service";
+import { ThumbnailService } from "./thumbnail.service";
 
 @Controller("orgs/:orgId")
 @UseGuards(SessionGuard)
 export class AttachmentsController {
-  constructor(private readonly svc: AttachmentsService) {}
+  constructor(
+    private readonly svc: AttachmentsService,
+    private readonly thumbnails: ThumbnailService,
+  ) {}
 
   @Post("uploads")
   createUpload(
@@ -124,6 +129,33 @@ export class AttachmentsController {
 
     res.status(200).setHeader("content-length", String(size));
     const stream = await this.svc.openStream(orgId, att.content_hash);
+    stream.pipe(res);
+  }
+
+  @Get("attachments/:id/thumbnail")
+  async thumbnail(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Headers("if-none-match") ifNoneMatch: string | undefined,
+    @Res() res: Response,
+  ) {
+    // Validates access and rejects quarantined attachments before serving.
+    await this.svc.forDownload(orgId, id, principal.userId);
+    const thumb = await this.thumbnails.open(orgId, id);
+    if (!thumb) throw new NotFoundException({ title: "Thumbnail not ready" });
+
+    const etag = `"${thumb.contentHash}"`;
+    if (ifNoneMatch && ifNoneMatch.split(",").some((t) => t.trim() === etag)) {
+      res.status(304).setHeader("etag", etag);
+      return res.end();
+    }
+
+    res.setHeader("content-type", "image/webp");
+    res.setHeader("x-content-type-options", "nosniff");
+    res.setHeader("etag", etag);
+    res.setHeader("cache-control", "private, max-age=300");
+    const stream = await this.thumbnails.stream(orgId, thumb.contentHash);
     stream.pipe(res);
   }
 }
