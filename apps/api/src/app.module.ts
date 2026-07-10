@@ -21,6 +21,10 @@ import { DeliverabilityModule } from "./deliverability/deliverability.module";
 import { OpenApiModule } from "./openapi/openapi.module";
 import { WebmailModule } from "./webmail/webmail.module";
 import { CaldavModule } from "./caldav/caldav.module";
+import { StorageModule } from "./storage/storage.module";
+import { AttachmentsModule } from "./attachments/attachments.module";
+import { NotificationsModule } from "./notifications/notifications.module";
+import { RealtimeModule } from "./realtime/realtime.module";
 import { WorkerModule } from "./worker/worker.module";
 import { HealthController } from "./health/health.controller";
 import { MtaStsController } from "./mtasts/mtasts.controller";
@@ -51,6 +55,10 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     OpenApiModule,
     WebmailModule,
     CaldavModule,
+    StorageModule,
+    AttachmentsModule,
+    NotificationsModule,
+    RealtimeModule,
     WorkerModule,
   ],
   controllers: [HealthController, MtaStsController],
