@@ -13,6 +13,7 @@ import {
   FileClock,
   Fingerprint,
   Globe2,
+  HardDrive,
   Inbox,
   KeyRound,
   LayoutDashboard,
@@ -98,6 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Organization",
     items: [
       { href: "/team", label: "Team", icon: <Users size={15} /> },
+      { href: "/quota", label: "Storage", icon: <HardDrive size={15} /> },
       { href: "/settings", label: "Settings", icon: <Settings size={15} /> },
     ],
   },

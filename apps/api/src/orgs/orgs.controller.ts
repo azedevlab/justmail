@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -17,6 +18,7 @@ import {
   CreateOrgRequest,
   UpdateMemberRequest,
   UpdateOrgRequest,
+  UpdateQuotaRequest,
 } from "@justmail/contracts";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
@@ -68,6 +70,24 @@ export class OrgsController {
     @Req() req: Request,
   ) {
     return this.orgs.remove(principal, id, req.ip);
+  }
+
+  @Get(":id/quota")
+  quota(
+    @Principal() principal: SessionPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.orgs.getQuota(id, principal.userId);
+  }
+
+  @Put(":id/quota")
+  setQuota(
+    @Principal() principal: SessionPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(UpdateQuotaRequest)) body: UpdateQuotaRequest,
+    @Req() req: Request,
+  ) {
+    return this.orgs.setQuota(principal, id, body.storage_quota_mb, req.ip);
   }
 
   @Get(":id/members")
