@@ -130,7 +130,8 @@ services:
     profiles: [mail]
     restart: unless-stopped
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # rspamd's jinja `env` only sees RSPAMD_-prefixed vars (prefix stripped).
+      RSPAMD_REDIS_PASSWORD: ${REDIS_PASSWORD}
       RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
     volumes:
       - ../mail/rspamd:/etc/rspamd/local.d:ro
