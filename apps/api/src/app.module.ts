@@ -31,6 +31,7 @@ import { CaldavModule } from "./caldav/caldav.module";
 import { ContactsModule } from "./contacts/contacts.module";
 import { CalendarModule } from "./calendar/calendar.module";
 import { SsoModule } from "./sso/sso.module";
+import { LdapModule } from "./ldap/ldap.module";
 import { StorageModule } from "./storage/storage.module";
 import { AvModule } from "./av/av.module";
 import { AttachmentsModule } from "./attachments/attachments.module";
@@ -74,6 +75,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     ContactsModule,
     CalendarModule,
     SsoModule,
+    LdapModule,
     StorageModule,
     AvModule,
     AttachmentsModule,

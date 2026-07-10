@@ -153,6 +153,9 @@ importers:
       ioredis:
         specifier: ^5.4.1
         version: 5.11.1
+      ldapts:
+        specifier: ^8.1.8
+        version: 8.1.8
       nodemailer:
         specifier: ^6.9.16
         version: 6.10.1
@@ -3088,6 +3091,10 @@ packages:
   launder@1.7.1:
     resolution: {integrity: sha512-mU6WRz5EusL9ZZuiZ5SO4Y6C0P9PAUR9iwdb6bzj4KDihm28DiHFw+/yk9DBH4f+Pv1wuzQ4e2jV3oQ7mkIqvw==}
 
+  ldapts@8.1.8:
+    resolution: {integrity: sha512-Wpdvo+/0DREIynYf2he2efHtjptr5zD7dpesSkZWJqfQdMEgSTytEIsSZVuoDSiiE1+SpXf3emZ7ewxGBTo7Pw==}
+    engines: {node: '>=20'}
+
   leac@0.7.0:
     resolution: {integrity: sha512-qMrZeyEekgdRQ9o6a4NAB2EQZrv827GJdn1vnapwSJ90hWRB4TzUSunvacPkxQ2TnNqHNI1/zSt0hlo0crG8Jw==}
 
@@ -3824,6 +3831,9 @@ packages:
   streamsearch@1.1.0:
     resolution: {integrity: sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==}
     engines: {node: '>=10.0.0'}
+
+  strict-event-emitter-types@2.0.0:
+    resolution: {integrity: sha512-Nk/brWYpD85WlOgzw5h173aci0Teyv8YdIAEtV+N88nDB0dLlazZyJMIsN6eo1/AR61l+p6CJTG1JIyFaoNEEA==}
 
   string-width@4.2.3:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
@@ -6994,6 +7004,10 @@ snapshots:
     dependencies:
       dayjs: 1.11.21
 
+  ldapts@8.1.8:
+    dependencies:
+      strict-event-emitter-types: 2.0.0
+
   leac@0.7.0: {}
 
   levn@0.4.1:
@@ -7738,6 +7752,8 @@ snapshots:
   stream-shift@1.0.3: {}
 
   streamsearch@1.1.0: {}
+
+  strict-event-emitter-types@2.0.0: {}
 
   string-width@4.2.3:
     dependencies:

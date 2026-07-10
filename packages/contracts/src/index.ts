@@ -31,3 +31,4 @@ export * from "./events.js";
 export * from "./contacts.js";
 export * from "./calendar.js";
 export * from "./sso.js";
+export * from "./ldap.js";
