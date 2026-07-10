@@ -15,7 +15,10 @@ import {
   FlagAction,
   type Folder,
   type MessageList,
+  type SaveDraftRequest,
+  type SavedDraft,
 } from "@justmail/contracts";
+import MailComposer from "nodemailer/lib/mail-composer";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
@@ -649,6 +652,81 @@ export class WebmailService {
   }
 
   /**
+   * Append a draft to the IMAP \Drafts folder (best interop: drafts are visible
+   * to every client). When replace_uid is given, the prior autosave is deleted
+   * after the new one lands, so a compose session keeps a single live draft.
+   */
+  async saveDraft(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    input: SaveDraftRequest,
+  ): Promise<SavedDraft> {
+    const creds = await this.creds(principal, orgId, mailboxId);
+    const result = await this.withImap(
+      principal.sessionId,
+      mailboxId,
+      creds,
+      async (client) => {
+        const drafts = await findDraftsBox(client);
+        if (!drafts) {
+          throw new BadRequestException({
+            title: "No Drafts folder",
+            detail: "This mailbox has no Drafts folder to save into.",
+          });
+        }
+        const message = await buildDraftMime({ from: creds.address, ...input });
+        const appended = await client.append(drafts, message, [
+          "\\Draft",
+          "\\Seen",
+        ]);
+        const uid =
+          appended && typeof appended === "object" && "uid" in appended
+            ? (appended.uid ?? null)
+            : null;
+        if (input.replace_uid) {
+          const lock = await client.getMailboxLock(drafts);
+          try {
+            await client.messageDelete(String(input.replace_uid), {
+              uid: true,
+            });
+          } catch {
+            // The prior draft may already be gone; deletion is best-effort.
+          } finally {
+            lock.release();
+          }
+        }
+        return { uid, folder: drafts };
+      },
+    );
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
+    return result;
+  }
+
+  /** Delete a draft from the \Drafts folder by UID. */
+  async discardDraft(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    uid: number,
+  ): Promise<void> {
+    const creds = await this.creds(principal, orgId, mailboxId);
+    await this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
+      const drafts = await findDraftsBox(client);
+      if (!drafts) return;
+      const lock = await client.getMailboxLock(drafts);
+      try {
+        await client.messageDelete(String(uid), { uid: true });
+      } catch {
+        // Already discarded elsewhere; treat as success.
+      } finally {
+        lock.release();
+      }
+    });
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
+  }
+
+  /**
    * Load stored attachments by id, enforce ownership, and virus-scan any that
    * are not yet marked clean. Throws before SMTP is touched if any is infected
    * or unscannable.
@@ -864,6 +942,42 @@ async function findSentBox(client: ImapFlow): Promise<string | null> {
   const boxes = await client.list();
   const sent = boxes.find((b) => (b.specialUse ?? "").toLowerCase() === "\\sent");
   return sent?.path ?? boxes.find((b) => b.name.toLowerCase() === "sent")?.path ?? null;
+}
+
+async function findDraftsBox(client: ImapFlow): Promise<string | null> {
+  const boxes = await client.list();
+  const drafts = boxes.find(
+    (b) => (b.specialUse ?? "").toLowerCase() === "\\drafts",
+  );
+  return (
+    drafts?.path ??
+    boxes.find((b) => b.name.toLowerCase() === "drafts")?.path ??
+    null
+  );
+}
+
+// Compile draft MIME with MailComposer directly so unfinished/empty recipient
+// lists don't trip the send-time recipient validation nodemailer applies.
+export async function buildDraftMime(
+  input: SaveDraftRequest & { from: string },
+): Promise<Buffer> {
+  const mail = new MailComposer({
+    from: input.from,
+    to: input.to.length > 0 ? input.to.join(", ") : undefined,
+    cc: input.cc.length > 0 ? input.cc.join(", ") : undefined,
+    bcc: input.bcc.length > 0 ? input.bcc.join(", ") : undefined,
+    subject: input.subject,
+    text: input.text,
+    html: input.html,
+    inReplyTo: input.in_reply_to,
+    references: input.references,
+  });
+  return new Promise<Buffer>((resolve, reject) => {
+    mail.compile().build((err, message) => {
+      if (err) reject(err);
+      else resolve(message);
+    });
+  });
 }
 
 async function buildMimeMessage(

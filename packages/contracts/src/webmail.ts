@@ -120,6 +120,28 @@ export const Draft = z.object({
 });
 export type Draft = z.infer<typeof Draft>;
 
+// A draft is saved to the IMAP \Drafts folder, so recipients may be partial or
+// empty while composing — unlike ComposeRequest, addresses are not validated.
+export const SaveDraftRequest = z.object({
+  to: z.array(z.string().max(320)).max(64).default([]),
+  cc: z.array(z.string().max(320)).max(64).default([]),
+  bcc: z.array(z.string().max(320)).max(64).default([]),
+  subject: z.string().max(998).default(""),
+  text: z.string().max(1_000_000).default(""),
+  html: z.string().max(1_000_000).optional(),
+  in_reply_to: z.string().optional(),
+  references: z.array(z.string()).optional(),
+  // UID of the previous autosave to replace (delete after the new append).
+  replace_uid: z.number().int().positive().optional(),
+});
+export type SaveDraftRequest = z.infer<typeof SaveDraftRequest>;
+
+export const SavedDraft = z.object({
+  uid: z.number().int().nullable(),
+  folder: z.string(),
+});
+export type SavedDraft = z.infer<typeof SavedDraft>;
+
 export const FlagAction = z.enum([
   "read",
   "unread",

@@ -18,6 +18,7 @@ import type {
   MessageSync,
   Message,
   ComposeRequest,
+  SavedDraft,
   Upload,
   Attachment,
 } from "@justmail/contracts";
@@ -65,10 +66,13 @@ import { useMailboxRealtime } from "@/lib/realtime";
 
 type ComposeInit = {
   to?: string;
+  cc?: string;
   subject?: string;
   text?: string;
   in_reply_to?: string;
   references?: string[];
+  // UID of an existing \Drafts message being resumed, so autosave replaces it.
+  draftUid?: number;
 };
 
 function fmtSize(n: number): string {
@@ -265,6 +269,33 @@ export default function MailboxView() {
   const archivePath = folders.data?.find(
     (f) => (f.special_use ?? "").toLowerCase() === "\\archive",
   )?.path;
+  const draftsPath = folders.data?.find(
+    (f) => (f.special_use ?? "").toLowerCase() === "\\drafts",
+  )?.path;
+
+  // Opening a message in Drafts resumes it in the composer instead of the read
+  // pane; everything else opens normally and clears its unread flag.
+  const openMessage = async (m: MessageSummary) => {
+    if (folder === draftsPath) {
+      try {
+        const full = await api.get<Message>(
+          `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(folder)}/messages/${m.uid}`,
+        );
+        setCompose({
+          to: (full.to.match(/[\w.+-]+@[\w.-]+/g) ?? []).join(", "),
+          cc: (full.cc.match(/[\w.+-]+@[\w.-]+/g) ?? []).join(", "),
+          subject: full.subject,
+          text: full.text,
+          draftUid: m.uid,
+        });
+      } catch {
+        toast({ title: "Could not open draft", tone: "bad" });
+      }
+      return;
+    }
+    setOpenUid(m.uid);
+    if (!m.flags.includes("\\Seen")) flag.mutate({ uid: m.uid, action: "read" });
+  };
   const move = useMutation({
     mutationFn: (v: { uid: number; destination: string }) =>
       api.post(
@@ -523,11 +554,6 @@ export default function MailboxView() {
                     row.kind === "head" ? row.thread.messages[0]! : row.m;
                   const count =
                     row.kind === "head" ? row.thread.messages.length : 1;
-                  const open = (uid: number, flags: string[]) => {
-                    setOpenUid(uid);
-                    if (!flags.includes("\\Seen"))
-                      flag.mutate({ uid, action: "read" });
-                  };
                   return (
                     <li
                       key={vi.key}
@@ -544,7 +570,7 @@ export default function MailboxView() {
                           row.kind === "head" && expanded.has(row.thread.id)
                         }
                         selected={openUid === m.uid}
-                        onOpen={() => open(m.uid, m.flags)}
+                        onOpen={() => openMessage(m)}
                         onToggle={
                           row.kind === "head" && count > 1
                             ? () => toggleThread(row.thread.id)
@@ -1005,6 +1031,16 @@ function UnlockScreen({
 // single chunk never trips the parser limit.
 const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
+// Idle delay before a compose draft is autosaved to \Drafts.
+const DRAFT_AUTOSAVE_MS = 2500;
+
+function splitAddresses(value: string): string[] {
+  return value
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function ComposePanel({
   orgId,
   mailboxId,
@@ -1024,22 +1060,44 @@ function ComposePanel({
   }>({
     defaultValues: {
       to: initial?.to ?? "",
-      cc: "",
+      cc: initial?.cc ?? "",
       subject: initial?.subject ?? "",
       text: initial?.text ?? "",
     },
   });
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [err, setErr] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Live UID of this compose session's draft, carried across autosaves.
+  const draftUidRef = useRef<number | undefined>(initial?.draftUid);
+  const savingRef = useRef(false);
+
+  const discardDraft = async () => {
+    const uid = draftUidRef.current;
+    if (uid === undefined) return;
+    draftUidRef.current = undefined;
+    try {
+      await api.post(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/drafts/${uid}/discard`,
+      );
+      qc.invalidateQueries({ queryKey: ["messages", orgId, mailboxId] });
+      qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+    } catch {
+      // Best-effort: a missing draft is already the desired state.
+    }
+  };
+
   const mut = useMutation({
     mutationFn: (b: ComposeRequest) =>
       api.post(`/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/send`, b),
-    onSuccess: () => {
+    onSuccess: async () => {
+      await discardDraft();
       onClose();
       toast({ title: "Sent", tone: "ok" });
     },
@@ -1115,6 +1173,46 @@ function ComposePanel({
   };
 
   const subject = f.watch("subject");
+  const toVal = f.watch("to");
+  const ccVal = f.watch("cc");
+  const textVal = f.watch("text");
+
+  // Autosave to \Drafts after a pause in typing, replacing the prior version so
+  // the folder keeps a single live draft per compose session.
+  useEffect(() => {
+    const hasContent = [toVal, ccVal, subject, textVal].some((v) =>
+      (v ?? "").trim(),
+    );
+    if (!hasContent) return;
+    const timer = setTimeout(async () => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      try {
+        const res = await api.post<SavedDraft>(
+          `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/drafts`,
+          {
+            to: splitAddresses(toVal),
+            cc: splitAddresses(ccVal),
+            subject,
+            text: textVal,
+            in_reply_to: initial?.in_reply_to,
+            references: initial?.references,
+            replace_uid: draftUidRef.current,
+          },
+        );
+        if (res.uid != null) {
+          draftUidRef.current = res.uid;
+          setSavedAt(Date.now());
+        }
+      } catch {
+        // Autosave is best-effort; the user can still send or retry.
+      } finally {
+        savingRef.current = false;
+      }
+    }, DRAFT_AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [toVal, ccVal, subject, textVal, orgId, mailboxId, initial]);
+
   const send = f.handleSubmit(async (v) => {
     setErr(null);
     const to = v.to
@@ -1265,11 +1363,17 @@ function ComposePanel({
             </IconButton>
           </Tooltip>
           <span className="text-[11px] text-[var(--color-neutral-700)]">
-            Plain text
+            {savedAt ? "Draft saved" : "Plain text"}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={onClose}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              void discardDraft();
+              onClose();
+            }}
+          >
             Discard
           </Button>
           <Button
