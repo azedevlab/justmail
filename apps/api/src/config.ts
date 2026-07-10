@@ -33,6 +33,10 @@ const Env = z.object({
   // Sliding TTL for an unlocked-mailbox credential. Refreshed on each use, so
   // it expires after this many seconds of inactivity rather than living forever.
   WEBMAIL_CREDENTIAL_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  // Short TTL for the folder/message-list read cache. Kept small because it is
+  // busted on mutations and IDLE notifications; this only bounds cross-session
+  // staleness for folders the session is not actively watching.
+  WEBMAIL_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(20),
 
   // Rate limiting (window seconds / max hits). Generous defaults; tune per deploy.
   RATE_LIMIT_GLOBAL_TTL: z.coerce.number().int().positive().default(60),

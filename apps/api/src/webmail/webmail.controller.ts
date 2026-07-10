@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Param,
   ParseIntPipe,
@@ -100,20 +101,30 @@ export class WebmailController {
   }
 
   @Get("folders/:folder/messages/:uid")
-  getMessage(
+  async getMessage(
     @Principal() principal: SessionPrincipal,
     @Param("orgId", ParseUUIDPipe) orgId: string,
     @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
     @Param("folder") folder: string,
     @Param("uid", ParseIntPipe) uid: number,
+    @Headers("if-none-match") ifNoneMatch: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.svc.getMessage(
+    const result = await this.svc.getMessage(
       principal,
       orgId,
       mailboxId,
       decodeURIComponent(folder),
       uid,
+      ifNoneMatch,
     );
+    res.setHeader("ETag", result.etag);
+    res.setHeader("Cache-Control", "private, no-cache");
+    if ("notModified" in result) {
+      res.status(304);
+      return;
+    }
+    return result.message;
   }
 
   @Get("folders/:folder/messages/:uid/attachments/:idx")
@@ -124,6 +135,7 @@ export class WebmailController {
     @Param("folder") folder: string,
     @Param("uid", ParseIntPipe) uid: number,
     @Param("idx", ParseIntPipe) idx: number,
+    @Headers("if-none-match") ifNoneMatch: string | undefined,
     @Res() res: Response,
   ) {
     const a = await this.svc.getAttachment(
@@ -133,7 +145,14 @@ export class WebmailController {
       decodeURIComponent(folder),
       uid,
       idx,
+      ifNoneMatch,
     );
+    res.setHeader("ETag", a.etag);
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    if (a.notModified) {
+      res.status(304).end();
+      return;
+    }
     // Sender-controlled MIME can be active content (text/html, svg with script).
     // nosniff is already set globally; additionally collapse anything outside a
     // known-inert allowlist to octet-stream, and always serve as attachment so

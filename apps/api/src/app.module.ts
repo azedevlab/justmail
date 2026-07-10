@@ -3,6 +3,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { RedisModule } from "./common/redis.module";
 import { ThrottlerGuard } from "./common/throttler.guard";
 import { CredentialStoreModule } from "./webmail/credential.store";
+import { WebmailCacheModule } from "./webmail/webmail.cache";
 import { ImapSessionModule } from "./webmail/imap-session.manager";
 import { ImapIdleModule } from "./webmail/imap-idle.watcher";
 import { DbModule } from "./db/db.module";
@@ -39,6 +40,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
   imports: [
     RedisModule,
     CredentialStoreModule,
+    WebmailCacheModule,
     ImapSessionModule,
     ImapIdleModule,
     DbModule,

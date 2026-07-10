@@ -40,7 +40,7 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 | M4-2 | P1 | Route all webmail ops through the manager; remove per-request connect/logout | M | M4-1 | done |
 | M4-3 | P1 | IDLE → WS publish (`mail:new`, `mail:flags`); client subscription | L | M4-2 | done |
 | M4-4 | P2 | `LIST-STATUS` folder counts; CONDSTORE delta sync | M | M4-2 | done |
-| M4-5 | P2 | Redis cache: folder list + message snapshots; ETag on message/attachment | M | M4-2 | todo |
+| M4-5 | P2 | Redis cache: folder list + message snapshots; ETag on message/attachment | M | M4-2 | done |
 | M4-6 | P2 | Message-list virtualization | M | M4-3 | todo |
 
 ## M5 — Storage-backed attachments
