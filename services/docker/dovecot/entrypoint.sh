@@ -10,6 +10,20 @@ chmod 600 /etc/dovecot/dovecot-sql.conf.ext
 
 mkdir -p /var/vmail && chown vmail:vmail /var/vmail
 
+# IMAPSieve → rspamd Bayes training. Install the learn scripts into a writable
+# dir (the templates mount is read-only), stash the controller password for the
+# pipe helpers, and precompile the sieve scripts so Dovecot doesn't need to.
+install -d -o vmail -g vmail -m 0755 /etc/dovecot/sieve
+install -o vmail -g vmail -m 0644 \
+  "$TPL/report-spam.sieve" "$TPL/report-ham.sieve" /etc/dovecot/sieve/
+install -o vmail -g vmail -m 0755 \
+  "$TPL/learn-spam.sh" "$TPL/learn-ham.sh" /etc/dovecot/sieve/
+printf '%s' "${RSPAMD_CONTROLLER_PASSWORD:-}" > /etc/dovecot/sieve/rspamd.password
+chown vmail:vmail /etc/dovecot/sieve/rspamd.password
+chmod 600 /etc/dovecot/sieve/rspamd.password
+sievec /etc/dovecot/sieve/report-spam.sieve
+sievec /etc/dovecot/sieve/report-ham.sieve
+
 # Self-signed bootstrap cert until certd issues the real one
 if [[ ! -s /certs/mail/fullchain.pem ]]; then
   mkdir -p /etc/dovecot/bootstrap-certs
