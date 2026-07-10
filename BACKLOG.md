@@ -72,7 +72,7 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 |---|---|---|---|---|---|
 | M7-1 | P2 | Contacts UI (CardDAV) + compose autocomplete/chips | L | M6-5 | done |
 | M7-2 | P2 | Calendar UI (CalDAV) read + basic CRUD | L | — | done |
-| M7-3 | P2 | PWA manifest + service worker + offline read + web-push | L | M4-3 | todo |
+| M7-3 | P2 | PWA manifest + service worker + offline read + web-push | L | M4-3 | done |
 
 ## M8 — Enterprise
 

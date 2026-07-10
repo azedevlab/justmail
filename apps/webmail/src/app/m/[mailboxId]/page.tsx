@@ -65,6 +65,7 @@ import {
 import {
   Archive,
   ArrowLeft,
+  Bell,
   Bold,
   CalendarDays,
   ChevronRight,
@@ -98,6 +99,12 @@ import {
 import { useMe } from "@/lib/session";
 import { api, API_BASE } from "@/lib/api";
 import { useMailboxRealtime } from "@/lib/realtime";
+import {
+  enablePush,
+  pushEnabled,
+  pushSupported,
+  registerServiceWorker,
+} from "@/lib/pwa";
 
 type ComposeInit = {
   to?: string;
@@ -154,6 +161,8 @@ export default function MailboxView() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [pushOn, setPushOn] = useState(false);
+  const [pushCapable, setPushCapable] = useState(false);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [listW, setListW] = useState(360);
@@ -172,6 +181,28 @@ export default function MailboxView() {
     const saved = Number(localStorage.getItem("jm.listWidth"));
     if (saved >= 280 && saved <= 560) setListW(saved);
   }, []);
+
+  // Register the offline/push service worker and reflect the current push
+  // subscription state in the toolbar toggle.
+  useEffect(() => {
+    registerServiceWorker();
+    setPushCapable(pushSupported());
+    void pushEnabled().then(setPushOn);
+  }, []);
+
+  const togglePush = async () => {
+    const result = await enablePush();
+    if (result === "enabled") {
+      setPushOn(true);
+      toast({ title: "Notifications enabled", tone: "ok" });
+    } else if (result === "denied") {
+      toast({ title: "Notifications blocked in browser", tone: "bad" });
+    } else if (result === "unconfigured") {
+      toast({ title: "Push not configured on this server", tone: "bad" });
+    } else {
+      toast({ title: "Push not supported here", tone: "bad" });
+    }
+  };
 
   // Debounce the search box so each keystroke doesn't fire an IMAP SEARCH.
   useEffect(() => {
@@ -521,6 +552,22 @@ export default function MailboxView() {
             <RefreshCw size={14} />
           </button>
         </Tooltip>
+        {pushCapable && (
+          <Tooltip content={pushOn ? "Notifications on" : "Enable notifications"}>
+            <button
+              onClick={() => void togglePush()}
+              className={`p-2 rounded-lg transition-colors ${
+                pushOn
+                  ? "text-[var(--color-accent)] hover:bg-[var(--hover-overlay)]"
+                  : "text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)]"
+              }`}
+              aria-label="Enable notifications"
+              aria-pressed={pushOn}
+            >
+              <Bell size={14} />
+            </button>
+          </Tooltip>
+        )}
         <Tooltip content="Calendar">
           <button
             onClick={() => setCalendarOpen(true)}

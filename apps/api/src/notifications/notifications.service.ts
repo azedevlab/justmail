@@ -1,10 +1,19 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import webpush from "web-push";
 import type {
   Notification,
   WebPushSubscription,
 } from "@justmail/contracts";
+import { config } from "../config";
 import { Db } from "../db/db.service";
 import type { SessionPrincipal } from "../auth/auth.service";
+
+interface SubRow {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
 
 interface Row {
   id: string;
@@ -19,8 +28,57 @@ interface Row {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
+  private vapidReady = false;
 
   constructor(private readonly db: Db) {}
+
+  // Configure web-push VAPID details once, lazily. Returns false when the
+  // deployment has not provisioned keys, in which case push is a no-op.
+  private ensureVapid(): boolean {
+    if (this.vapidReady) return true;
+    const pub = config.WEB_PUSH_VAPID_PUBLIC_KEY;
+    const priv = config.WEB_PUSH_VAPID_PRIVATE_KEY;
+    if (!pub || !priv) return false;
+    const subject =
+      config.WEB_PUSH_SUBJECT ?? `mailto:postmaster@${config.MAIL_HOSTNAME}`;
+    webpush.setVapidDetails(subject, pub, priv);
+    this.vapidReady = true;
+    return true;
+  }
+
+  // Fan out a notification to every registered browser subscription for the
+  // user. Best-effort: expired endpoints (404/410) are pruned; other failures
+  // are logged but not retried here.
+  private async pushToUser(
+    userId: string,
+    payload: { title: string; body: string; url: string | null },
+  ): Promise<void> {
+    if (!this.ensureVapid()) return;
+    const { rows } = await this.db.query<SubRow>(
+      "SELECT id, endpoint, p256dh, auth FROM web_push_subs WHERE user_id = $1",
+      [userId],
+    );
+    const body = JSON.stringify(payload);
+    await Promise.all(
+      rows.map(async (s) => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+            body,
+          );
+        } catch (err) {
+          const status = (err as { statusCode?: number }).statusCode;
+          if (status === 404 || status === 410) {
+            await this.db.query("DELETE FROM web_push_subs WHERE id = $1", [s.id]);
+          } else {
+            this.logger.warn(
+              `web-push failed for ${s.id}: ${(err as Error).message}`,
+            );
+          }
+        }
+      }),
+    );
+  }
 
   async list(principal: SessionPrincipal): Promise<Notification[]> {
     const { rows } = await this.db.query<Row>(
@@ -68,7 +126,13 @@ export class NotificationsService {
         input.url ?? null,
       ],
     );
-    return toNotification(rows[0]!);
+    const notification = toNotification(rows[0]!);
+    void this.pushToUser(input.userId, {
+      title: notification.title,
+      body: notification.body,
+      url: notification.url,
+    });
+    return notification;
   }
 
   async subscribeWebPush(

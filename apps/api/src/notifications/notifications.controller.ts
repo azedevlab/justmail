@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { z } from "zod";
+import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
@@ -44,6 +45,13 @@ export class NotificationsController {
   @HttpCode(204)
   markAllRead(@Principal() principal: SessionPrincipal) {
     return this.svc.markAllRead(principal);
+  }
+
+  // Public VAPID key the browser needs to create a push subscription. Null
+  // when the deployment has not provisioned web-push keys.
+  @Get("web-push/key")
+  vapidKey(): { key: string | null } {
+    return { key: config.WEB_PUSH_VAPID_PUBLIC_KEY ?? null };
   }
 
   @Post("web-push/subscribe")
