@@ -78,6 +78,14 @@ const Env = z.object({
   // A 'sending' row older than this was stranded by a crashed dispatch; reclaim it.
   WEBMAIL_SEND_CLAIM_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(120),
 
+  // Web Push (VAPID). Both keys are optional so the API boots without them;
+  // push delivery is simply disabled until they are set. Generate a pair with
+  // `npx web-push generate-vapid-keys`. The subject must be a mailto: or https
+  // URL identifying the sender; it defaults to postmaster@MAIL_HOSTNAME.
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional(),
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional(),
+  WEB_PUSH_SUBJECT: z.string().optional(),
+
   // Rate limiting (window seconds / max hits). Generous defaults; tune per deploy.
   RATE_LIMIT_GLOBAL_TTL: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().positive().default(300),
