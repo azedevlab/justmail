@@ -30,6 +30,7 @@ import { WebmailModule } from "./webmail/webmail.module";
 import { CaldavModule } from "./caldav/caldav.module";
 import { ContactsModule } from "./contacts/contacts.module";
 import { CalendarModule } from "./calendar/calendar.module";
+import { SsoModule } from "./sso/sso.module";
 import { StorageModule } from "./storage/storage.module";
 import { AvModule } from "./av/av.module";
 import { AttachmentsModule } from "./attachments/attachments.module";
@@ -72,6 +73,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     CaldavModule,
     ContactsModule,
     CalendarModule,
+    SsoModule,
     StorageModule,
     AvModule,
     AttachmentsModule,

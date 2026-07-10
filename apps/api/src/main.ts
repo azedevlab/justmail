@@ -4,7 +4,13 @@ import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { WsAdapter } from "@nestjs/platform-ws";
 import cookieParser from "cookie-parser";
-import { json, type NextFunction, type Request, type Response } from "express";
+import {
+  json,
+  urlencoded,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { AppModule } from "./app.module";
 import { config } from "./config";
 import { Db } from "./db/db.service";
@@ -21,12 +27,17 @@ async function bootstrap(): Promise<void> {
   // Registered before the global parser so body-parser marks req._body and the
   // global json() skips these requests.
   const sendParser = json({ limit: config.WEBMAIL_SEND_BODY_LIMIT });
+  // SAML posts the assertion as application/x-www-form-urlencoded to the ACS.
+  const acsParser = urlencoded({ extended: false, limit: "2mb" });
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (
       req.method === "POST" &&
       /\/webmail\/mailboxes\/[^/]+\/send$/.test(req.path)
     ) {
       return sendParser(req, res, next);
+    }
+    if (req.method === "POST" && /\/auth\/sso\/[^/]+\/acs$/.test(req.path)) {
+      return acsParser(req, res, next);
     }
     return next();
   });
