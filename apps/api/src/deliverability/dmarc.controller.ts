@@ -14,6 +14,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
+import { SkipThrottle } from "../common/throttle.decorator";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { DmarcService } from "./dmarc.service";
@@ -46,6 +47,7 @@ export class DmarcController {
   }
 
   @Post("internal/dmarc/ingest")
+  @SkipThrottle()
   @HttpCode(204)
   async ingest(
     @Headers("x-ingest-token") token: string | undefined,

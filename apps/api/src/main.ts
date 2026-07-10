@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { WsAdapter } from "@nestjs/platform-ws";
 import cookieParser from "cookie-parser";
+import { json, type NextFunction, type Request, type Response } from "express";
 import { AppModule } from "./app.module";
 import { config } from "./config";
 import { Db } from "./db/db.service";
@@ -15,13 +16,34 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
-  // Big enough for vector log batches and webmail sends with base64
-  // attachments (15MB binary ≈ 20MB base64 + JSON overhead).
-  app.useBodyParser("json", { limit: "32mb" });
+  // Large bodies are scoped to the webmail send route only (base64 attachments);
+  // every other endpoint keeps a small default so a big payload can't DoS them.
+  // Registered before the global parser so body-parser marks req._body and the
+  // global json() skips these requests.
+  const sendParser = json({ limit: config.WEBMAIL_SEND_BODY_LIMIT });
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (
+      req.method === "POST" &&
+      /\/webmail\/mailboxes\/[^/]+\/send$/.test(req.path)
+    ) {
+      return sendParser(req, res, next);
+    }
+    return next();
+  });
+  app.useBodyParser("json", { limit: "2mb" });
   // Raw binary chunks for tus.io uploads.
   app.useBodyParser("raw", {
     type: "application/offset+octet-stream",
     limit: "10mb",
+  });
+
+  // Baseline security headers on every API response.
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+    next();
   });
 
   const ran = await runMigrations(app.get(Db).pool);

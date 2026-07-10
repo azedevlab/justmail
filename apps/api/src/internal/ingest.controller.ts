@@ -9,6 +9,7 @@ import {
 import { createHash, timingSafeEqual } from "node:crypto";
 import { config } from "../config";
 import { Db } from "../db/db.service";
+import { SkipThrottle } from "../common/throttle.decorator";
 import { parseByService } from "./parse";
 
 interface VectorEvent {
@@ -22,6 +23,7 @@ const digest = (s: string) => createHash("sha256").update(s).digest();
 // Vector ships mail-stack log lines here; parseByService pulls out the fields
 // (queue_id, from/to, spam score, dsn, tls) that dashboards + queue views need.
 @Controller("internal/events")
+@SkipThrottle()
 export class IngestController {
   constructor(private readonly db: Db) {}
 

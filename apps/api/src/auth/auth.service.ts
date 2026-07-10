@@ -19,6 +19,7 @@ import { config } from "../config";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { open, seal } from "../common/secretbox";
+import { WebmailCredentialStore } from "../webmail/credential.store";
 
 const ARGON2_OPTS: argon2.Options = {
   type: argon2.argon2id,
@@ -56,6 +57,7 @@ export class AuthService {
   constructor(
     private readonly db: Db,
     private readonly audit: AuditService,
+    private readonly credStore: WebmailCredentialStore,
   ) {}
 
   async status(): Promise<{ bootstrapped: boolean }> {
@@ -239,6 +241,7 @@ export class AuthService {
     await this.db.query("DELETE FROM sessions WHERE id = $1", [
       principal.sessionId,
     ]);
+    await this.credStore.purgeSession(principal.sessionId);
     this.audit.log({
       actorType: "user",
       actorId: principal.userId,
@@ -278,6 +281,7 @@ export class AuthService {
       [sessionId, principal.userId],
     );
     if (!rowCount) throw new NotFoundException({ title: "Session not found" });
+    await this.credStore.purgeSession(sessionId);
     this.audit.log({
       actorType: "user",
       actorId: principal.userId,

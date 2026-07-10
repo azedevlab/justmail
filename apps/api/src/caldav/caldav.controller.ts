@@ -10,6 +10,7 @@ import {
 import { createHash, timingSafeEqual } from "node:crypto";
 import { ImapFlow } from "imapflow";
 import { config } from "../config";
+import { SkipThrottle } from "../common/throttle.decorator";
 
 /**
  * Radicale http_x_remote_user backend calls GET /internal/caldav/auth on every
@@ -17,6 +18,7 @@ import { config } from "../config";
  * "does this password work" check — same auth surface as webmail.
  */
 @Controller("internal/caldav")
+@SkipThrottle()
 export class CaldavController {
   @Get("auth")
   @HttpCode(200)

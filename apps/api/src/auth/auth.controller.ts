@@ -20,7 +20,13 @@ import {
 } from "@justmail/contracts";
 import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
+import { Throttle } from "../common/throttle.decorator";
 import { AuthService, SessionPrincipal } from "./auth.service";
+
+const AUTH_THROTTLE = {
+  limit: config.RATE_LIMIT_AUTH_MAX,
+  ttl: config.RATE_LIMIT_AUTH_TTL,
+};
 import { Principal, SESSION_COOKIE, SessionGuard } from "./session.guard";
 
 @Controller("auth")
@@ -45,6 +51,7 @@ export class AuthController {
   }
 
   @Post("bootstrap")
+  @Throttle(AUTH_THROTTLE)
   async bootstrap(
     @Body(new ZodPipe(BootstrapRequest)) body: BootstrapRequest,
     @Req() req: Request,
@@ -60,6 +67,7 @@ export class AuthController {
   }
 
   @Post("login")
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(200)
   async login(
     @Body(new ZodPipe(LoginRequest)) body: LoginRequest,
@@ -94,6 +102,7 @@ export class AuthController {
   }
 
   @Post("ws-ticket")
+  @Throttle(AUTH_THROTTLE)
   @UseGuards(SessionGuard)
   wsTicket(@Principal() principal: SessionPrincipal) {
     return this.auth.wsTicket(principal);

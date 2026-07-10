@@ -1,4 +1,8 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { RedisModule } from "./common/redis.module";
+import { ThrottlerGuard } from "./common/throttler.guard";
+import { CredentialStoreModule } from "./webmail/credential.store";
 import { DbModule } from "./db/db.module";
 import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
@@ -31,6 +35,8 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
 
 @Module({
   imports: [
+    RedisModule,
+    CredentialStoreModule,
     DbModule,
     AuditModule,
     // ApiKeysModule is @Global so SessionGuard can resolve it without a circular
@@ -62,5 +68,6 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     WorkerModule,
   ],
   controllers: [HealthController, MtaStsController],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

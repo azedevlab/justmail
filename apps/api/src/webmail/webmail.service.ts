@@ -12,30 +12,23 @@ import { z } from "zod";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
-import { open, seal } from "../common/secretbox";
 import { config } from "../config";
 import type { SessionPrincipal } from "../auth/auth.service";
+import {
+  type CachedCreds,
+  WebmailCredentialStore,
+} from "./credential.store";
 
-const IMAP_HOST = "dovecot";
-const IMAP_PORT = 993;
-const SMTP_HOST = "postfix";
-const SMTP_PORT = 587;
-
-interface CachedCreds {
-  address: string;
-  password: string;
-}
+const IMAP_HOST = config.IMAP_HOST;
+const IMAP_PORT = config.IMAP_PORT;
+const SMTP_HOST = config.SMTP_HOST;
+const SMTP_PORT = config.SMTP_PORT;
 
 interface MailboxAccess {
   mailboxId: string;
   address: string;
   orgId: string;
 }
-
-// Password cache: users unlock a mailbox once per session; we seal the password
-// with the platform key and stash it in a settings row keyed by session id.
-const CACHE_KEY = (sessionId: string, mailboxId: string) =>
-  `webmail.session:${sessionId}.${mailboxId}`;
 
 @Injectable()
 export class WebmailService {
@@ -45,6 +38,7 @@ export class WebmailService {
     private readonly db: Db,
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
+    private readonly credStore: WebmailCredentialStore,
   ) {}
 
   /** Unlock the mailbox by verifying the current password against Dovecot. */
@@ -61,19 +55,19 @@ export class WebmailService {
       await client.connect();
       await client.logout();
     } catch (err) {
+      this.logger.warn(
+        `mailbox unlock failed for ${mb.address}: ${(err as Error).message}`,
+      );
       throw new ForbiddenException({
         title: "Wrong mailbox password",
-        detail: (err as Error).message.slice(0, 200),
+        detail: "The mailbox password was not accepted. Please try again.",
       });
     }
-    await this.db.query(
-      `INSERT INTO settings (key, value, updated_by) VALUES ($1, $2::jsonb, $3)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      [
-        CACHE_KEY(principal.sessionId, mailboxId),
-        JSON.stringify({ address: mb.address, sealed: seal(password) }),
-        principal.userId,
-      ],
+    await this.credStore.store(
+      principal.sessionId,
+      mailboxId,
+      mb.address,
+      password,
     );
     this.audit.log({
       orgId,
@@ -86,9 +80,7 @@ export class WebmailService {
   }
 
   async lock(principal: SessionPrincipal, mailboxId: string) {
-    await this.db.query("DELETE FROM settings WHERE key = $1", [
-      CACHE_KEY(principal.sessionId, mailboxId),
-    ]);
+    await this.credStore.remove(principal.sessionId, mailboxId);
   }
 
   async listFolders(principal: SessionPrincipal, orgId: string, mailboxId: string) {
@@ -189,7 +181,8 @@ export class WebmailService {
         let html = parsed.html;
         if (html) {
           for (const a of parsed.attachments) {
-            if (!a.contentId || a.size > 2_000_000) continue;
+            if (!a.contentId || a.size > config.WEBMAIL_ATTACHMENT_INLINE_MAX_BYTES)
+              continue;
             const cid = a.contentId.replace(/[<>]/g, "");
             if (cid && html.includes(`cid:${cid}`)) {
               html = html
@@ -324,10 +317,11 @@ export class WebmailService {
       (sum, a) => sum + Math.ceil(a.content_base64.length * 0.75),
       0,
     );
-    if (totalBytes > 15_000_000) {
+    const maxTotal = config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES;
+    if (totalBytes > maxTotal) {
       throw new BadRequestException({
         title: "Attachments too large",
-        detail: "Total attachment size must stay under 15 MB.",
+        detail: `Total attachment size must stay under ${Math.floor(maxTotal / 1_000_000)} MB.`,
       });
     }
     const creds = await this.creds(principal, orgId, mailboxId);
@@ -337,7 +331,7 @@ export class WebmailService {
       secure: false,
       requireTLS: true,
       auth: { user: creds.address, pass: creds.password },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: config.SMTP_TLS_REJECT_UNAUTHORIZED },
     });
     const info = await transport.sendMail({
       from: creds.address,
@@ -386,18 +380,14 @@ export class WebmailService {
     mailboxId: string,
   ): Promise<CachedCreds> {
     await this.mailboxFor(orgId, mailboxId, principal.userId);
-    const { rows } = await this.db.query<{ value: { address: string; sealed: string } }>(
-      "SELECT value FROM settings WHERE key = $1",
-      [CACHE_KEY(principal.sessionId, mailboxId)],
-    );
-    const v = rows[0]?.value;
-    if (!v) {
+    const creds = await this.credStore.get(principal.sessionId, mailboxId);
+    if (!creds) {
       throw new ForbiddenException({
         title: "Mailbox locked",
         detail: "Unlock the mailbox first by entering its password.",
       });
     }
-    return { address: v.address, password: open(v.sealed) };
+    return creds;
   }
 
   private async mailboxFor(
@@ -426,7 +416,7 @@ export class WebmailService {
       port: IMAP_PORT,
       secure: true,
       auth: { user: address, pass: password },
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: config.IMAP_TLS_REJECT_UNAUTHORIZED },
       logger: false,
     });
   }
@@ -460,7 +450,7 @@ export const SendRequest = z.object({
         content_base64: z.string().max(20_000_000),
       }),
     )
-    .max(16)
+    .max(config.WEBMAIL_ATTACHMENT_MAX_COUNT)
     .optional(),
 });
 export type SendRequest = z.infer<typeof SendRequest>;
@@ -516,5 +506,3 @@ async function buildMimeMessage(
   });
   return compiled.message as Buffer;
 }
-
-void config;
