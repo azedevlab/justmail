@@ -245,11 +245,25 @@ export class AttachmentsService {
     );
   }
 
-  async signedDownload(orgId: string, id: string, userId: string) {
+  /** Resolve an attachment for streaming download; opens no stream itself. */
+  async forDownload(
+    orgId: string,
+    id: string,
+    userId: string,
+  ): Promise<Attachment> {
     const att = await this.get(orgId, id, userId);
     if (att.virus_status === "infected")
       throw new BadRequestException({ title: "Attachment quarantined" });
-    return this.storage.sign(orgId, `attachments/${att.content_hash}`, "GET", 900);
+    return att;
+  }
+
+  /** Open a (optionally ranged) read stream for a stored attachment body. */
+  openStream(
+    orgId: string,
+    contentHash: string,
+    range?: { start: number; end?: number },
+  ) {
+    return this.storage.stream(orgId, `attachments/${contentHash}`, range);
   }
 }
 

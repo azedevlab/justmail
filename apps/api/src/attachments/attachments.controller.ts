@@ -82,9 +82,75 @@ export class AttachmentsController {
     @Principal() principal: SessionPrincipal,
     @Param("orgId", ParseUUIDPipe) orgId: string,
     @Param("id", ParseUUIDPipe) id: string,
+    @Headers("range") rangeHeader: string | undefined,
+    @Headers("if-none-match") ifNoneMatch: string | undefined,
     @Res() res: Response,
   ) {
-    const url = await this.svc.signedDownload(orgId, id, principal.userId);
-    res.redirect(302, url);
+    const att = await this.svc.forDownload(orgId, id, principal.userId);
+    const etag = `"${att.content_hash}"`;
+    const size = att.size_bytes;
+
+    // Content-addressed bodies never change, so a matching ETag is always fresh.
+    if (ifNoneMatch && ifNoneMatch.split(",").some((t) => t.trim() === etag)) {
+      res.status(304).setHeader("etag", etag);
+      return res.end();
+    }
+
+    // Force a safe download: never let the browser sniff or inline-render.
+    res.setHeader("content-type", att.mime || "application/octet-stream");
+    res.setHeader("x-content-type-options", "nosniff");
+    res.setHeader(
+      "content-disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(att.filename)}`,
+    );
+    res.setHeader("etag", etag);
+    res.setHeader("accept-ranges", "bytes");
+    res.setHeader("cache-control", "private, max-age=0, must-revalidate");
+
+    const range = parseRange(rangeHeader, size);
+    if (range === "invalid") {
+      res.status(416).setHeader("content-range", `bytes */${size}`);
+      return res.end();
+    }
+
+    if (range) {
+      res.status(206);
+      res.setHeader("content-range", `bytes ${range.start}-${range.end}/${size}`);
+      res.setHeader("content-length", String(range.end - range.start + 1));
+      const stream = await this.svc.openStream(orgId, att.content_hash, range);
+      stream.pipe(res);
+      return;
+    }
+
+    res.status(200).setHeader("content-length", String(size));
+    const stream = await this.svc.openStream(orgId, att.content_hash);
+    stream.pipe(res);
   }
+}
+
+// Parse a single-range `bytes=start-end` request against the object size.
+// Returns undefined for no range, "invalid" for an unsatisfiable one.
+export function parseRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | "invalid" | undefined {
+  if (!header) return undefined;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m) return "invalid";
+  const [, rawStart, rawEnd] = m;
+  if (rawStart === "" && rawEnd === "") return "invalid";
+  let start: number;
+  let end: number;
+  if (rawStart === "") {
+    // Suffix range: last N bytes.
+    const suffix = Number(rawEnd);
+    if (suffix === 0) return "invalid";
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd === "" ? size - 1 : Math.min(Number(rawEnd), size - 1);
+  }
+  if (start > end || start >= size) return "invalid";
+  return { start, end };
 }
