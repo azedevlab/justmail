@@ -73,6 +73,7 @@ function LoginForm({ onDone }: { onDone: () => void }) {
   const f = useForm<LoginRequest>({ defaultValues: { email: "", password: "" } });
   const [needsTotp, setNeedsTotp] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [ssoBusy, setSsoBusy] = useState(false);
   const mut = useMutation({
     mutationFn: (body: LoginRequest) => api.post("/v1/auth/login", body),
     onSuccess: onDone,
@@ -85,6 +86,34 @@ function LoginForm({ onDone }: { onDone: () => void }) {
       else setErr((e as Error).message);
     },
   });
+
+  async function continueWithSso() {
+    setErr(null);
+    const email = f.getValues("email").trim();
+    if (!email) {
+      setErr("Enter your email to continue with SSO.");
+      return;
+    }
+    setSsoBusy(true);
+    try {
+      const { provider } = await api.get<{
+        provider: { login_url: string } | null;
+      }>(`/v1/auth/sso/discover?email=${encodeURIComponent(email)}`);
+      if (!provider) {
+        setErr("No SSO provider is configured for this email domain.");
+        return;
+      }
+      const relay = encodeURIComponent(window.location.origin);
+      window.location.href = `${provider.login_url}?relay=${relay}`;
+    } catch (e) {
+      setErr(
+        e instanceof ApiError ? e.problem.detail ?? e.problem.title : (e as Error).message,
+      );
+    } finally {
+      setSsoBusy(false);
+    }
+  }
+
   return (
     <form
       className="space-y-3"
@@ -111,6 +140,20 @@ function LoginForm({ onDone }: { onDone: () => void }) {
       )}
       <Button variant="primary" className="w-full" loading={mut.isPending}>
         Sign in
+      </Button>
+      <div className="flex items-center gap-2 py-0.5">
+        <span className="h-px flex-1 bg-[var(--color-border)]" />
+        <span className="text-[11px] text-[var(--color-neutral-700)]">or</span>
+        <span className="h-px flex-1 bg-[var(--color-border)]" />
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        loading={ssoBusy}
+        onClick={continueWithSso}
+      >
+        Continue with SSO
       </Button>
     </form>
   );

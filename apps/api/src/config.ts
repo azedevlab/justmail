@@ -86,6 +86,14 @@ const Env = z.object({
   WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional(),
   WEB_PUSH_SUBJECT: z.string().optional(),
 
+  // Single sign-on (OIDC/SAML). Callbacks must be reachable by the browser and
+  // exactly match what is registered at the IdP; the base defaults to the public
+  // API host. After login the user is returned to a relay target — an allow-list
+  // built from the admin/webmail hosts, defaulting to the admin console.
+  SSO_CALLBACK_BASE_URL: z.string().url().optional(),
+  SSO_DEFAULT_RELAY_URL: z.string().url().optional(),
+  SSO_FLOW_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+
   // Rate limiting (window seconds / max hits). Generous defaults; tune per deploy.
   RATE_LIMIT_GLOBAL_TTL: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().positive().default(300),

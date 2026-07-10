@@ -78,7 +78,7 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 
 | ID | P | Task | Effort | Deps | Status |
 |---|---|---|---|---|---|
-| M8-1 | P1 | OIDC + SAML SSO | XL | M2-1 | todo |
+| M8-1 | P1 | OIDC + SAML SSO | XL | M2-1 | done |
 | M8-2 | P1 | 2FA (TOTP + passkeys) + session management UI | L | M2-1 | todo |
 | M8-3 | P1 | LDAP/AD sync (OpenLDAP/AD/FreeIPA/AzureADDS), LDAPS, nested groups, attr mapping, provision/deactivate | XL | — | todo |
 | M8-4 | P2 | SCIM provisioning | L | M8-3 | todo |
