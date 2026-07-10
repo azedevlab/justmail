@@ -5,10 +5,11 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { ImapFlow } from "imapflow";
+import { ImapFlow, type MessageStructureObject } from "imapflow";
 import { parseMime } from "@justmail/mail-parser";
 import nodemailer from "nodemailer";
 import { z } from "zod";
+import { ComposeRequest, FlagAction } from "@justmail/contracts";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
@@ -130,20 +131,31 @@ export class WebmailService {
         if (!status) return { messages: [], total: 0 };
         const from = Math.max(status - limit + 1, 1);
         const range = `${from}:${status}`;
-        const items: Array<{
+        type Item = {
           uid: number;
           seq: number;
           flags: string[];
           envelope: unknown;
           size: number;
           date: string | null;
-        }> = [];
+          preview: string;
+          has_attachments: boolean;
+          thread_id: string | null;
+        };
+        const items: Item[] = [];
+        // part key -> { uids, encoding } for a single grouped snippet fetch
+        const textParts = new Map<
+          number,
+          { key: string; encoding: string }
+        >();
         for await (const msg of client.fetch(range, {
           uid: true,
           envelope: true,
           flags: true,
           size: true,
           internalDate: true,
+          bodyStructure: true,
+          threadId: true,
         })) {
           items.push({
             uid: msg.uid,
@@ -151,8 +163,51 @@ export class WebmailService {
             flags: [...(msg.flags ?? [])],
             envelope: msg.envelope,
             size: msg.size ?? 0,
-            date: msg.internalDate ? new Date(msg.internalDate).toISOString() : null,
+            date: msg.internalDate
+              ? new Date(msg.internalDate).toISOString()
+              : null,
+            preview: "",
+            has_attachments: msg.bodyStructure
+              ? structureHasAttachments(msg.bodyStructure)
+              : false,
+            thread_id: msg.threadId ?? null,
           });
+          const text = msg.bodyStructure
+            ? findTextNode(msg.bodyStructure)
+            : undefined;
+          if (text) {
+            textParts.set(msg.uid, {
+              key: text.part ?? "1",
+              encoding: (text.encoding ?? "").toLowerCase(),
+            });
+          }
+        }
+
+        // Fetch bounded snippets grouped by identical part key (most mail
+        // shares "1" or "1.1"), so this is a handful of extra commands.
+        const byKey = new Map<string, number[]>();
+        for (const [uid, t] of textParts) {
+          const list = byKey.get(t.key) ?? [];
+          list.push(uid);
+          byKey.set(t.key, list);
+        }
+        const previews = new Map<number, string>();
+        for (const [key, uids] of byKey) {
+          for await (const msg of client.fetch(
+            uids,
+            { uid: true, bodyParts: [{ key, start: 0, maxLength: 1024 }] },
+            { uid: true },
+          )) {
+            const buf = msg.bodyParts?.get(key);
+            if (!buf) continue;
+            previews.set(
+              msg.uid,
+              snippetFromPart(buf, textParts.get(msg.uid)?.encoding ?? ""),
+            );
+          }
+        }
+        for (const it of items) {
+          it.preview = previews.get(it.uid) ?? "";
         }
         items.reverse();
         return { messages: items, total: status };
@@ -210,6 +265,7 @@ export class WebmailService {
             mime: a.contentType,
             inline: a.disposition === "inline",
           })),
+          headers: parsed.headers,
         };
       } finally {
         lock.release();
@@ -251,23 +307,59 @@ export class WebmailService {
     mailboxId: string,
     folder: string,
     uid: number,
-    action: "read" | "unread" | "star" | "unstar",
+    action: FlagAction,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
     return this.withImap(creds, async (client) => {
+      // spam/not_spam are folder moves (mark-as-spam == relocate to Junk), so
+      // resolve destinations before taking the source lock.
+      if (action === "spam" || action === "not_spam") {
+        const dest =
+          action === "spam"
+            ? await this.resolveSpecialFolder(client, "\\Junk", "Junk")
+            : "INBOX";
+        const lock = await client.getMailboxLock(folder);
+        try {
+          await client.messageMove(String(uid), dest, { uid: true });
+        } finally {
+          lock.release();
+        }
+        return;
+      }
+
       const lock = await client.getMailboxLock(folder);
       try {
-        const seen = action === "read" || action === "unread";
-        const flags = seen ? ["\\Seen"] : ["\\Flagged"];
-        if (action === "read" || action === "star") {
-          await client.messageFlagsAdd(String(uid), flags, { uid: true });
+        const flagMap: Record<string, { flag: string; add: boolean }> = {
+          read: { flag: "\\Seen", add: true },
+          unread: { flag: "\\Seen", add: false },
+          star: { flag: "\\Flagged", add: true },
+          unstar: { flag: "\\Flagged", add: false },
+          important: { flag: "$Important", add: true },
+          not_important: { flag: "$Important", add: false },
+        };
+        const op = flagMap[action]!;
+        if (op.add) {
+          await client.messageFlagsAdd(String(uid), [op.flag], { uid: true });
         } else {
-          await client.messageFlagsRemove(String(uid), flags, { uid: true });
+          await client.messageFlagsRemove(String(uid), [op.flag], {
+            uid: true,
+          });
         }
       } finally {
         lock.release();
       }
     });
+  }
+
+  private async resolveSpecialFolder(
+    client: ImapFlow,
+    use: string,
+    fallback: string,
+  ): Promise<string> {
+    for (const b of await client.list()) {
+      if (b.specialUse === use) return b.path;
+    }
+    return fallback;
   }
 
   async move(
@@ -311,8 +403,22 @@ export class WebmailService {
     principal: SessionPrincipal,
     orgId: string,
     mailboxId: string,
-    input: SendRequest,
+    input: ComposeRequest,
   ) {
+    // Guard fields the contract accepts but this milestone can't fulfil yet, so
+    // a client never believes a scheduled/stored-attachment send succeeded.
+    if (input.attachment_ids?.length) {
+      throw new BadRequestException({
+        title: "Stored attachments not supported yet",
+        detail: "Send attachments inline; attachment_ids lands with storage-backed uploads.",
+      });
+    }
+    if (input.send_at) {
+      throw new BadRequestException({
+        title: "Scheduled send not supported yet",
+        detail: "Remove send_at; scheduled delivery is not available yet.",
+      });
+    }
     const totalBytes = (input.attachments ?? []).reduce(
       (sum, a) => sum + Math.ceil(a.content_base64.length * 0.75),
       0,
@@ -341,6 +447,8 @@ export class WebmailService {
       subject: input.subject,
       text: input.text,
       html: input.html,
+      inReplyTo: input.in_reply_to,
+      references: input.references,
       attachments: toNodemailerAttachments(input.attachments),
     });
     // Append to Sent for a proper "sent" trail.
@@ -435,28 +543,8 @@ export class WebmailService {
   }
 }
 
-export const SendRequest = z.object({
-  to: z.array(z.string().email()).min(1),
-  cc: z.array(z.string().email()).optional(),
-  bcc: z.array(z.string().email()).optional(),
-  subject: z.string().max(998).default(""),
-  text: z.string().max(1_000_000).default(""),
-  html: z.string().max(1_000_000).optional(),
-  attachments: z
-    .array(
-      z.object({
-        filename: z.string().min(1).max(255),
-        mime: z.string().max(255).default("application/octet-stream"),
-        content_base64: z.string().max(20_000_000),
-      }),
-    )
-    .max(config.WEBMAIL_ATTACHMENT_MAX_COUNT)
-    .optional(),
-});
-export type SendRequest = z.infer<typeof SendRequest>;
-
 function toNodemailerAttachments(
-  attachments: SendRequest["attachments"],
+  attachments: ComposeRequest["attachments"],
 ):
   | Array<{ filename: string; content: Buffer; contentType: string }>
   | undefined {
@@ -468,6 +556,57 @@ function toNodemailerAttachments(
   }));
 }
 
+function structureHasAttachments(node: MessageStructureObject): boolean {
+  if (node.childNodes?.length) {
+    return node.childNodes.some(structureHasAttachments);
+  }
+  const disp = (node.disposition ?? "").toLowerCase();
+  if (disp === "attachment") return true;
+  return Boolean(node.dispositionParameters?.filename);
+}
+
+function findTextNode(
+  node: MessageStructureObject,
+): MessageStructureObject | undefined {
+  let plain: MessageStructureObject | undefined;
+  let html: MessageStructureObject | undefined;
+  const walk = (n: MessageStructureObject) => {
+    if (n.childNodes?.length) {
+      n.childNodes.forEach(walk);
+      return;
+    }
+    const type = (n.type ?? "").toLowerCase();
+    const disp = (n.disposition ?? "").toLowerCase();
+    if (disp === "attachment") return;
+    if (type === "text/plain" && !plain) plain = n;
+    else if (type === "text/html" && !html) html = n;
+  };
+  walk(node);
+  return plain ?? html;
+}
+
+function snippetFromPart(buf: Buffer, encoding: string): string {
+  let text: string;
+  if (encoding === "base64") {
+    text = Buffer.from(buf.toString("ascii"), "base64").toString("utf8");
+  } else if (encoding === "quoted-printable") {
+    text = buf
+      .toString("latin1")
+      .replace(/=\r?\n/g, "")
+      .replace(/=([0-9A-Fa-f]{2})/g, (_m, h) =>
+        String.fromCharCode(parseInt(h, 16)),
+      );
+  } else {
+    text = buf.toString("utf8");
+  }
+  return text
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
 export const UnlockRequest = z.object({
   password: z.string().min(1).max(256),
 });
@@ -476,8 +615,6 @@ export const MoveRequest = z.object({
   destination: z.string().min(1).max(500),
 });
 
-export const FlagAction = z.enum(["read", "unread", "star", "unstar"]);
-
 async function findSentBox(client: ImapFlow): Promise<string | null> {
   const boxes = await client.list();
   const sent = boxes.find((b) => (b.specialUse ?? "").toLowerCase() === "\\sent");
@@ -485,7 +622,7 @@ async function findSentBox(client: ImapFlow): Promise<string | null> {
 }
 
 async function buildMimeMessage(
-  input: SendRequest & { from: string },
+  input: ComposeRequest & { from: string },
 ): Promise<Buffer> {
   // Reuse nodemailer's compiler so we get a spec-compliant MIME body without
   // pulling in a second library.
@@ -502,6 +639,8 @@ async function buildMimeMessage(
     subject: input.subject,
     text: input.text,
     html: input.html,
+    inReplyTo: input.in_reply_to,
+    references: input.references,
     attachments: toNodemailerAttachments(input.attachments),
   });
   return compiled.message as Buffer;

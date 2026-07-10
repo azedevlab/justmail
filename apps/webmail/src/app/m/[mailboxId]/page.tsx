@@ -50,7 +50,13 @@ import {
 import { useMe } from "@/lib/session";
 import { api, API_BASE } from "@/lib/api";
 
-type ComposeInit = { to?: string; subject?: string; text?: string };
+type ComposeInit = {
+  to?: string;
+  subject?: string;
+  text?: string;
+  in_reply_to?: string;
+  references?: string[];
+};
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -170,10 +176,19 @@ export default function MailboxView() {
       .map((l) => `> ${l}`)
       .join("\n");
     const when = m.date ? new Date(m.date).toLocaleString() : "";
+    const priorRefs = (m.headers?.references ?? "")
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const references = m.message_id
+      ? [...priorRefs, m.message_id]
+      : priorRefs;
     setCompose({
       to: addr,
       subject,
       text: `\n\nOn ${when}, ${m.from} wrote:\n${quoted}`,
+      in_reply_to: m.message_id ?? undefined,
+      references: references.length > 0 ? references : undefined,
     });
   };
   const forwardMsg = (m: Message) => {
@@ -409,6 +424,13 @@ export default function MailboxView() {
                           aria-label="Starred"
                         />
                       )}
+                      {m.has_attachments && (
+                        <Paperclip
+                          size={11}
+                          className="text-[var(--color-neutral-700)] shrink-0"
+                          aria-label="Has attachments"
+                        />
+                      )}
                       <span
                         className={
                           "truncate " +
@@ -420,6 +442,11 @@ export default function MailboxView() {
                         {m.envelope.subject || "(no subject)"}
                       </span>
                     </span>
+                    {m.preview && (
+                      <span className="mt-0.5 block truncate text-[11px] text-[var(--color-neutral-700)]">
+                        {m.preview}
+                      </span>
+                    )}
                   </button>
                 </li>
               );
@@ -858,6 +885,8 @@ function ComposePanel({
       subject: v.subject,
       text: v.text,
       attachments,
+      in_reply_to: initial?.in_reply_to,
+      references: initial?.references,
     });
   });
 

@@ -25,11 +25,12 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 
 | ID | P | Task | Files | Effort | Deps | Status |
 |---|---|---|---|---|---|---|
-| M3-1 | P1 | API imports contract `ComposeRequest`/`FlagAction`; delete duplicate zod | `webmail.service.ts`, controller | M | M2-9 | todo |
-| M3-2 | P1 | Set `In-Reply-To`/`References` on send; wire reply threading headers from client | `webmail.service.ts`, contracts, webmail page | M | M3-1 | todo |
-| M3-3 | P1 | Implement spam/not-spam/importance flag actions (IMAP keywords + rspamd learn) | `webmail.service.ts`, worker | M | M3-1 | todo |
-| M3-4 | P1 | Populate `preview` + `has_attachments` in message list (BODYSTRUCTURE + snippet) | `webmail.service.ts` | M | — | todo |
-| M3-5 | P2 | Remove or implement `attachment_ids`/`send_at` stubs (implement in M5/M6, delete-guard until then) | contracts, service | S | — | todo |
+| M3-1 | P1 | API imports contract `ComposeRequest`/`FlagAction`; delete duplicate zod | `webmail.service.ts`, controller | M | M2-9 | done |
+| M3-2 | P1 | Set `In-Reply-To`/`References` on send; wire reply threading headers from client | `webmail.service.ts`, contracts, webmail page | M | M3-1 | done |
+| M3-3 | P1 | Implement spam/not-spam/importance flag actions (spam→Junk move, `$Important` keyword) | `webmail.service.ts` | M | M3-1 | done |
+| M3-4 | P1 | Populate `preview` + `has_attachments` in message list (BODYSTRUCTURE + snippet) | `webmail.service.ts` | M | — | done |
+| M3-5 | P2 | Remove or implement `attachment_ids`/`send_at` stubs (implement in M5/M6, delete-guard until then) | contracts, service | S | — | done |
+| M3-6 | P2 | Server-side rspamd Bayes training on Junk moves via Dovecot IMAPSieve + rspamd controller worker | `services/mail/dovecot`, `services/mail/rspamd` | M | M3-3 | todo |
 
 ## M4 — IMAP session layer + realtime
 
