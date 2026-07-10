@@ -20,9 +20,9 @@ export function DropdownMenu({
           align={align}
           sideOffset={4}
           className={cn(
-            "min-w-[180px] rounded-lg bg-[var(--color-surface-2)]",
-            "border border-[var(--color-border)] shadow-[var(--shadow-3)] p-1",
-            "z-[var(--z-modal)]",
+            "min-w-[180px] rounded-lg bg-[var(--color-surface-3)]",
+            "border border-[var(--color-border-strong)] shadow-[var(--shadow-3)] p-1",
+            "z-[var(--z-modal)] animate-in fade-in-0 zoom-in-95 duration-100",
           )}
         >
           {children}

@@ -5,7 +5,14 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import type { LoginRequest } from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
-import { Button, Card, FormField, Input } from "@justmail/shared-ui";
+import {
+  AuroraBackdrop,
+  Button,
+  Card,
+  FormField,
+  Input,
+  Wordmark,
+} from "@justmail/shared-ui";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/session";
 
@@ -28,19 +35,17 @@ export default function LoginPage() {
   });
 
   return (
-    <main className="min-h-screen grid place-items-center p-4 bg-gradient-to-b from-[var(--color-neutral-0)] to-[var(--color-neutral-100)]">
-      <Card className="w-full max-w-sm p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-9 h-9 rounded-lg bg-[var(--color-brand-500)] grid place-items-center font-bold text-white">
-            J
-          </div>
-          <div>
-            <div className="font-semibold">JustMail</div>
-            <div className="text-xs text-[var(--color-neutral-900)]">
-              Sign in to webmail
-            </div>
-          </div>
+    <main className="relative min-h-screen grid place-items-center p-4 bg-[var(--color-bg)]">
+      <AuroraBackdrop />
+      <div className="relative w-full max-w-sm animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+        <div className="flex justify-center mb-6">
+          <Wordmark size={36} sub="Webmail" />
         </div>
+        <Card className="p-6 shadow-[var(--shadow-4)]">
+          <h1 className="text-base font-semibold mb-1">Welcome back</h1>
+          <p className="text-xs text-[var(--color-neutral-900)] mb-5">
+            Sign in with your account to read and send mail.
+          </p>
         <form
           className="space-y-3"
           onSubmit={f.handleSubmit((v) => {
@@ -72,7 +77,11 @@ export default function LoginPage() {
             Sign in
           </Button>
         </form>
-      </Card>
+        </Card>
+        <p className="mt-4 text-center text-[11px] text-[var(--color-neutral-700)]">
+          JustMail — self-hosted mail platform
+        </p>
+      </div>
     </main>
   );
 }

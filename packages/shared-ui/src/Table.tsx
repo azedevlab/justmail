@@ -28,7 +28,7 @@ export function TR({
   return (
     <tr
       className={cn(
-        "border-b border-[var(--color-border)] hover:bg-white/[0.02]",
+        "border-b border-[var(--color-border)] transition-colors duration-[var(--motion-quick)] hover:bg-white/[0.03]",
         className,
       )}
       {...rest}
@@ -43,8 +43,8 @@ export function TH({
   return (
     <th
       className={cn(
-        "text-left px-3 py-2 text-[11px] uppercase tracking-wider font-medium",
-        "text-[var(--color-neutral-900)] bg-transparent sticky top-0",
+        "text-left px-3 py-2.5 text-[11px] uppercase tracking-[0.08em] font-medium",
+        "text-[var(--color-neutral-800)] bg-transparent sticky top-0",
         className,
       )}
       {...rest}

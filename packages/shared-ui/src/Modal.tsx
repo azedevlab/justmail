@@ -32,11 +32,12 @@ export function Modal({
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/60 z-[var(--z-modal)] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-[6px] z-[var(--z-modal)] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
           className={cn(
             "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[var(--z-modal)] w-[calc(100vw-32px)]",
-            "bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-[var(--shadow-4)] p-6",
+            "bg-[var(--color-surface-3)] border border-[var(--color-border-strong)] rounded-xl shadow-[var(--shadow-4)] p-6",
+            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-150",
             sizeClass[size],
           )}
         >
