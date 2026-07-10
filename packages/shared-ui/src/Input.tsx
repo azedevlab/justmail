@@ -2,9 +2,9 @@ import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } fro
 import { cn } from "@justmail/shared-utils";
 
 const inputClass = cn(
-  "w-full rounded-lg bg-[var(--color-surface-2)] text-[var(--color-neutral-1100)]",
-  "border border-[var(--color-border)] px-3 py-2 text-sm",
-  "shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]",
+  "w-full rounded-lg bg-[var(--color-field)] text-[var(--color-neutral-1100)]",
+  "border border-[var(--color-border-strong)] px-3 py-2 text-sm",
+  "shadow-[var(--shadow-inset-input)]",
   "placeholder:text-[var(--color-neutral-700)]",
   "transition-[border-color,box-shadow,background] duration-[var(--motion-base)]",
   "hover:border-[var(--color-border-strong)]",

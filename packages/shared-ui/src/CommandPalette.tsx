@@ -61,7 +61,7 @@ export function CommandPalette({
   return (
     <div
       onClick={() => onOpenChange(false)}
-      className="fixed inset-0 z-[var(--z-cmdk)] bg-black/60 backdrop-blur-[6px] pt-[15vh] px-4 animate-in fade-in-0 duration-100"
+      className="fixed inset-0 z-[var(--z-cmdk)] bg-[var(--overlay)] backdrop-blur-[6px] pt-[15vh] px-4 animate-in fade-in-0 duration-100"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -129,15 +129,15 @@ export function CommandPalette({
           </Command.List>
           <div className="flex items-center gap-4 px-3 py-2 border-t border-[var(--color-border)] text-[11px] text-[var(--color-neutral-700)]">
             <span>
-              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-[var(--color-border)] font-mono">↑↓</kbd>{" "}
+              <kbd className="px-1 py-0.5 rounded bg-[var(--hover-overlay)] border border-[var(--color-border)] font-mono">↑↓</kbd>{" "}
               navigate
             </span>
             <span>
-              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-[var(--color-border)] font-mono">⏎</kbd>{" "}
+              <kbd className="px-1 py-0.5 rounded bg-[var(--hover-overlay)] border border-[var(--color-border)] font-mono">⏎</kbd>{" "}
               select
             </span>
             <span>
-              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-[var(--color-border)] font-mono">esc</kbd>{" "}
+              <kbd className="px-1 py-0.5 rounded bg-[var(--hover-overlay)] border border-[var(--color-border)] font-mono">esc</kbd>{" "}
               close
             </span>
           </div>

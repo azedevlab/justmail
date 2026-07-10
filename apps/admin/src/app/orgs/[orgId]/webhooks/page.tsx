@@ -233,7 +233,7 @@ function CreateModal({ orgId, onClose }: { orgId: string; onClose: () => void })
             {EVENTS.map((ev) => (
               <label
                 key={ev}
-                className="flex items-center gap-2 rounded p-1.5 hover:bg-white/5 text-sm cursor-pointer"
+                className="flex items-center gap-2 rounded p-1.5 hover:bg-[var(--hover-overlay)] text-sm cursor-pointer"
               >
                 <input type="checkbox" value={ev} {...f.register("events")} />
                 <span className="mono text-xs">{ev}</span>

@@ -17,10 +17,12 @@ import {
   DropdownMenu,
   Empty,
   FormField,
+  IconButton,
   Input,
   Modal,
   PageBody,
   PageHeader,
+  Progress,
   SkeletonRows,
   StatusBadge,
   Table,
@@ -30,7 +32,7 @@ import {
   TR,
   useToast,
 } from "@justmail/shared-ui";
-import { MoreVertical, Plus } from "lucide-react";
+import { Mail, MoreVertical, Plus, Search } from "lucide-react";
 import { api, API_BASE } from "@/lib/api";
 
 export default function MailboxesPage() {
@@ -38,6 +40,7 @@ export default function MailboxesPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
+  const [filter, setFilter] = useState("");
   const list = useQuery({
     queryKey: ["mailboxes", orgId],
     queryFn: () => api.get<Mailbox[]>(`/v1/orgs/${orgId}/mailboxes`),
@@ -87,7 +90,9 @@ export default function MailboxesPage() {
         {list.isLoading && <SkeletonRows count={5} />}
         {list.data && list.data.length === 0 && (
           <Empty
+            icon={<Mail size={20} />}
             title="No mailboxes yet"
+            description="Create a mailbox to give someone an address on one of your domains."
             action={
               <Button variant="primary" onClick={() => setShowCreate(true)}>
                 Add your first mailbox
@@ -97,6 +102,19 @@ export default function MailboxesPage() {
         )}
         {list.data && list.data.length > 0 && (
           <Card className="overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+              <Search size={14} className="text-[var(--color-neutral-700)]" />
+              <input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filter by address or name…"
+                aria-label="Filter mailboxes"
+                className="flex-1 bg-transparent outline-none text-sm placeholder:text-[var(--color-neutral-700)]"
+              />
+              <span className="text-xs text-[var(--color-neutral-800)] tabular-nums">
+                {list.data.length} total
+              </span>
+            </div>
             <Table>
               <THead>
                 <TR>
@@ -109,28 +127,31 @@ export default function MailboxesPage() {
                 </TR>
               </THead>
               <tbody>
-                {list.data.map((m) => {
-                  const pct =
-                    m.quota_mb > 0
-                      ? Math.min(
-                          100,
-                          (m.quota_used_bytes / 1024 / 1024 / m.quota_mb) * 100,
-                        )
-                      : 0;
+                {list.data
+                  .filter(
+                    (m) =>
+                      !filter ||
+                      m.address.toLowerCase().includes(filter.toLowerCase()) ||
+                      (m.name ?? "").toLowerCase().includes(filter.toLowerCase()),
+                  )
+                  .map((m) => {
+                  const usedMb = m.quota_used_bytes / 1024 / 1024;
+                  const pct = m.quota_mb > 0 ? (usedMb / m.quota_mb) * 100 : 0;
                   return (
                     <TR key={m.id}>
                       <TD>
-                        <span className="mono">{m.address}</span>
+                        <span className="font-medium">{m.address}</span>
                       </TD>
-                      <TD>{m.name || "—"}</TD>
+                      <TD className="text-[var(--color-neutral-900)]">{m.name || "—"}</TD>
                       <TD>
-                        <div className="text-xs mono">
-                          {(m.quota_used_bytes / 1024 / 1024).toFixed(0)}/{m.quota_mb} MB
-                        </div>
-                        <div className="h-1 mt-1 rounded bg-white/5 overflow-hidden w-24">
-                          <div
-                            className="h-full bg-[var(--color-brand-500)]"
-                            style={{ width: `${pct}%` }}
+                        <div className="w-32">
+                          <div className="text-xs tabular-nums text-[var(--color-neutral-900)] mb-1">
+                            {usedMb.toFixed(0)} / {m.quota_mb} MB
+                          </div>
+                          <Progress
+                            value={usedMb}
+                            max={m.quota_mb}
+                            tone={pct > 90 ? "bad" : pct > 75 ? "warn" : "brand"}
                           />
                         </div>
                       </TD>
@@ -147,12 +168,9 @@ export default function MailboxesPage() {
                       <TD className="text-right">
                         <DropdownMenu
                           trigger={
-                            <button
-                              className="p-1.5 rounded hover:bg-white/5"
-                              aria-label="More actions"
-                            >
+                            <IconButton size="sm" aria-label={`Actions for ${m.address}`}>
                               <MoreVertical size={14} />
-                            </button>
+                            </IconButton>
                           }
                         >
                           <DropdownItem

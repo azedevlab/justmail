@@ -18,6 +18,7 @@ import {
   Link2,
   LogOut,
   Mail,
+  Menu,
   Palette,
   Puzzle,
   Search,
@@ -25,6 +26,7 @@ import {
   ShieldCheck,
   Users,
   Webhook,
+  X,
 } from "lucide-react";
 import {
   Avatar,
@@ -33,6 +35,7 @@ import {
   DropdownLabel,
   DropdownMenu,
   DropdownSeparator,
+  IconButton,
   OfflineBanner,
   Spinner,
   Tooltip,
@@ -102,10 +105,15 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const me = useMe();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (me.data === null) router.replace("/login");
   }, [me.data, router]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [path]);
 
   const logout = useMutation({
     mutationFn: () => api.post("/v1/auth/logout"),
@@ -150,92 +158,130 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
     },
   ]);
 
+  const sidebar = (
+    <>
+      <div className="px-1.5 mb-4 flex items-center justify-between">
+        <Link href={orgBase} aria-label="JustMail overview">
+          <Wordmark size={30} sub="Control plane" />
+        </Link>
+        <IconButton
+          aria-label="Close menu"
+          className="lg:hidden"
+          onClick={() => setMenuOpen(false)}
+        >
+          <X size={16} />
+        </IconButton>
+      </div>
+
+      {currentOrg && (
+        <DropdownMenu
+          align="start"
+          trigger={
+            <button
+              className="mb-1 w-full flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-2 text-left hover:border-[var(--color-border-strong)] transition-colors"
+              aria-label="Switch organization"
+            >
+              <Avatar name={currentOrg.name} size={22} />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-medium truncate">
+                  {currentOrg.name}
+                </span>
+                <span className="block text-[11px] text-[var(--color-neutral-800)] capitalize">
+                  {currentOrg.role}
+                </span>
+              </span>
+              <ChevronsUpDown size={14} className="text-[var(--color-neutral-700)] shrink-0" />
+            </button>
+          }
+        >
+          <DropdownLabel>Organizations</DropdownLabel>
+          {me.data.orgs.map((o) => (
+            <DropdownItem key={o.id} onSelect={() => router.push(`/orgs/${o.id}`)}>
+              <Avatar name={o.name} size={18} />
+              <span className="flex-1 truncate">{o.name}</span>
+              {o.id === orgId && <Check size={14} className="text-[var(--color-accent)]" />}
+            </DropdownItem>
+          ))}
+        </DropdownMenu>
+      )}
+
+      <nav className="flex-1" aria-label="Sections">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label ?? "root"}>
+            {group.label && <div className="nav-group-label">{group.label}</div>}
+            {!group.label && <div className="mt-3" />}
+            <div className="space-y-px">
+              {group.items.map((item) => {
+                const href = `${orgBase}${item.href}`;
+                const active =
+                  item.href === ""
+                    ? path === orgBase
+                    : path === href || path.startsWith(href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={href}
+                    className="nav-item"
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <span className="nav-icon text-[var(--color-neutral-800)] w-4 flex justify-center">
+                      {item.icon}
+                    </span>
+                    <span className="flex-1">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      <div className="mt-4 pt-3 border-t border-[var(--color-border)] px-1.5 text-[11px] text-[var(--color-neutral-700)]">
+        JustMail · AGPL-3.0
+      </div>
+    </>
+  );
+
   return (
-    <div className="min-h-screen grid" style={{ gridTemplateColumns: "240px 1fr" }}>
+    <div className="min-h-screen bg-[var(--color-bg)] lg:flex">
       <OfflineBanner />
 
-      <aside className="border-r border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-4 flex flex-col sticky top-0 h-screen overflow-y-auto">
-        <div className="px-1.5 mb-4">
-          <Link href={orgBase} aria-label="JustMail overview">
-            <Wordmark size={30} sub="Control plane" />
-          </Link>
-        </div>
-
-        {currentOrg && (
-          <DropdownMenu
-            align="start"
-            trigger={
-              <button
-                className="mb-1 w-full flex items-center gap-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-2 text-left hover:border-[var(--color-border-strong)] transition-colors"
-                aria-label="Switch organization"
-              >
-                <Avatar name={currentOrg.name} size={22} />
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[13px] font-medium truncate">
-                    {currentOrg.name}
-                  </span>
-                  <span className="block text-[11px] text-[var(--color-neutral-800)] capitalize">
-                    {currentOrg.role}
-                  </span>
-                </span>
-                <ChevronsUpDown size={14} className="text-[var(--color-neutral-700)] shrink-0" />
-              </button>
-            }
-          >
-            <DropdownLabel>Organizations</DropdownLabel>
-            {me.data.orgs.map((o) => (
-              <DropdownItem key={o.id} onSelect={() => router.push(`/orgs/${o.id}`)}>
-                <Avatar name={o.name} size={18} />
-                <span className="flex-1 truncate">{o.name}</span>
-                {o.id === orgId && <Check size={14} className="text-[var(--color-brand-400)]" />}
-              </DropdownItem>
-            ))}
-          </DropdownMenu>
-        )}
-
-        <nav className="flex-1" aria-label="Sections">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label ?? "root"}>
-              {group.label && <div className="nav-group-label">{group.label}</div>}
-              {!group.label && <div className="mt-3" />}
-              <div className="space-y-px">
-                {group.items.map((item) => {
-                  const href = `${orgBase}${item.href}`;
-                  const active =
-                    item.href === ""
-                      ? path === orgBase
-                      : path === href || path.startsWith(href + "/");
-                  return (
-                    <Link
-                      key={item.href}
-                      href={href}
-                      className="nav-item"
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <span className="nav-icon text-[var(--color-neutral-800)] w-4 flex justify-center">
-                        {item.icon}
-                      </span>
-                      <span className="flex-1">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <div className="mt-4 pt-3 border-t border-[var(--color-border)] px-1.5 text-[11px] text-[var(--color-neutral-700)]">
-          JustMail · AGPL-3.0
-        </div>
+      {/* Floating sidebar (desktop) */}
+      <aside className="hidden lg:flex flex-col w-[248px] shrink-0 sticky top-3 h-[calc(100vh-24px)] my-3 ml-3 rounded-2xl bg-[var(--color-surface-1)] border border-[var(--color-border)] shadow-[var(--shadow-2)] px-3 py-4 overflow-y-auto">
+        {sidebar}
       </aside>
 
-      <div className="min-h-screen flex flex-col bg-[var(--color-bg)]">
-        <header className="h-12 shrink-0 border-b border-[var(--color-border)] flex items-center gap-3 px-4 sticky top-0 z-[var(--z-raised)] bg-[color:rgb(8_9_12/0.85)] backdrop-blur-md">
+      {/* Mobile sheet */}
+      {menuOpen && (
+        <div className="lg:hidden fixed inset-0 z-[var(--z-overlay)]">
+          <div
+            className="absolute inset-0 bg-[var(--overlay)] backdrop-blur-[4px]"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden
+          />
+          <aside className="absolute left-0 top-0 bottom-0 w-[264px] flex flex-col bg-[var(--color-surface-1)] shadow-[var(--shadow-4)] px-3 py-4 overflow-y-auto animate-in slide-in-from-left-4 fade-in-0 duration-200">
+            {sidebar}
+          </aside>
+        </div>
+      )}
+
+      <div className="min-h-screen flex flex-col flex-1 min-w-0">
+        <header className="h-[52px] shrink-0 border-b border-[var(--color-border)] flex items-center gap-3 px-4 sticky top-0 z-[var(--z-raised)] glass">
+          <IconButton
+            aria-label="Open menu"
+            className="lg:hidden"
+            onClick={() => setMenuOpen(true)}
+          >
+            <Menu size={16} />
+          </IconButton>
+
           <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] min-w-0">
             {currentOrg && (
-              <span className="text-[var(--color-neutral-800)] truncate">{currentOrg.name}</span>
+              <span className="text-[var(--color-neutral-800)] truncate hidden sm:inline">
+                {currentOrg.name}
+              </span>
             )}
-            <span className="text-[var(--color-neutral-600)]">/</span>
+            <span className="text-[var(--color-neutral-600)] hidden sm:inline">/</span>
             <span className="font-medium text-[var(--color-neutral-1100)] truncate">
               {activeItem?.label ?? "Overview"}
             </span>
@@ -245,23 +291,27 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
 
           <button
             onClick={() => setCmdOpen(true)}
-            className="flex items-center gap-2 w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-[13px] text-[var(--color-neutral-800)] hover:border-[var(--color-border-strong)] transition-colors"
+            className="hidden md:flex items-center gap-2 w-56 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-[13px] text-[var(--color-neutral-800)] hover:border-[color:rgb(124_92_255/0.4)] transition-colors shadow-[var(--shadow-inset-input)]"
             aria-label="Open command palette"
           >
             <Search size={13} />
             <span className="flex-1 text-left">Search…</span>
-            <kbd className="px-1 py-px rounded bg-white/5 border border-[var(--color-border)] font-mono text-[10px]">
+            <kbd className="px-1 py-px rounded bg-[var(--hover-overlay)] border border-[var(--color-border)] font-mono text-[10px]">
               ⌘K
             </kbd>
           </button>
+          <IconButton
+            aria-label="Search"
+            className="md:hidden"
+            onClick={() => setCmdOpen(true)}
+          >
+            <Search size={15} />
+          </IconButton>
 
           <Tooltip content="Notifications">
-            <button
-              className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-white/[0.06] hover:text-[var(--color-neutral-1100)] transition-colors"
-              aria-label="Notifications"
-            >
+            <IconButton aria-label="Notifications">
               <Bell size={15} />
-            </button>
+            </IconButton>
           </Tooltip>
 
           <DropdownMenu
@@ -279,7 +329,9 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </header>
 
-        <main className="flex-1 min-h-0">{children}</main>
+        <main className="flex-1 min-h-0 w-full max-w-[1200px] mx-auto">
+          {children}
+        </main>
       </div>
 
       <CommandPalette

@@ -28,7 +28,7 @@ export function TR({
   return (
     <tr
       className={cn(
-        "border-b border-[var(--color-border)] transition-colors duration-[var(--motion-quick)] hover:bg-white/[0.03]",
+        "border-b border-[var(--color-border)] transition-colors duration-[var(--motion-quick)] hover:bg-[var(--hover-overlay-faint)]",
         className,
       )}
       {...rest}

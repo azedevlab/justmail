@@ -91,7 +91,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                       t.action!.onClick();
                       dismiss(t.id);
                     }}
-                    className="mt-2 text-xs text-[var(--color-brand-400)] hover:underline"
+                    className="mt-2 text-xs text-[var(--color-accent)] hover:underline"
                   >
                     {t.action.label}
                   </button>

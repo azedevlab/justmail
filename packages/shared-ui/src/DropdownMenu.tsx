@@ -49,7 +49,7 @@ export function DropdownItem({
       }}
       className={cn(
         "flex items-center gap-2 px-2.5 py-1.5 text-sm rounded-md cursor-pointer",
-        "focus:outline-none focus:bg-white/5",
+        "focus:outline-none focus:bg-[var(--hover-overlay)]",
         destructive && "text-[var(--color-bad)]",
       )}
     >

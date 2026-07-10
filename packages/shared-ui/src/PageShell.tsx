@@ -13,10 +13,10 @@ export function PageHeader({
   breadcrumbs?: ReactNode;
 }) {
   return (
-    <header className="border-b border-[var(--color-border)] px-6 md:px-8 py-5 flex items-start justify-between gap-4 flex-wrap">
+    <header className="px-6 md:px-8 pt-8 pb-2 flex items-start justify-between gap-4 flex-wrap">
       <div>
         {breadcrumbs && <div className="mb-2 text-xs">{breadcrumbs}</div>}
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-neutral-1100)]">
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-[var(--color-neutral-1100)]">
           {title}
         </h1>
         {description && (
