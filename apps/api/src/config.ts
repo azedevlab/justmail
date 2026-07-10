@@ -20,6 +20,12 @@ const Env = z.object({
   // the TTL. Sized for a small deployment; raise for higher concurrency.
   IMAP_POOL_MAX: z.coerce.number().int().positive().default(256),
   IMAP_POOL_IDLE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  // Dovecot master user for admin-level mailbox access (retention pruning and
+  // exports). Login is `<address>*<master-user>` with the master password.
+  // Both optional: when unset, retention/export features stay disabled.
+  DOVECOT_MASTER_USER: z.string().optional(),
+  DOVECOT_MASTER_PASSWORD: z.string().optional(),
+
   SMTP_HOST: z.string().default("postfix"),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),

@@ -33,6 +33,7 @@ import { CalendarModule } from "./calendar/calendar.module";
 import { SsoModule } from "./sso/sso.module";
 import { LdapModule } from "./ldap/ldap.module";
 import { ScimModule } from "./scim/scim.module";
+import { RetentionModule } from "./retention/retention.module";
 import { StorageModule } from "./storage/storage.module";
 import { AvModule } from "./av/av.module";
 import { AttachmentsModule } from "./attachments/attachments.module";
@@ -78,6 +79,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     SsoModule,
     LdapModule,
     ScimModule,
+    RetentionModule,
     StorageModule,
     AvModule,
     AttachmentsModule,
