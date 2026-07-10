@@ -24,6 +24,12 @@ const Env = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
 
+  // Thumbnail generation (sharp) for image attachments.
+  THUMBNAIL_ENABLED: z.coerce.boolean().default(true),
+  THUMBNAIL_MAX_DIM: z.coerce.number().int().positive().default(320),
+  THUMBNAIL_QUALITY: z.coerce.number().int().min(1).max(100).default(72),
+  THUMBNAIL_SOURCE_MAX_BYTES: z.coerce.number().int().positive().default(25_000_000),
+
   // clamd (antivirus) INSTREAM scan on send. Disable in dev where no clamav runs.
   CLAMAV_ENABLED: z.coerce.boolean().default(true),
   CLAMAV_HOST: z.string().default("clamav"),

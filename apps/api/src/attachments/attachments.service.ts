@@ -14,6 +14,7 @@ import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
 import { StorageService } from "../storage/storage.service";
+import { ThumbnailService } from "./thumbnail.service";
 import type { SessionPrincipal } from "../auth/auth.service";
 
 interface UploadRow {
@@ -52,6 +53,7 @@ export class AttachmentsService {
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly thumbnails: ThumbnailService,
   ) {}
 
   async createUpload(
@@ -208,6 +210,20 @@ export class AttachmentsService {
     );
     await this.db.query("DELETE FROM uploads WHERE id = $1", [uploadId]);
 
+    const attachment = inserted[0]!;
+    // Best-effort thumbnail generation; never blocks or fails finalise.
+    if (this.thumbnails.canThumbnail(attachment.mime, Number(attachment.size_bytes))) {
+      void this.thumbnails
+        .generate(
+          orgId,
+          attachment.id,
+          contentHash,
+          attachment.mime,
+          Number(attachment.size_bytes),
+        )
+        .catch(() => undefined);
+    }
+
     this.audit.log({
       orgId,
       actorType: "user",
@@ -219,7 +235,7 @@ export class AttachmentsService {
       meta: { filename: upload.filename, size_bytes: upload.size_bytes },
     });
 
-    return toAttachment(inserted[0]!);
+    return toAttachment(attachment);
   }
 
   async get(orgId: string, id: string, userId: string): Promise<Attachment> {
