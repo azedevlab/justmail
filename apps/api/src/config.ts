@@ -24,6 +24,13 @@ const Env = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
 
+  // clamd (antivirus) INSTREAM scan on send. Disable in dev where no clamav runs.
+  CLAMAV_ENABLED: z.coerce.boolean().default(true),
+  CLAMAV_HOST: z.string().default("clamav"),
+  CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+  CLAMAV_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  CLAMAV_CHUNK_BYTES: z.coerce.number().int().positive().default(65_536),
+
   // Webmail limits (bytes / counts). Defaults are conservative; raise per deploy.
   WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES: z.coerce.number().int().positive().default(15_000_000),
   WEBMAIL_ATTACHMENT_MAX_COUNT: z.coerce.number().int().positive().default(16),
