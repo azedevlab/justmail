@@ -19,7 +19,7 @@ import { ZodPipe } from "../common/zod.pipe";
 import { Throttle } from "../common/throttle.decorator";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
-import { ComposeRequest, FlagAction } from "@justmail/contracts";
+import { ComposeRequest, FlagAction, SaveDraftRequest } from "@justmail/contracts";
 import { MoveRequest, UnlockRequest, WebmailService } from "./webmail.service";
 
 const FlagBody = z.object({ action: FlagAction });
@@ -259,6 +259,27 @@ export class WebmailController {
     @Body(new ZodPipe(ComposeRequest)) body: ComposeRequest,
   ) {
     return this.svc.send(principal, orgId, mailboxId, body);
+  }
+
+  @Post("drafts")
+  saveDraft(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Body(new ZodPipe(SaveDraftRequest)) body: SaveDraftRequest,
+  ) {
+    return this.svc.saveDraft(principal, orgId, mailboxId, body);
+  }
+
+  @Post("drafts/:uid/discard")
+  @HttpCode(204)
+  discardDraft(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("uid", ParseIntPipe) uid: number,
+  ) {
+    return this.svc.discardDraft(principal, orgId, mailboxId, uid);
   }
 }
 
