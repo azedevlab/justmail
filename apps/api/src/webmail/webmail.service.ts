@@ -32,6 +32,7 @@ import {
 import { ImapSessionManager } from "./imap-session.manager";
 import { ImapIdleWatcher } from "./imap-idle.watcher";
 import { WebmailCache } from "./webmail.cache";
+import { computeThreadId, headerValue, parseReferences } from "./threading";
 
 const IMAP_HOST = config.IMAP_HOST;
 const IMAP_PORT = config.IMAP_PORT;
@@ -222,7 +223,11 @@ export class WebmailService {
           internalDate: true,
           bodyStructure: true,
           threadId: true,
+          headers: ["references"],
         })) {
+          const references = parseReferences(
+            headerValue(msg.headers?.toString("utf8"), "references"),
+          );
           items.push({
             uid: msg.uid,
             seq: msg.seq,
@@ -236,7 +241,13 @@ export class WebmailService {
             has_attachments: msg.bodyStructure
               ? structureHasAttachments(msg.bodyStructure)
               : false,
-            thread_id: msg.threadId ?? null,
+            thread_id: computeThreadId({
+              nativeThreadId: msg.threadId ?? null,
+              messageId: msg.envelope?.messageId ?? null,
+              inReplyTo: msg.envelope?.inReplyTo ?? null,
+              references,
+              subject: msg.envelope?.subject ?? null,
+            }),
           });
           const text = msg.bodyStructure
             ? findTextNode(msg.bodyStructure)
