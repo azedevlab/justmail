@@ -40,6 +40,27 @@ export const MessageSummary = z.object({
 });
 export type MessageSummary = z.infer<typeof MessageSummary>;
 
+// modseq/uidvalidity are IMAP 64-bit counters; carried as decimal strings
+// because JSON has no bigint. Null when the server lacks CONDSTORE.
+export const MessageList = z.object({
+  messages: z.array(MessageSummary),
+  total: z.number().int(),
+  uid_validity: z.string().nullable(),
+  mod_seq: z.string().nullable(),
+});
+export type MessageList = z.infer<typeof MessageList>;
+
+export const MessageSync = z.object({
+  uid_validity: z.string().nullable(),
+  mod_seq: z.string().nullable(),
+  // uid_validity changed under the client: its cache is void, reload in full.
+  stale: z.boolean(),
+  changed: z.array(
+    z.object({ uid: z.number().int(), flags: z.array(z.string()) }),
+  ),
+});
+export type MessageSync = z.infer<typeof MessageSync>;
+
 export const Message = z.object({
   uid: z.number().int(),
   message_id: z.string().nullable(),

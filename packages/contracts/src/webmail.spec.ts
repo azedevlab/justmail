@@ -3,7 +3,9 @@ import {
   ComposeRequest,
   FlagAction,
   Folder,
+  MessageList,
   MessageSummary,
+  MessageSync,
 } from "./webmail.js";
 
 describe("ComposeRequest", () => {
@@ -76,5 +78,43 @@ describe("Folder / MessageSummary shapes", () => {
     });
     expect(parsed.uid).toBe(10);
     expect(parsed.envelope.subject).toBe("Hi");
+  });
+});
+
+describe("MessageList / MessageSync (CONDSTORE)", () => {
+  it("carries modseq + uidvalidity as nullable strings", () => {
+    const parsed = MessageList.parse({
+      messages: [],
+      total: 0,
+      uid_validity: "123456789",
+      mod_seq: "42",
+    });
+    expect(parsed.mod_seq).toBe("42");
+
+    const nulls = MessageList.parse({
+      messages: [],
+      total: 0,
+      uid_validity: null,
+      mod_seq: null,
+    });
+    expect(nulls.uid_validity).toBeNull();
+  });
+
+  it("parses a flag delta and a stale signal", () => {
+    const delta = MessageSync.parse({
+      uid_validity: "1",
+      mod_seq: "50",
+      stale: false,
+      changed: [{ uid: 7, flags: ["\\Seen", "\\Flagged"] }],
+    });
+    expect(delta.changed[0]!.uid).toBe(7);
+
+    const stale = MessageSync.parse({
+      uid_validity: "2",
+      mod_seq: "1",
+      stale: true,
+      changed: [],
+    });
+    expect(stale.stale).toBe(true);
   });
 });
