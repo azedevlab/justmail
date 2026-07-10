@@ -36,6 +36,7 @@ const Env = z.object({
   // it there); external clients authenticate via the caldav.* proxy instead.
   RADICALE_URL: z.string().url().default("http://radicale:5232"),
   RADICALE_CONTACTS_COLLECTION: z.string().default("contacts"),
+  RADICALE_CALENDAR_COLLECTION: z.string().default("calendar"),
 
   // Thumbnail generation (sharp) for image attachments.
   THUMBNAIL_ENABLED: z.coerce.boolean().default(true),
