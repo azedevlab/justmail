@@ -1,8 +1,10 @@
 import { BadRequestException, PipeTransform } from "@nestjs/common";
-import { ZodType } from "zod";
+import { ZodType, type ZodTypeDef } from "zod";
 
 export class ZodPipe<T> implements PipeTransform<unknown, T> {
-  constructor(private readonly schema: ZodType<T>) {}
+  // Input generic is `unknown` so schemas with a transform (whose parsed input
+  // type differs from the output type) are accepted as well.
+  constructor(private readonly schema: ZodType<T, ZodTypeDef, unknown>) {}
 
   transform(value: unknown): T {
     const parsed = this.schema.safeParse(value);

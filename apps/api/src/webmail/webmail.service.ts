@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import type { Readable } from "node:stream";
-import { ImapFlow, type MessageStructureObject } from "imapflow";
+import { ImapFlow, type MessageStructureObject, type SearchObject } from "imapflow";
 import { parseMime } from "@justmail/mail-parser";
 import nodemailer from "nodemailer";
 import { z } from "zod";
@@ -15,6 +15,7 @@ import {
   FlagAction,
   type Folder,
   type MessageList,
+  type MessageSummary,
   type SaveDraftRequest,
   type SavedDraft,
 } from "@justmail/contracts";
@@ -60,6 +61,18 @@ interface StoredNodemailerAttachment {
   filename: string;
   contentType: string;
   content: Readable;
+}
+
+interface MessageSummaryItem {
+  uid: number;
+  seq: number;
+  flags: string[];
+  envelope: MessageSummary["envelope"];
+  size: number;
+  date: string | null;
+  preview: string;
+  has_attachments: boolean;
+  thread_id: string | null;
 }
 
 @Injectable()
@@ -200,96 +213,11 @@ export class WebmailService {
         if (!status)
           return { messages: [], total: 0, uid_validity, mod_seq };
         const from = Math.max(status - limit + 1, 1);
-        const range = `${from}:${status}`;
-        type Item = {
-          uid: number;
-          seq: number;
-          flags: string[];
-          envelope: unknown;
-          size: number;
-          date: string | null;
-          preview: string;
-          has_attachments: boolean;
-          thread_id: string | null;
-        };
-        const items: Item[] = [];
-        // part key -> { uids, encoding } for a single grouped snippet fetch
-        const textParts = new Map<
-          number,
-          { key: string; encoding: string }
-        >();
-        for await (const msg of client.fetch(range, {
-          uid: true,
-          envelope: true,
-          flags: true,
-          size: true,
-          internalDate: true,
-          bodyStructure: true,
-          threadId: true,
-          headers: ["references"],
-        })) {
-          const references = parseReferences(
-            headerValue(msg.headers?.toString("utf8"), "references"),
-          );
-          items.push({
-            uid: msg.uid,
-            seq: msg.seq,
-            flags: [...(msg.flags ?? [])],
-            envelope: msg.envelope,
-            size: msg.size ?? 0,
-            date: msg.internalDate
-              ? new Date(msg.internalDate).toISOString()
-              : null,
-            preview: "",
-            has_attachments: msg.bodyStructure
-              ? structureHasAttachments(msg.bodyStructure)
-              : false,
-            thread_id: computeThreadId({
-              nativeThreadId: msg.threadId ?? null,
-              messageId: msg.envelope?.messageId ?? null,
-              inReplyTo: msg.envelope?.inReplyTo ?? null,
-              references,
-              subject: msg.envelope?.subject ?? null,
-            }),
-          });
-          const text = msg.bodyStructure
-            ? findTextNode(msg.bodyStructure)
-            : undefined;
-          if (text) {
-            textParts.set(msg.uid, {
-              key: text.part ?? "1",
-              encoding: (text.encoding ?? "").toLowerCase(),
-            });
-          }
-        }
-
-        // Fetch bounded snippets grouped by identical part key (most mail
-        // shares "1" or "1.1"), so this is a handful of extra commands.
-        const byKey = new Map<string, number[]>();
-        for (const [uid, t] of textParts) {
-          const list = byKey.get(t.key) ?? [];
-          list.push(uid);
-          byKey.set(t.key, list);
-        }
-        const previews = new Map<number, string>();
-        for (const [key, uids] of byKey) {
-          for await (const msg of client.fetch(
-            uids,
-            { uid: true, bodyParts: [{ key, start: 0, maxLength: 1024 }] },
-            { uid: true },
-          )) {
-            const buf = msg.bodyParts?.get(key);
-            if (!buf) continue;
-            previews.set(
-              msg.uid,
-              snippetFromPart(buf, textParts.get(msg.uid)?.encoding ?? ""),
-            );
-          }
-        }
-        for (const it of items) {
-          it.preview = previews.get(it.uid) ?? "";
-        }
-        items.reverse();
+        const items = await this.collectSummaries(
+          client,
+          `${from}:${status}`,
+          false,
+        );
         return { messages: items, total: status, uid_validity, mod_seq };
       } finally {
         lock.release();
@@ -303,6 +231,134 @@ export class WebmailService {
       out,
     );
     return out;
+  }
+
+  // Build message-list summaries (envelope, flags, thread id, snippet preview)
+  // for a sequence range or an explicit UID list, newest-first. Shared by the
+  // folder listing and server-side search so both render identical rows.
+  private async collectSummaries(
+    client: ImapFlow,
+    source: string | number[],
+    byUid: boolean,
+  ): Promise<MessageSummaryItem[]> {
+    const items: MessageSummaryItem[] = [];
+    // uid -> { part key, encoding } for a single grouped snippet fetch
+    const textParts = new Map<number, { key: string; encoding: string }>();
+    const query = {
+      uid: true,
+      envelope: true,
+      flags: true,
+      size: true,
+      internalDate: true,
+      bodyStructure: true,
+      threadId: true,
+      headers: ["references"],
+    };
+    const iterator = byUid
+      ? client.fetch(source, query, { uid: true })
+      : client.fetch(source, query);
+    for await (const msg of iterator) {
+      const references = parseReferences(
+        headerValue(msg.headers?.toString("utf8"), "references"),
+      );
+      items.push({
+        uid: msg.uid,
+        seq: msg.seq,
+        flags: [...(msg.flags ?? [])],
+        envelope: msg.envelope as MessageSummary["envelope"],
+        size: msg.size ?? 0,
+        date: msg.internalDate
+          ? new Date(msg.internalDate).toISOString()
+          : null,
+        preview: "",
+        has_attachments: msg.bodyStructure
+          ? structureHasAttachments(msg.bodyStructure)
+          : false,
+        thread_id: computeThreadId({
+          nativeThreadId: msg.threadId ?? null,
+          messageId: msg.envelope?.messageId ?? null,
+          inReplyTo: msg.envelope?.inReplyTo ?? null,
+          references,
+          subject: msg.envelope?.subject ?? null,
+        }),
+      });
+      const text = msg.bodyStructure
+        ? findTextNode(msg.bodyStructure)
+        : undefined;
+      if (text) {
+        textParts.set(msg.uid, {
+          key: text.part ?? "1",
+          encoding: (text.encoding ?? "").toLowerCase(),
+        });
+      }
+    }
+
+    // Fetch bounded snippets grouped by identical part key (most mail
+    // shares "1" or "1.1"), so this is a handful of extra commands.
+    const byKey = new Map<string, number[]>();
+    for (const [uid, t] of textParts) {
+      const list = byKey.get(t.key) ?? [];
+      list.push(uid);
+      byKey.set(t.key, list);
+    }
+    const previews = new Map<number, string>();
+    for (const [key, uids] of byKey) {
+      for await (const msg of client.fetch(
+        uids,
+        { uid: true, bodyParts: [{ key, start: 0, maxLength: 1024 }] },
+        { uid: true },
+      )) {
+        const buf = msg.bodyParts?.get(key);
+        if (!buf) continue;
+        previews.set(
+          msg.uid,
+          snippetFromPart(buf, textParts.get(msg.uid)?.encoding ?? ""),
+        );
+      }
+    }
+    for (const it of items) {
+      it.preview = previews.get(it.uid) ?? "";
+    }
+    items.reverse();
+    return items;
+  }
+
+  // Server-side IMAP SEARCH over a folder. The free-text query supports Gmail-
+  // style operators (from:/to:/cc:/subject:/body:/before:/after:/has:/is:) that
+  // compile to standard IMAP SEARCH criteria; anything left over matches header
+  // and body text. has:attachment has no IMAP primitive, so it is applied as a
+  // structure post-filter on the matched set.
+  async search(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    folder: string,
+    input: SearchRequest,
+  ): Promise<MessageList> {
+    const creds = await this.creds(principal, orgId, mailboxId);
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
+      const lock = await client.getMailboxLock(folder);
+      try {
+        const mb =
+          client.mailbox && typeof client.mailbox === "object"
+            ? client.mailbox
+            : null;
+        const uid_validity = mb?.uidValidity != null ? String(mb.uidValidity) : null;
+        const mod_seq = mb?.highestModseq != null ? String(mb.highestModseq) : null;
+        const { criteria, hasAttachment } = buildSearchCriteria(input);
+        const matched = await client.search(criteria, { uid: true });
+        if (!matched || matched.length === 0) {
+          return { messages: [], total: 0, uid_validity, mod_seq };
+        }
+        // search() returns ascending UIDs; take the newest window.
+        const uids = matched.slice(-config.WEBMAIL_MESSAGE_LIST_MAX);
+        let items = await this.collectSummaries(client, uids, true);
+        if (hasAttachment) items = items.filter((it) => it.has_attachments);
+        return { messages: items, total: items.length, uid_validity, mod_seq };
+      } finally {
+        lock.release();
+      }
+    });
   }
 
   // CONDSTORE delta: returns flag changes since the client's last modseq so the
@@ -937,6 +993,126 @@ export const UnlockRequest = z.object({
 export const MoveRequest = z.object({
   destination: z.string().min(1).max(500),
 });
+
+// Query params for folder search. has_attachment arrives as a query string, so
+// it is parsed from the literal "true"/"false" rather than coerced (any non-
+// empty string is truthy, which would make "false" mean true).
+export const SearchRequest = z.object({
+  q: z.string().min(1).max(500),
+  from: z.string().max(320).optional(),
+  to: z.string().max(320).optional(),
+  has_attachment: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
+  after: z.string().datetime().optional(),
+  before: z.string().datetime().optional(),
+});
+export type SearchRequest = z.infer<typeof SearchRequest>;
+
+// Split a search string into Gmail-style operators plus residual free text and
+// compile it to an IMAP SearchObject. Explicit structured fields (from/to/date/
+// has_attachment) override operators of the same name. has:attachment is
+// returned separately because IMAP has no attachment search primitive.
+export function buildSearchCriteria(input: SearchRequest): {
+  criteria: SearchObject;
+  hasAttachment: boolean;
+} {
+  const criteria: SearchObject = {};
+  let hasAttachment = input.has_attachment ?? false;
+  const free: string[] = [];
+  const tokenRe = /(\w+):(?:"([^"]*)"|(\S+))|"([^"]*)"|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(input.q))) {
+    const op = m[1]?.toLowerCase();
+    if (op) {
+      const value = (m[2] ?? m[3] ?? "").trim();
+      if (!value) continue;
+      switch (op) {
+        case "from":
+          criteria.from = value;
+          break;
+        case "to":
+          criteria.to = value;
+          break;
+        case "cc":
+          criteria.cc = value;
+          break;
+        case "subject":
+          criteria.subject = value;
+          break;
+        case "body":
+          criteria.body = value;
+          break;
+        case "before": {
+          const d = parseSearchDate(value);
+          if (d) criteria.before = d;
+          break;
+        }
+        case "after":
+        case "since": {
+          const d = parseSearchDate(value);
+          if (d) criteria.since = d;
+          break;
+        }
+        case "has":
+          if (value.toLowerCase() === "attachment") hasAttachment = true;
+          break;
+        case "is":
+          switch (value.toLowerCase()) {
+            case "unread":
+            case "unseen":
+              criteria.seen = false;
+              break;
+            case "read":
+            case "seen":
+              criteria.seen = true;
+              break;
+            case "starred":
+            case "flagged":
+              criteria.flagged = true;
+              break;
+            case "unstarred":
+            case "unflagged":
+              criteria.flagged = false;
+              break;
+          }
+          break;
+        default:
+          // Unknown operator: keep the whole token as free text.
+          free.push(m[0]);
+      }
+    } else {
+      free.push((m[4] ?? m[5] ?? "").trim());
+    }
+  }
+  const text = free.filter(Boolean).join(" ");
+  if (text) criteria.text = text;
+
+  if (input.from) criteria.from = input.from;
+  if (input.to) criteria.to = input.to;
+  if (input.after) {
+    const d = parseSearchDate(input.after);
+    if (d) criteria.since = d;
+  }
+  if (input.before) {
+    const d = parseSearchDate(input.before);
+    if (d) criteria.before = d;
+  }
+
+  // IMAP SEARCH needs at least one criterion; fall back to matching everything
+  // (attachment-only queries) or the raw text.
+  if (Object.keys(criteria).length === 0) {
+    if (hasAttachment) criteria.all = true;
+    else criteria.text = input.q.trim();
+  }
+  return { criteria, hasAttachment };
+}
+
+function parseSearchDate(value: string): Date | null {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 async function findSentBox(client: ImapFlow): Promise<string | null> {
   const boxes = await client.list();
