@@ -1,6 +1,7 @@
 "use client";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useEffect,
   useRef,
@@ -12,6 +13,7 @@ import { useForm } from "react-hook-form";
 import type {
   Folder,
   MessageList,
+  MessageSummary,
   MessageSync,
   Message,
   ComposeRequest,
@@ -290,6 +292,18 @@ export default function MailboxView() {
     );
   });
 
+  // Virtualize the message list so a folder with thousands of messages only
+  // mounts the rows in view. Rows have variable height (optional preview line),
+  // so measureElement corrects the estimate after mount.
+  const listParentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listParentRef.current,
+    estimateSize: () => 76,
+    overscan: 10,
+    getItemKey: (i) => filtered[i]!.uid,
+  });
+
   if (folders.isError && (folders.error as ApiError)?.status === 403) {
     return (
       <UnlockScreen
@@ -403,11 +417,11 @@ export default function MailboxView() {
 
         {/* Message list */}
         <section
-          className="shrink-0 overflow-y-auto"
+          className="shrink-0 min-h-0 flex flex-col"
           style={{ width: listW }}
           aria-label="Messages"
         >
-          <div className="sticky top-0 z-10 px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2">
+          <div className="shrink-0 z-10 px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2">
             <Search size={13} className="text-[var(--color-neutral-700)] shrink-0" />
             <input
               value={search}
@@ -422,16 +436,21 @@ export default function MailboxView() {
                 : "…"}
             </span>
           </div>
-          <ul>
-            {messages.isLoading &&
-              Array.from({ length: 6 }).map((_, i) => (
-                <li key={i} className="px-4 py-3 border-b border-[var(--color-border)]">
-                  <Skeleton className="h-3 w-28 mb-2" />
-                  <Skeleton className="h-3 w-full" />
-                </li>
-              ))}
-            {messages.data && filtered.length === 0 && (
-              <li className="p-6">
+          <div ref={listParentRef} className="flex-1 min-h-0 overflow-y-auto">
+            {messages.isLoading ? (
+              <ul>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <li
+                    key={i}
+                    className="px-4 py-3 border-b border-[var(--color-border)]"
+                  >
+                    <Skeleton className="h-3 w-28 mb-2" />
+                    <Skeleton className="h-3 w-full" />
+                  </li>
+                ))}
+              </ul>
+            ) : messages.data && filtered.length === 0 ? (
+              <div className="p-6">
                 <Empty
                   title={q ? "No matches" : "This folder is empty"}
                   description={
@@ -439,92 +458,37 @@ export default function MailboxView() {
                   }
                   icon={q ? <Search size={20} /> : <MailOpen size={20} />}
                 />
-              </li>
+              </div>
+            ) : (
+              <ul
+                className="relative w-full"
+                style={{ height: rowVirtualizer.getTotalSize() }}
+              >
+                {rowVirtualizer.getVirtualItems().map((vi) => {
+                  const m = filtered[vi.index]!;
+                  return (
+                    <li
+                      key={vi.key}
+                      data-index={vi.index}
+                      ref={rowVirtualizer.measureElement}
+                      className="absolute top-0 left-0 w-full"
+                      style={{ transform: `translateY(${vi.start}px)` }}
+                    >
+                      <MessageRow
+                        m={m}
+                        selected={openUid === m.uid}
+                        onOpen={() => {
+                          setOpenUid(m.uid);
+                          if (!m.flags.includes("\\Seen"))
+                            flag.mutate({ uid: m.uid, action: "read" });
+                        }}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-            {filtered.map((m) => {
-              const unread = !m.flags.includes("\\Seen");
-              const starred = m.flags.includes("\\Flagged");
-              const sender =
-                m.envelope.from?.[0]?.name ??
-                m.envelope.from?.[0]?.address ??
-                "?";
-              const selected = openUid === m.uid;
-              return (
-                <li key={m.uid}>
-                  <button
-                    onClick={() => {
-                      setOpenUid(m.uid);
-                      if (unread) flag.mutate({ uid: m.uid, action: "read" });
-                    }}
-                    className={
-                      "relative w-full text-left px-4 py-3 border-b border-[var(--color-border)] transition-colors " +
-                      (selected
-                        ? "bg-[color:rgb(10_132_255/0.1)]"
-                        : "hover:bg-[var(--hover-overlay-faint)]")
-                    }
-                  >
-                    {selected && (
-                      <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-[var(--color-brand-500)]" />
-                    )}
-                    <span className="flex items-center gap-2">
-                      {unread && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] shrink-0" />
-                      )}
-                      <span
-                        className={
-                          "flex-1 truncate text-[13px] " +
-                          (unread
-                            ? "font-semibold text-[var(--color-neutral-1100)]"
-                            : "text-[var(--color-neutral-1000)]")
-                        }
-                      >
-                        {sender}
-                      </span>
-                      <span className="text-[11px] tabular-nums text-[var(--color-neutral-700)] shrink-0">
-                        {m.date &&
-                          new Date(m.date).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                      </span>
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-xs">
-                      {starred && (
-                        <Star
-                          size={11}
-                          className="text-[var(--color-warn)] shrink-0"
-                          fill="currentColor"
-                          aria-label="Starred"
-                        />
-                      )}
-                      {m.has_attachments && (
-                        <Paperclip
-                          size={11}
-                          className="text-[var(--color-neutral-700)] shrink-0"
-                          aria-label="Has attachments"
-                        />
-                      )}
-                      <span
-                        className={
-                          "truncate " +
-                          (unread
-                            ? "text-[var(--color-neutral-1000)]"
-                            : "text-[var(--color-neutral-800)]")
-                        }
-                      >
-                        {m.envelope.subject || "(no subject)"}
-                      </span>
-                    </span>
-                    {m.preview && (
-                      <span className="mt-0.5 block truncate text-[11px] text-[var(--color-neutral-700)]">
-                        {m.preview}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          </div>
         </section>
 
         <div
@@ -779,6 +743,90 @@ function AttachmentItem({
         )}
       </div>
     </li>
+  );
+}
+
+function MessageRow({
+  m,
+  selected,
+  onOpen,
+}: {
+  m: MessageSummary;
+  selected: boolean;
+  onOpen: () => void;
+}) {
+  const unread = !m.flags.includes("\\Seen");
+  const starred = m.flags.includes("\\Flagged");
+  const sender =
+    m.envelope.from?.[0]?.name ?? m.envelope.from?.[0]?.address ?? "?";
+  return (
+    <button
+      onClick={onOpen}
+      className={
+        "relative w-full text-left px-4 py-3 border-b border-[var(--color-border)] transition-colors " +
+        (selected
+          ? "bg-[color:rgb(10_132_255/0.1)]"
+          : "hover:bg-[var(--hover-overlay-faint)]")
+      }
+    >
+      {selected && (
+        <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-[var(--color-brand-500)]" />
+      )}
+      <span className="flex items-center gap-2">
+        {unread && (
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] shrink-0" />
+        )}
+        <span
+          className={
+            "flex-1 truncate text-[13px] " +
+            (unread
+              ? "font-semibold text-[var(--color-neutral-1100)]"
+              : "text-[var(--color-neutral-1000)]")
+          }
+        >
+          {sender}
+        </span>
+        <span className="text-[11px] tabular-nums text-[var(--color-neutral-700)] shrink-0">
+          {m.date &&
+            new Date(m.date).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+            })}
+        </span>
+      </span>
+      <span className="mt-0.5 flex items-center gap-1.5 text-xs">
+        {starred && (
+          <Star
+            size={11}
+            className="text-[var(--color-warn)] shrink-0"
+            fill="currentColor"
+            aria-label="Starred"
+          />
+        )}
+        {m.has_attachments && (
+          <Paperclip
+            size={11}
+            className="text-[var(--color-neutral-700)] shrink-0"
+            aria-label="Has attachments"
+          />
+        )}
+        <span
+          className={
+            "truncate " +
+            (unread
+              ? "text-[var(--color-neutral-1000)]"
+              : "text-[var(--color-neutral-800)]")
+          }
+        >
+          {m.envelope.subject || "(no subject)"}
+        </span>
+      </span>
+      {m.preview && (
+        <span className="mt-0.5 block truncate text-[11px] text-[var(--color-neutral-700)]">
+          {m.preview}
+        </span>
+      )}
+    </button>
   );
 }
 
