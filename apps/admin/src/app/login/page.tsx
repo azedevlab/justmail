@@ -6,11 +6,13 @@ import { useForm } from "react-hook-form";
 import type { BootstrapRequest, LoginRequest } from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
 import {
+  AuroraBackdrop,
   Button,
   Card,
   FormField,
   Input,
   Spinner,
+  Wordmark,
 } from "@justmail/shared-ui";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/session";
@@ -34,30 +36,34 @@ export default function LoginPage() {
   }, [mode]);
 
   return (
-    <main className="min-h-screen grid place-items-center bg-gradient-to-b from-[var(--color-neutral-0)] to-[var(--color-neutral-100)] p-4">
+    <main className="relative min-h-screen grid place-items-center bg-[var(--color-bg)] p-4">
+      <AuroraBackdrop />
       {mode === null ? (
         <Spinner size={22} />
       ) : (
-        <Card className="w-full max-w-sm p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="w-9 h-9 rounded-lg bg-[var(--color-brand-500)] grid place-items-center font-bold text-white">
-              J
-            </div>
-            <div>
-              <div className="font-semibold">JustMail</div>
-              <div className="text-xs text-[var(--color-neutral-900)]">
-                {mode === "bootstrap"
-                  ? "Bootstrap admin account"
-                  : "Sign in to the console"}
-              </div>
-            </div>
+        <div className="relative w-full max-w-sm animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+          <div className="flex justify-center mb-6">
+            <Wordmark size={36} sub="Control plane" />
           </div>
-          {mode === "bootstrap" ? (
-            <BootstrapForm onDone={() => me.refetch()} />
-          ) : (
-            <LoginForm onDone={() => me.refetch()} />
-          )}
-        </Card>
+          <Card className="p-6 shadow-[var(--shadow-4)]">
+            <h1 className="text-base font-semibold mb-1">
+              {mode === "bootstrap" ? "Create the first account" : "Welcome back"}
+            </h1>
+            <p className="text-xs text-[var(--color-neutral-900)] mb-5">
+              {mode === "bootstrap"
+                ? "Set up the owner account for this server."
+                : "Sign in to manage domains, mailboxes and delivery."}
+            </p>
+            {mode === "bootstrap" ? (
+              <BootstrapForm onDone={() => me.refetch()} />
+            ) : (
+              <LoginForm onDone={() => me.refetch()} />
+            )}
+          </Card>
+          <p className="mt-4 text-center text-[11px] text-[var(--color-neutral-700)]">
+            JustMail — self-hosted mail platform
+          </p>
+        </div>
       )}
     </main>
   );

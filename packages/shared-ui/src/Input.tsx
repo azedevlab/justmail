@@ -2,10 +2,13 @@ import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } fro
 import { cn } from "@justmail/shared-utils";
 
 const inputClass = cn(
-  "w-full rounded-lg bg-[var(--color-surface)] text-[var(--color-neutral-1100)]",
+  "w-full rounded-lg bg-[var(--color-surface-2)] text-[var(--color-neutral-1100)]",
   "border border-[var(--color-border)] px-3 py-2 text-sm",
+  "shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]",
   "placeholder:text-[var(--color-neutral-700)]",
-  "focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-500)] focus:border-transparent",
+  "transition-[border-color,box-shadow,background] duration-[var(--motion-base)]",
+  "hover:border-[var(--color-border-strong)]",
+  "focus:outline-none focus:border-[color:rgb(124_92_255/0.6)] focus:ring-[3px] focus:ring-[color:rgb(124_92_255/0.18)]",
   "disabled:opacity-50 disabled:cursor-not-allowed",
   "font-[var(--font-sans)]",
 );

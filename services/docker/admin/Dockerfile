@@ -15,6 +15,10 @@ COPY packages packages
 # Build only what admin transitively needs, honouring the dep graph.
 RUN pnpm -r --filter '@justmail/shared-ui...' --filter '@justmail/theme-engine...' build
 COPY apps/admin apps/admin
+# NEXT_PUBLIC_* is inlined into the client bundle at build time — a runtime
+# environment: entry never reaches the browser, so it must be a build arg.
+ARG NEXT_PUBLIC_API_BASE
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @justmail/admin build
 

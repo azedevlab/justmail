@@ -29,10 +29,10 @@ export function useToast() {
 }
 
 const toneClass: Record<ToastTone, string> = {
-  info: "border-[var(--color-info)]",
-  ok: "border-[var(--color-ok)]",
-  warn: "border-[var(--color-warn)]",
-  bad: "border-[var(--color-bad)]",
+  info: "before:bg-[var(--color-info)]",
+  ok: "before:bg-[var(--color-ok)]",
+  warn: "before:bg-[var(--color-warn)]",
+  bad: "before:bg-[var(--color-bad)]",
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -66,8 +66,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto min-w-[260px] max-w-sm bg-[var(--color-surface)]",
-              "border border-l-4 rounded-lg shadow-[var(--shadow-3)] px-4 py-3 text-sm",
+              "pointer-events-auto min-w-[260px] max-w-sm bg-[var(--color-surface-3)]",
+              "relative overflow-hidden border border-[var(--color-border-strong)] rounded-lg",
+              "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px]",
+              "shadow-[var(--shadow-3)] px-4 py-3 text-sm",
               "animate-in fade-in-0 slide-in-from-right-2",
               toneClass[t.tone ?? "info"],
             )}

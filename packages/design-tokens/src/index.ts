@@ -7,19 +7,35 @@
 
 // 12-step neutral ramp (dark-first, keys map to lightness)
 export const neutralDark = [
-  "#05070A",
-  "#0B0D10",
-  "#12151A",
-  "#1B1F26",
-  "#262B34",
-  "#3A414C",
-  "#4E5867",
+  "#08090C",
+  "#0D0F13",
+  "#13161C",
+  "#1A1E26",
+  "#232833",
+  "#39404D",
+  "#4D5666",
   "#6B7280",
   "#8B93A1",
-  "#A4ACB8",
-  "#CFD4DC",
-  "#E6E8EB",
+  "#A9B0BC",
+  "#D2D6DE",
+  "#EDEFF2",
 ] as const;
+
+// Layered surfaces (dark theme). bg is the canvas; each surface step is one
+// perceptible layer up — sidebar/cards, inputs/hover, popovers/modals.
+export const surfaceDark = {
+  bg: "#08090C",
+  "1": "#0D0F13",
+  "2": "#13161C",
+  "3": "#1A1E26",
+} as const;
+
+export const surfaceLight = {
+  bg: "#FFFFFF",
+  "1": "#F7F8FA",
+  "2": "#EEF0F3",
+  "3": "#FFFFFF",
+} as const;
 
 export const neutralLight = [
   "#FFFFFF",
@@ -105,6 +121,12 @@ export const fontFamily = {
   serif: '"Source Serif Pro", ui-serif, Georgia, serif',
 } as const;
 
+export const letterSpacing = {
+  body: "-0.011em",
+  heading: "-0.02em",
+  label: "0.08em",
+} as const;
+
 export const motion = {
   quick: "80ms",
   base: "120ms",
@@ -112,13 +134,15 @@ export const motion = {
   easing: "cubic-bezier(0.16, 1, 0.3, 1)",
 } as const;
 
+// Raised surfaces pair a drop shadow with a 1px inner top highlight so edges
+// catch light against the dark canvas.
 export const elevation = {
   "0": "none",
-  "1": "0 1px 2px 0 rgba(0,0,0,0.4)",
-  "2": "0 2px 4px 0 rgba(0,0,0,0.4)",
-  "3": "0 4px 12px 0 rgba(0,0,0,0.5)",
-  "4": "0 10px 30px 0 rgba(0,0,0,0.55)",
-  "5": "0 24px 60px 0 rgba(0,0,0,0.65)",
+  "1": "inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px 0 rgba(0,0,0,0.4)",
+  "2": "inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px 0 rgba(0,0,0,0.45)",
+  "3": "inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 16px 0 rgba(0,0,0,0.5)",
+  "4": "inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px 0 rgba(0,0,0,0.55)",
+  "5": "inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 60px 0 rgba(0,0,0,0.65)",
 } as const;
 
 export const zIndex = {
@@ -134,12 +158,15 @@ export const zIndex = {
 export type Tokens = {
   neutralDark: typeof neutralDark;
   neutralLight: typeof neutralLight;
+  surfaceDark: typeof surfaceDark;
+  surfaceLight: typeof surfaceLight;
   brand: typeof brand;
   semantic: typeof semantic;
   spacing: typeof spacing;
   radius: typeof radius;
   fontSize: typeof fontSize;
   fontFamily: typeof fontFamily;
+  letterSpacing: typeof letterSpacing;
   motion: typeof motion;
   elevation: typeof elevation;
   zIndex: typeof zIndex;
@@ -148,12 +175,15 @@ export type Tokens = {
 export const tokens: Tokens = {
   neutralDark,
   neutralLight,
+  surfaceDark,
+  surfaceLight,
   brand,
   semantic,
   spacing,
   radius,
   fontSize,
   fontFamily,
+  letterSpacing,
   motion,
   elevation,
   zIndex,

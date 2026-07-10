@@ -61,14 +61,17 @@ export function CommandPalette({
   return (
     <div
       onClick={() => onOpenChange(false)}
-      className="fixed inset-0 z-[var(--z-cmdk)] bg-black/60 pt-[15vh] px-4"
+      className="fixed inset-0 z-[var(--z-cmdk)] bg-black/60 backdrop-blur-[6px] pt-[15vh] px-4 animate-in fade-in-0 duration-100"
     >
-      <div onClick={(e) => e.stopPropagation()} className="mx-auto max-w-xl">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="mx-auto max-w-xl animate-in fade-in-0 zoom-in-95 duration-150"
+      >
         <Command
           label="Command palette"
           className={cn(
-            "rounded-xl border border-[var(--color-border)]",
-            "bg-[var(--color-surface)] shadow-[var(--shadow-4)]",
+            "rounded-xl border border-[var(--color-border-strong)]",
+            "bg-[var(--color-surface-3)] shadow-[var(--shadow-5)] overflow-hidden",
           )}
         >
           <div className="flex items-center gap-2 px-3 border-b border-[var(--color-border)]">
@@ -100,7 +103,7 @@ export function CommandPalette({
                     }}
                     className={cn(
                       "flex items-center justify-between gap-3 px-2 py-2 rounded-md text-sm cursor-pointer",
-                      "aria-selected:bg-white/[0.06] text-[var(--color-neutral-1100)]",
+                      "aria-selected:bg-[color:rgb(124_92_255/0.14)] text-[var(--color-neutral-1100)]",
                     )}
                   >
                     <div className="flex items-center gap-2 flex-1">
@@ -124,6 +127,20 @@ export function CommandPalette({
               </Command.Group>
             ))}
           </Command.List>
+          <div className="flex items-center gap-4 px-3 py-2 border-t border-[var(--color-border)] text-[11px] text-[var(--color-neutral-700)]">
+            <span>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-[var(--color-border)] font-mono">↑↓</kbd>{" "}
+              navigate
+            </span>
+            <span>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-[var(--color-border)] font-mono">⏎</kbd>{" "}
+              select
+            </span>
+            <span>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-[var(--color-border)] font-mono">esc</kbd>{" "}
+              close
+            </span>
+          </div>
         </Command>
       </div>
     </div>

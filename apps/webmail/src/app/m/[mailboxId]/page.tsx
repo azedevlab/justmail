@@ -6,24 +6,31 @@ import { useForm } from "react-hook-form";
 import type { Folder, MessageSummary, Message, ComposeRequest } from "@justmail/contracts";
 import { ApiError, useHotkey } from "@justmail/shared-utils";
 import {
+  AuroraBackdrop,
+  Avatar,
   Button,
   Card,
   Empty,
   FormField,
   Input,
+  KeyHint,
   Modal,
-  PageBody,
-  PageHeader,
   Skeleton,
   Spinner,
   Textarea,
+  Tooltip,
   useToast,
+  Wordmark,
 } from "@justmail/shared-ui";
 import {
   Archive,
+  ArrowLeft,
   Clock,
   Edit3,
+  Folder as FolderIcon,
   Inbox,
+  MailOpen,
+  RefreshCw,
   Reply,
   Star,
   Trash2,
@@ -111,242 +118,330 @@ export default function MailboxView() {
   }
 
   return (
-    <div className="min-h-screen">
-      <PageHeader
-        title="Inbox"
-        description={folders.data ? `${folders.data.length} folders` : "Loading…"}
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => folders.refetch()}
-              leadingIcon={<Inbox size={14} />}
-            >
-              Refresh
-            </Button>
-            <Button
-              variant="primary"
-              leadingIcon={<Edit3 size={14} />}
-              onClick={() => setShowCompose(true)}
-            >
-              Compose
-            </Button>
-          </>
-        }
-      />
-      <PageBody>
-        <div
-          className="grid gap-4"
-          style={{
-            gridTemplateColumns: "180px 380px 1fr",
-            minHeight: "calc(100vh - 200px)",
-          }}
-        >
-          {/* Folder tree */}
-          <Card className="overflow-hidden">
-            <div className="p-2 text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
-              Folders
-            </div>
-            <nav className="text-sm">
-              {folders.data?.map((f) => {
-                const active = folder === f.path;
-                return (
-                  <button
-                    key={f.path}
-                    onClick={() => {
-                      setFolder(f.path);
-                      setOpenUid(null);
-                    }}
-                    className={
-                      "w-full text-left px-3 py-2 hover:bg-white/5 flex justify-between items-center " +
-                      (active ? "text-[var(--color-brand-400)]" : "")
-                    }
-                  >
-                    <span>{f.name}</span>
-                    {f.unread > 0 && (
-                      <span className="text-[10px] font-mono text-[var(--color-neutral-900)]">
-                        {f.unread}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </Card>
+    <div className="h-screen flex flex-col bg-[var(--color-bg)]">
+      {/* Top chrome */}
+      <header className="h-12 shrink-0 border-b border-[var(--color-border)] flex items-center gap-3 px-3 bg-[var(--color-surface-1)]">
+        <Tooltip content="All mailboxes">
+          <a
+            href="/"
+            className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-white/[0.06] hover:text-[var(--color-neutral-1100)] transition-colors"
+            aria-label="Back to mailboxes"
+          >
+            <ArrowLeft size={15} />
+          </a>
+        </Tooltip>
+        <Wordmark size={26} />
+        <span className="text-[var(--color-neutral-600)] text-sm">/</span>
+        <span className="text-[13px] font-medium truncate">{folder}</span>
 
-          {/* Message list */}
-          <Card className="overflow-hidden">
-            <div className="px-3 py-2 border-b border-[var(--color-border)] text-xs text-[var(--color-neutral-900)]">
-              {folder} · {messages.data?.messages.length ?? 0} shown ({messages.data?.total ?? 0} total)
+        <div className="flex-1" />
+
+        <Tooltip content="Refresh">
+          <button
+            onClick={() => {
+              folders.refetch();
+              messages.refetch();
+            }}
+            className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-white/[0.06] hover:text-[var(--color-neutral-1100)] transition-colors"
+            aria-label="Refresh"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </Tooltip>
+        <Button
+          variant="primary"
+          size="sm"
+          leadingIcon={<Edit3 size={13} />}
+          onClick={() => setShowCompose(true)}
+        >
+          Compose
+        </Button>
+      </header>
+
+      <div
+        className="flex-1 min-h-0 grid"
+        style={{ gridTemplateColumns: "200px 360px 1fr" }}
+      >
+        {/* Folder rail */}
+        <nav
+          className="border-r border-[var(--color-border)] bg-[var(--color-surface-1)] overflow-y-auto p-2"
+          aria-label="Folders"
+        >
+          <div className="px-2 pt-2 pb-1 text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-700)]">
+            Folders
+          </div>
+          {folders.data?.map((f) => {
+            const active = folder === f.path;
+            return (
+              <button
+                key={f.path}
+                onClick={() => {
+                  setFolder(f.path);
+                  setOpenUid(null);
+                }}
+                className={
+                  "w-full flex items-center gap-2.5 h-8 px-2 rounded-[7px] text-[13px] transition-colors " +
+                  (active
+                    ? "bg-[color:rgb(124_92_255/0.14)] text-[var(--color-neutral-1100)]"
+                    : "text-[var(--color-neutral-1000)] hover:bg-white/[0.05]")
+                }
+              >
+                <span
+                  className={
+                    active
+                      ? "text-[var(--color-brand-400)]"
+                      : "text-[var(--color-neutral-800)]"
+                  }
+                >
+                  {f.path === "INBOX" ? (
+                    <Inbox size={14} />
+                  ) : (
+                    <FolderIcon size={14} />
+                  )}
+                </span>
+                <span className="flex-1 text-left truncate">{f.name}</span>
+                {f.unread > 0 && (
+                  <span className="text-[10px] font-medium tabular-nums px-1.5 py-px rounded-full bg-[color:rgb(124_92_255/0.16)] text-[var(--color-brand-400)]">
+                    {f.unread}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          <div className="mt-6 px-2 space-y-1.5 text-[11px] text-[var(--color-neutral-700)]">
+            <div className="flex items-center gap-2">
+              <KeyHint combo="c" /> compose
             </div>
-            <ul className="divide-y divide-[var(--color-border)] overflow-y-auto max-h-[65vh]">
-              {messages.isLoading &&
-                Array.from({ length: 5 }).map((_, i) => (
-                  <li key={i} className="p-3">
-                    <Skeleton className="h-3 w-24 mb-1" />
-                    <Skeleton className="h-3 w-full" />
-                  </li>
-                ))}
-              {messages.data?.messages.length === 0 && (
-                <li>
-                  <Empty title="This folder is empty" />
+            <div className="flex items-center gap-2">
+              <KeyHint combo="s" /> star
+            </div>
+            <div className="flex items-center gap-2">
+              <KeyHint combo="shift 3" /> delete
+            </div>
+          </div>
+        </nav>
+
+        {/* Message list */}
+        <section
+          className="border-r border-[var(--color-border)] overflow-y-auto"
+          aria-label="Messages"
+        >
+          <div className="sticky top-0 z-10 px-4 py-2 border-b border-[var(--color-border)] text-[11px] text-[var(--color-neutral-800)] bg-[color:rgb(8_9_12/0.9)] backdrop-blur-md uppercase tracking-[0.08em] font-medium">
+            {messages.data
+              ? `${messages.data.messages.length} of ${messages.data.total}`
+              : "Loading…"}
+          </div>
+          <ul>
+            {messages.isLoading &&
+              Array.from({ length: 6 }).map((_, i) => (
+                <li key={i} className="px-4 py-3 border-b border-[var(--color-border)]">
+                  <Skeleton className="h-3 w-28 mb-2" />
+                  <Skeleton className="h-3 w-full" />
                 </li>
-              )}
-              {messages.data?.messages.map((m) => {
-                const unread = !m.flags.includes("\\Seen");
-                const starred = m.flags.includes("\\Flagged");
-                const sender =
-                  m.envelope.from?.[0]?.name ??
-                  m.envelope.from?.[0]?.address ??
-                  "?";
-                return (
-                  <li
-                    key={m.uid}
+              ))}
+            {messages.data?.messages.length === 0 && (
+              <li className="p-6">
+                <Empty
+                  title="This folder is empty"
+                  icon={<MailOpen size={20} />}
+                />
+              </li>
+            )}
+            {messages.data?.messages.map((m) => {
+              const unread = !m.flags.includes("\\Seen");
+              const starred = m.flags.includes("\\Flagged");
+              const sender =
+                m.envelope.from?.[0]?.name ??
+                m.envelope.from?.[0]?.address ??
+                "?";
+              const selected = openUid === m.uid;
+              return (
+                <li key={m.uid}>
+                  <button
                     onClick={() => {
                       setOpenUid(m.uid);
                       if (unread) flag.mutate({ uid: m.uid, action: "read" });
                     }}
                     className={
-                      "px-3 py-2 cursor-pointer hover:bg-white/5 " +
-                      (openUid === m.uid ? "bg-white/[0.04]" : "")
+                      "relative w-full text-left px-4 py-3 border-b border-[var(--color-border)] transition-colors " +
+                      (selected
+                        ? "bg-[color:rgb(124_92_255/0.1)]"
+                        : "hover:bg-white/[0.03]")
                     }
                   >
-                    <div className="flex items-center gap-2 text-sm">
+                    {selected && (
+                      <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-[var(--color-brand-500)]" />
+                    )}
+                    <span className="flex items-center gap-2">
+                      {unread && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-brand-400)] shrink-0" />
+                      )}
                       <span
                         className={
-                          "w-1 h-4 rounded-full " +
+                          "flex-1 truncate text-[13px] " +
                           (unread
-                            ? "bg-[var(--color-brand-500)]"
-                            : "bg-transparent")
-                        }
-                      />
-                      <span
-                        className={
-                          "flex-1 truncate " + (unread ? "font-semibold" : "")
+                            ? "font-semibold text-[var(--color-neutral-1100)]"
+                            : "text-[var(--color-neutral-1000)]")
                         }
                       >
                         {sender}
                       </span>
-                      <span className="text-xs text-[var(--color-neutral-900)]">
-                        {m.date && new Date(m.date).toLocaleDateString()}
+                      <span className="text-[11px] tabular-nums text-[var(--color-neutral-700)] shrink-0">
+                        {m.date &&
+                          new Date(m.date).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                          })}
                       </span>
-                    </div>
-                    <div className="text-xs text-[var(--color-neutral-900)] truncate mt-0.5 flex items-center gap-1">
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-xs">
                       {starred && (
                         <Star
-                          size={10}
-                          className="text-[var(--color-warn)]"
+                          size={11}
+                          className="text-[var(--color-warn)] shrink-0"
+                          fill="currentColor"
                           aria-label="Starred"
                         />
                       )}
-                      <span>{m.envelope.subject || "(no subject)"}</span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
+                      <span
+                        className={
+                          "truncate " +
+                          (unread
+                            ? "text-[var(--color-neutral-1000)]"
+                            : "text-[var(--color-neutral-800)]")
+                        }
+                      >
+                        {m.envelope.subject || "(no subject)"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
 
-          {/* Read pane */}
-          <Card className="overflow-hidden p-5">
-            {openUid === null ? (
-              <div className="text-sm text-[var(--color-neutral-900)]">
-                Select a message
-              </div>
-            ) : message.data ? (
+        {/* Read pane */}
+        <section className="overflow-y-auto" aria-label="Message">
+          {openUid === null ? (
+            <div className="h-full grid place-items-center text-center p-8">
               <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      {message.data.subject || "(no subject)"}
-                    </h2>
-                    <div className="text-xs mono text-[var(--color-neutral-900)] mt-1">
-                      {message.data.from}
-                    </div>
-                    <div className="text-xs text-[var(--color-neutral-700)] mt-0.5">
-                      to {message.data.to}
-                      {message.data.date &&
-                        ` · ${new Date(message.data.date).toLocaleString()}`}
-                    </div>
+                <span className="mx-auto mb-3 w-12 h-12 grid place-items-center rounded-2xl bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-neutral-700)]">
+                  <MailOpen size={20} />
+                </span>
+                <p className="text-sm text-[var(--color-neutral-900)]">
+                  Select a message to read
+                </p>
+              </div>
+            </div>
+          ) : message.data ? (
+            <article className="max-w-3xl mx-auto p-6">
+              <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                {message.data.subject || "(no subject)"}
+              </h2>
+              <div className="mt-4 flex items-center gap-3 pb-4 border-b border-[var(--color-border)]">
+                <Avatar name={message.data.from} size={34} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium truncate">
+                    {message.data.from}
                   </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        flag.mutate({ uid: openUid, action: "star" })
-                      }
-                      leadingIcon={<Star size={12} />}
+                  <div className="text-xs text-[var(--color-neutral-800)] truncate">
+                    to {message.data.to}
+                    {message.data.date &&
+                      ` · ${new Date(message.data.date).toLocaleString()}`}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Tooltip content="Star (s)">
+                    <button
+                      onClick={() => flag.mutate({ uid: openUid, action: "star" })}
+                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-white/[0.06] hover:text-[var(--color-warn)] transition-colors"
+                      aria-label="Star"
                     >
-                      Star
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      leadingIcon={<Reply size={12} />}
+                      <Star size={15} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Reply">
+                    <button
+                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-white/[0.06] hover:text-[var(--color-neutral-1100)] transition-colors"
+                      aria-label="Reply"
                     >
-                      Reply
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      leadingIcon={<Archive size={12} />}
+                      <Reply size={15} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Archive">
+                    <button
+                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-white/[0.06] hover:text-[var(--color-neutral-1100)] transition-colors"
+                      aria-label="Archive"
                     >
-                      Archive
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      leadingIcon={<Clock size={12} />}
+                      <Archive size={15} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Snooze">
+                    <button
+                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-white/[0.06] hover:text-[var(--color-neutral-1100)] transition-colors"
+                      aria-label="Snooze"
                     >
-                      Snooze
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      leadingIcon={<Trash2 size={12} />}
+                      <Clock size={15} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Delete (#)">
+                    <button
                       onClick={() => {
                         if (confirm("Delete this message?")) remove.mutate(openUid);
                       }}
+                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[color:rgb(239_68_68/0.12)] hover:text-[var(--color-bad)] transition-colors"
+                      aria-label="Delete"
                     >
-                      Delete
-                    </Button>
-                  </div>
+                      <Trash2 size={15} />
+                    </button>
+                  </Tooltip>
                 </div>
-                <hr className="border-[var(--color-border)] my-4" />
+              </div>
+              <div className="py-5">
                 {message.data.html ? (
                   <iframe
-                    className="w-full min-h-[400px] bg-white rounded-lg"
+                    className="w-full min-h-[480px] bg-white rounded-lg border border-[var(--color-border)]"
                     srcDoc={message.data.html}
                     sandbox=""
                     title="Message body"
                   />
                 ) : (
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-[var(--color-neutral-1000)]">
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--color-neutral-1000)]">
                     {message.data.text}
                   </pre>
                 )}
-                {message.data.attachments.length > 0 && (
-                  <>
-                    <hr className="border-[var(--color-border)] my-4" />
-                    <div className="text-sm font-medium mb-2">Attachments</div>
-                    <ul className="text-xs text-[var(--color-neutral-900)] space-y-1">
-                      {message.data.attachments.map((a, i) => (
-                        <li key={i}>
-                          {a.filename} — {a.mime} · {(a.size / 1024).toFixed(1)}{" "}
-                          KB
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
               </div>
-            ) : (
+              {message.data.attachments.length > 0 && (
+                <div className="pt-4 border-t border-[var(--color-border)]">
+                  <div className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-800)] mb-2">
+                    Attachments
+                  </div>
+                  <ul className="flex flex-wrap gap-2">
+                    {message.data.attachments.map((a, i) => (
+                      <li
+                        key={i}
+                        className="px-3 py-2 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs"
+                      >
+                        <span className="font-medium">{a.filename}</span>
+                        <span className="text-[var(--color-neutral-800)]">
+                          {" "}
+                          · {(a.size / 1024).toFixed(1)} KB
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </article>
+          ) : (
+            <div className="h-full grid place-items-center">
               <Spinner size={20} />
-            )}
-          </Card>
-        </div>
-      </PageBody>
+            </div>
+          )}
+        </section>
+      </div>
+
       {showCompose && (
         <ComposeModal
           orgId={orgId ?? ""}
@@ -381,11 +476,13 @@ function UnlockScreen({
       ),
   });
   return (
-    <div className="min-h-screen grid place-items-center p-4">
-      <Card className="p-6 max-w-sm w-full">
+    <div className="relative min-h-screen grid place-items-center p-4 bg-[var(--color-bg)]">
+      <AuroraBackdrop />
+      <Card className="relative p-6 max-w-sm w-full shadow-[var(--shadow-4)] animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
         <h2 className="text-sm font-semibold mb-1">Unlock mailbox</h2>
         <p className="text-xs text-[var(--color-neutral-900)] mb-4">
-          Enter the mailbox password to open your inbox.
+          Enter the mailbox password to open your inbox. Credentials are sealed
+          to your session.
         </p>
         <form
           onSubmit={f.handleSubmit((v) => {

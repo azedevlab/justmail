@@ -150,22 +150,22 @@ function StatCard({
   loading?: boolean;
 }) {
   return (
-    <Card>
-      <CardBody>
-        <div className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
-          {label}
+    <Card className="p-4">
+      <div className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-800)]">
+        {label}
+      </div>
+      {loading ? (
+        <Skeleton className="h-7 w-24 mt-2" />
+      ) : (
+        <div className="mt-2 text-2xl font-semibold tracking-[-0.02em] tabular-nums leading-none">
+          {value ?? "—"}
         </div>
-        {loading ? (
-          <Skeleton className="h-8 w-24 mt-2" />
-        ) : (
-          <div className="mt-2 text-2xl font-semibold">{value ?? "—"}</div>
-        )}
-        {hint && (
-          <div className="mt-1 text-xs text-[var(--color-neutral-900)]">
-            {hint}
-          </div>
-        )}
-      </CardBody>
+      )}
+      {hint && (
+        <div className="mt-2 text-xs text-[var(--color-neutral-900)]">
+          {hint}
+        </div>
+      )}
     </Card>
   );
 }

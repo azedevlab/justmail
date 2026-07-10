@@ -13,16 +13,30 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary:
-    "bg-[var(--color-brand-500)] text-white hover:brightness-110 border border-transparent",
-  secondary:
-    "bg-transparent text-[var(--color-neutral-1100)] border border-[var(--color-border-strong)] hover:bg-white/5",
-  ghost:
-    "bg-transparent text-[var(--color-neutral-1100)] border border-transparent hover:bg-white/5",
-  danger:
-    "bg-transparent text-[var(--color-bad)] border border-[color:rgb(239_68_68_/_0.3)] hover:bg-[color:rgb(239_68_68_/_0.1)]",
-  link:
-    "bg-transparent text-[var(--color-brand-400)] border-none underline-offset-2 hover:underline p-0",
+  primary: cn(
+    "text-white border border-[color:rgb(124_92_255/0.55)]",
+    "bg-[linear-gradient(180deg,var(--color-brand-400),var(--color-brand-600))]",
+    "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(92,61,255,0.12)]",
+    "hover:bg-[linear-gradient(180deg,var(--color-brand-300),var(--color-brand-500))]",
+    "active:translate-y-px active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]",
+  ),
+  secondary: cn(
+    "text-[var(--color-neutral-1100)] bg-[var(--color-surface-2)]",
+    "border border-[var(--color-border-strong)]",
+    "shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.25)]",
+    "hover:bg-[var(--color-surface-3)] hover:border-[rgba(255,255,255,0.2)]",
+    "active:translate-y-px",
+  ),
+  ghost: cn(
+    "bg-transparent text-[var(--color-neutral-1000)] border border-transparent",
+    "hover:bg-white/[0.06] hover:text-[var(--color-neutral-1100)]",
+  ),
+  danger: cn(
+    "bg-transparent text-[var(--color-bad)] border border-[color:rgb(239_68_68/0.3)]",
+    "hover:bg-[color:rgb(239_68_68/0.1)] hover:border-[color:rgb(239_68_68/0.45)]",
+    "active:translate-y-px",
+  ),
+  link: "bg-transparent text-[var(--color-brand-400)] border-none underline-offset-2 hover:underline p-0",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -51,9 +65,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center font-medium",
-        "transition-[background-color,border-color,filter,box-shadow] duration-[var(--motion-quick)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-500)]",
+        "inline-flex items-center justify-center font-medium select-none whitespace-nowrap",
+        "tracking-[-0.006em]",
+        "transition-[background,border-color,box-shadow,transform,color] duration-[var(--motion-base)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:rgb(124_92_255/0.55)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         variantClasses[variant],
         sizeClasses[size],

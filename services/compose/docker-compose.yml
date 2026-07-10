@@ -209,11 +209,13 @@ services:
     logging: *default-logging
 
   admin:
-    build: { context: ../.., dockerfile: services/docker/admin/Dockerfile }
+    build:
+      context: ../..
+      dockerfile: services/docker/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: https://${JM_API_HOST}
     profiles: [app]
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_BASE: https://${JM_API_HOST}
     networks: [edge]
     labels:
       traefik.enable: "true"
@@ -224,11 +226,13 @@ services:
     logging: *default-logging
 
   webmail:
-    build: { context: ../.., dockerfile: services/docker/webmail/Dockerfile }
+    build:
+      context: ../..
+      dockerfile: services/docker/webmail/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: https://${JM_API_HOST}
     profiles: [app]
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_BASE: https://${JM_API_HOST}
     networks: [edge]
     labels:
       traefik.enable: "true"
@@ -236,19 +240,6 @@ services:
       traefik.http.routers.webmail.entrypoints: websecure
       traefik.http.routers.webmail.tls.certresolver: cloudflare
       traefik.http.services.webmail.loadbalancer.server.port: "3001"
-    logging: *default-logging
-
-  landing:
-    build: { context: ../.., dockerfile: services/docker/landing/Dockerfile }
-    profiles: [app]
-    restart: unless-stopped
-    networks: [edge]
-    labels:
-      traefik.enable: "true"
-      traefik.http.routers.landing.rule: Host(`${JM_LANDING_HOST}`)
-      traefik.http.routers.landing.entrypoints: websecure
-      traefik.http.routers.landing.tls.certresolver: cloudflare
-      traefik.http.services.landing.loadbalancer.server.port: "3002"
     logging: *default-logging
 
   # ── observability ─────────────────────────────────────────────────────────
