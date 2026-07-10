@@ -19,6 +19,8 @@ import {
   type CachedCreds,
   WebmailCredentialStore,
 } from "./credential.store";
+import { ImapSessionManager } from "./imap-session.manager";
+import { ImapIdleWatcher } from "./imap-idle.watcher";
 
 const IMAP_HOST = config.IMAP_HOST;
 const IMAP_PORT = config.IMAP_PORT;
@@ -40,7 +42,27 @@ export class WebmailService {
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
     private readonly credStore: WebmailCredentialStore,
+    private readonly sessions: ImapSessionManager,
+    private readonly idle: ImapIdleWatcher,
   ) {}
+
+  /** Arm IDLE-based realtime notifications for the open folder. */
+  async startWatch(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    folder: string,
+  ): Promise<void> {
+    const creds = await this.creds(principal, orgId, mailboxId);
+    await this.idle.watch(principal.sessionId, mailboxId, folder, creds);
+  }
+
+  async stopWatch(
+    principal: SessionPrincipal,
+    mailboxId: string,
+  ): Promise<void> {
+    await this.idle.unwatch(principal.sessionId, mailboxId);
+  }
 
   /** Unlock the mailbox by verifying the current password against Dovecot. */
   async unlock(
@@ -82,11 +104,12 @@ export class WebmailService {
 
   async lock(principal: SessionPrincipal, mailboxId: string) {
     await this.credStore.remove(principal.sessionId, mailboxId);
+    await this.idle.unwatch(principal.sessionId, mailboxId);
   }
 
   async listFolders(principal: SessionPrincipal, orgId: string, mailboxId: string) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(creds, async (client) => {
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const boxes = await client.list();
       const out = [];
       for (const b of boxes) {
@@ -122,7 +145,7 @@ export class WebmailService {
     limit: number,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(creds, async (client) => {
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         const status = client.mailbox && typeof client.mailbox === "object"
@@ -225,7 +248,7 @@ export class WebmailService {
     uid: number,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(creds, async (client) => {
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         const raw = await client.download(String(uid), undefined, { uid: true });
@@ -282,7 +305,7 @@ export class WebmailService {
     index: number,
   ): Promise<{ filename: string; mime: string; content: Buffer }> {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(creds, async (client) => {
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         const raw = await client.download(String(uid), undefined, { uid: true });
@@ -310,7 +333,7 @@ export class WebmailService {
     action: FlagAction,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(creds, async (client) => {
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       // spam/not_spam are folder moves (mark-as-spam == relocate to Junk), so
       // resolve destinations before taking the source lock.
       if (action === "spam" || action === "not_spam") {
@@ -371,7 +394,7 @@ export class WebmailService {
     dest: string,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(creds, async (client) => {
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         await client.messageMove(String(uid), dest, { uid: true });
@@ -389,7 +412,7 @@ export class WebmailService {
     uid: number,
   ) {
     const creds = await this.creds(principal, orgId, mailboxId);
-    return this.withImap(creds, async (client) => {
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
         await client.messageDelete(String(uid), { uid: true });
@@ -453,20 +476,21 @@ export class WebmailService {
     });
     // Append to Sent for a proper "sent" trail.
     try {
-      const client = this.imap(creds.address, creds.password);
-      await client.connect();
-      try {
-        const sent = await findSentBox(client);
-        if (sent) {
-          const message = await buildMimeMessage({
-            from: creds.address,
-            ...input,
-          });
-          await client.append(sent, message, ["\\Seen"]);
-        }
-      } finally {
-        await client.logout();
-      }
+      await this.withImap(
+        principal.sessionId,
+        mailboxId,
+        creds,
+        async (client) => {
+          const sent = await findSentBox(client);
+          if (sent) {
+            const message = await buildMimeMessage({
+              from: creds.address,
+              ...input,
+            });
+            await client.append(sent, message, ["\\Seen"]);
+          }
+        },
+      );
     } catch (err) {
       this.logger.warn(`append to Sent failed: ${(err as Error).message}`);
     }
@@ -530,16 +554,12 @@ export class WebmailService {
   }
 
   private async withImap<T>(
+    sessionId: string,
+    mailboxId: string,
     creds: CachedCreds,
     fn: (client: ImapFlow) => Promise<T>,
   ): Promise<T> {
-    const client = this.imap(creds.address, creds.password);
-    await client.connect();
-    try {
-      return await fn(client);
-    } finally {
-      await client.logout().catch(() => undefined);
-    }
+    return this.sessions.run(sessionId, mailboxId, creds, fn);
   }
 }
 

@@ -187,6 +187,31 @@ export class WebmailController {
     );
   }
 
+  @Post("folders/:folder/watch")
+  @HttpCode(204)
+  watch(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("folder") folder: string,
+  ) {
+    return this.svc.startWatch(
+      principal,
+      orgId,
+      mailboxId,
+      decodeURIComponent(folder),
+    );
+  }
+
+  @Post("unwatch")
+  @HttpCode(204)
+  unwatch(
+    @Principal() principal: SessionPrincipal,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+  ) {
+    return this.svc.stopWatch(principal, mailboxId);
+  }
+
   @Post("send")
   @Throttle(AUTH_THROTTLE)
   send(

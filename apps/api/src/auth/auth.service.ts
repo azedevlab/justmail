@@ -20,6 +20,8 @@ import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { open, seal } from "../common/secretbox";
 import { WebmailCredentialStore } from "../webmail/credential.store";
+import { ImapSessionManager } from "../webmail/imap-session.manager";
+import { ImapIdleWatcher } from "../webmail/imap-idle.watcher";
 
 const ARGON2_OPTS: argon2.Options = {
   type: argon2.argon2id,
@@ -58,6 +60,8 @@ export class AuthService {
     private readonly db: Db,
     private readonly audit: AuditService,
     private readonly credStore: WebmailCredentialStore,
+    private readonly imapSessions: ImapSessionManager,
+    private readonly imapIdle: ImapIdleWatcher,
   ) {}
 
   async status(): Promise<{ bootstrapped: boolean }> {
@@ -242,6 +246,8 @@ export class AuthService {
       principal.sessionId,
     ]);
     await this.credStore.purgeSession(principal.sessionId);
+    await this.imapSessions.purgeSession(principal.sessionId);
+    await this.imapIdle.purgeSession(principal.sessionId);
     this.audit.log({
       actorType: "user",
       actorId: principal.userId,
@@ -282,6 +288,8 @@ export class AuthService {
     );
     if (!rowCount) throw new NotFoundException({ title: "Session not found" });
     await this.credStore.purgeSession(sessionId);
+    await this.imapSessions.purgeSession(sessionId);
+    await this.imapIdle.purgeSession(sessionId);
     this.audit.log({
       actorType: "user",
       actorId: principal.userId,

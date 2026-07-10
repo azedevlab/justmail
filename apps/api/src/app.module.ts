@@ -3,6 +3,8 @@ import { APP_GUARD } from "@nestjs/core";
 import { RedisModule } from "./common/redis.module";
 import { ThrottlerGuard } from "./common/throttler.guard";
 import { CredentialStoreModule } from "./webmail/credential.store";
+import { ImapSessionModule } from "./webmail/imap-session.manager";
+import { ImapIdleModule } from "./webmail/imap-idle.watcher";
 import { DbModule } from "./db/db.module";
 import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
@@ -37,6 +39,8 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
   imports: [
     RedisModule,
     CredentialStoreModule,
+    ImapSessionModule,
+    ImapIdleModule,
     DbModule,
     AuditModule,
     // ApiKeysModule is @Global so SessionGuard can resolve it without a circular
