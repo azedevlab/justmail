@@ -71,6 +71,16 @@ export const ComposeRequest = z.object({
   text: z.string().max(1_000_000).default(""),
   html: z.string().max(1_000_000).optional(),
   attachment_ids: z.array(Uuid).max(64).optional(),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string().min(1).max(255),
+        mime: z.string().max(255).default("application/octet-stream"),
+        content_base64: z.string().max(20_000_000),
+      }),
+    )
+    .max(16)
+    .optional(),
   in_reply_to: z.string().optional(),
   references: z.array(z.string()).optional(),
   send_at: IsoDate.optional(),

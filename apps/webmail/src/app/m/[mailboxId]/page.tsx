@@ -3,7 +3,9 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useEffect,
+  useRef,
   useState,
+  type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useForm } from "react-hook-form";
@@ -29,12 +31,15 @@ import {
 import {
   Archive,
   ArrowLeft,
-  Clock,
+  Download,
   Edit3,
+  FileText,
   Folder as FolderIcon,
+  Forward,
   Inbox,
   MailOpen,
   Minus,
+  Paperclip,
   RefreshCw,
   Reply,
   Search,
@@ -43,7 +48,15 @@ import {
   X,
 } from "lucide-react";
 import { useMe } from "@/lib/session";
-import { api } from "@/lib/api";
+import { api, API_BASE } from "@/lib/api";
+
+type ComposeInit = { to?: string; subject?: string; text?: string };
+
+function fmtSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1_048_576).toFixed(1)} MB`;
+}
 
 export default function MailboxView() {
   const { mailboxId } = useParams<{ mailboxId: string }>();
@@ -52,7 +65,7 @@ export default function MailboxView() {
   const { toast } = useToast();
   const [folder, setFolder] = useState("INBOX");
   const [openUid, setOpenUid] = useState<number | null>(null);
-  const [showCompose, setShowCompose] = useState(false);
+  const [compose, setCompose] = useState<ComposeInit | null>(null);
   const [search, setSearch] = useState("");
   const [listW, setListW] = useState(360);
 
@@ -132,7 +145,46 @@ export default function MailboxView() {
     },
   });
 
-  useHotkey("c", () => setShowCompose(true));
+  const archivePath = folders.data?.find(
+    (f) => (f.special_use ?? "").toLowerCase() === "\\archive",
+  )?.path;
+  const move = useMutation({
+    mutationFn: (v: { uid: number; destination: string }) =>
+      api.post(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(folder)}/messages/${v.uid}/move`,
+        { destination: v.destination },
+      ),
+    onSuccess: () => {
+      setOpenUid(null);
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+      toast({ title: "Archived", tone: "ok" });
+    },
+  });
+
+  const replyTo = (m: Message) => {
+    const addr = m.from.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? m.from;
+    const subject = /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`;
+    const quoted = (m.text || "")
+      .split("\n")
+      .map((l) => `> ${l}`)
+      .join("\n");
+    const when = m.date ? new Date(m.date).toLocaleString() : "";
+    setCompose({
+      to: addr,
+      subject,
+      text: `\n\nOn ${when}, ${m.from} wrote:\n${quoted}`,
+    });
+  };
+  const forwardMsg = (m: Message) => {
+    const subject = /^fwd:/i.test(m.subject) ? m.subject : `Fwd: ${m.subject}`;
+    setCompose({
+      subject,
+      text: `\n\n---------- Forwarded message ----------\nFrom: ${m.from}\nDate: ${m.date ? new Date(m.date).toLocaleString() : ""}\nSubject: ${m.subject}\nTo: ${m.to}\n\n${m.text}`,
+    });
+  };
+
+  useHotkey("c", () => setCompose({}));
   useHotkey("#", () => openUid && remove.mutate(openUid), { deps: [openUid] });
   useHotkey("s", () =>
     openUid && flag.mutate({ uid: openUid, action: "star" }),
@@ -195,7 +247,7 @@ export default function MailboxView() {
           variant="primary"
           size="sm"
           leadingIcon={<Edit3 size={13} />}
-          onClick={() => setShowCompose(true)}
+          onClick={() => setCompose({})}
         >
           Compose
         </Button>
@@ -425,28 +477,35 @@ export default function MailboxView() {
                   </Tooltip>
                   <Tooltip content="Reply">
                     <button
+                      onClick={() => message.data && replyTo(message.data)}
                       className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
                       aria-label="Reply"
                     >
                       <Reply size={15} />
                     </button>
                   </Tooltip>
-                  <Tooltip content="Archive">
+                  <Tooltip content="Forward">
                     <button
+                      onClick={() => message.data && forwardMsg(message.data)}
                       className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
-                      aria-label="Archive"
+                      aria-label="Forward"
                     >
-                      <Archive size={15} />
+                      <Forward size={15} />
                     </button>
                   </Tooltip>
-                  <Tooltip content="Snooze">
-                    <button
-                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
-                      aria-label="Snooze"
-                    >
-                      <Clock size={15} />
-                    </button>
-                  </Tooltip>
+                  {archivePath && folder !== archivePath && (
+                    <Tooltip content="Archive">
+                      <button
+                        onClick={() =>
+                          move.mutate({ uid: openUid, destination: archivePath })
+                        }
+                        className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
+                        aria-label="Archive"
+                      >
+                        <Archive size={15} />
+                      </button>
+                    </Tooltip>
+                  )}
                   <Tooltip content="Delete (#)">
                     <button
                       onClick={() => {
@@ -462,12 +521,7 @@ export default function MailboxView() {
               </div>
               <div className="py-5">
                 {message.data.html ? (
-                  <iframe
-                    className="w-full min-h-[480px] bg-white rounded-lg border border-[var(--color-border)]"
-                    srcDoc={message.data.html}
-                    sandbox=""
-                    title="Message body"
-                  />
+                  <HtmlViewer html={message.data.html} />
                 ) : (
                   <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--color-neutral-1000)]">
                     {message.data.text}
@@ -477,20 +531,15 @@ export default function MailboxView() {
               {message.data.attachments.length > 0 && (
                 <div className="pt-4 border-t border-[var(--color-border)]">
                   <div className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-800)] mb-2">
-                    Attachments
+                    Attachments ({message.data.attachments.length})
                   </div>
-                  <ul className="flex flex-wrap gap-2">
-                    {message.data.attachments.map((a, i) => (
-                      <li
-                        key={i}
-                        className="px-3 py-2 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs"
-                      >
-                        <span className="font-medium">{a.filename}</span>
-                        <span className="text-[var(--color-neutral-800)]">
-                          {" "}
-                          · {(a.size / 1024).toFixed(1)} KB
-                        </span>
-                      </li>
+                  <ul className="flex flex-wrap gap-3">
+                    {message.data.attachments.map((a) => (
+                      <AttachmentItem
+                        key={a.id}
+                        att={a}
+                        url={`${API_BASE}/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(folder)}/messages/${openUid}/attachments/${a.id}`}
+                      />
                     ))}
                   </ul>
                 </div>
@@ -504,14 +553,132 @@ export default function MailboxView() {
         </section>
       </div>
 
-      {showCompose && (
+      {compose && (
         <ComposePanel
           orgId={orgId ?? ""}
           mailboxId={mailboxId}
-          onClose={() => setShowCompose(false)}
+          initial={compose}
+          onClose={() => setCompose(null)}
         />
       )}
     </div>
+  );
+}
+
+function HtmlViewer({ html }: { html: string }) {
+  const [height, setHeight] = useState(480);
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>
+body{margin:16px;font:14px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","Segoe UI",Roboto,sans-serif;color:#1a1d21;word-break:break-word}
+img{max-width:100%;height:auto}
+a{color:#0071e3}
+table{max-width:100%}
+pre{white-space:pre-wrap}
+blockquote{border-left:3px solid #d9dce1;margin:8px 0;padding:2px 12px;color:#5c6470}
+</style></head><body>${html}</body></html>`;
+  // No allow-scripts: message JS never runs. allow-same-origin lets the
+  // parent measure the rendered height; popups escape the sandbox so links open.
+  return (
+    <iframe
+      title="Message body"
+      className="w-full bg-white rounded-lg border border-[var(--color-border)]"
+      style={{ height }}
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      srcDoc={doc}
+      onLoad={(e) => {
+        const d = (e.target as HTMLIFrameElement).contentDocument;
+        if (d?.body) {
+          setHeight(Math.min(4000, Math.max(200, d.body.scrollHeight + 32)));
+        }
+      }}
+    />
+  );
+}
+
+function AttachmentItem({
+  att,
+  url,
+}: {
+  att: { id: string; filename: string; size: number; mime: string };
+  url: string;
+}) {
+  const { toast } = useToast();
+  const [thumb, setThumb] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const isImage = att.mime.startsWith("image/") && att.size < 5_000_000;
+
+  useEffect(() => {
+    if (!isImage) return;
+    let obj: string | null = null;
+    let cancelled = false;
+    fetch(url, { credentials: "include" })
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error("fetch failed"))))
+      .then((b) => {
+        if (cancelled) return;
+        obj = URL.createObjectURL(b);
+        setThumb(obj);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (obj) URL.revokeObjectURL(obj);
+    };
+  }, [url, isImage]);
+
+  const download = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(url, { credentials: "include" });
+      if (!r.ok) throw new Error(`Download failed (${r.status})`);
+      const obj = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = obj;
+      a.download = att.filename;
+      a.click();
+      URL.revokeObjectURL(obj);
+    } catch (e) {
+      toast({ title: (e as Error).message, tone: "bad" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="w-44 rounded-xl overflow-hidden bg-[var(--color-surface-2)] border border-[var(--color-border)]">
+      {thumb ? (
+        <button
+          onClick={() => window.open(thumb, "_blank", "noopener")}
+          className="block w-full h-24 cursor-zoom-in"
+          aria-label={`Preview ${att.filename}`}
+        >
+          <img
+            src={thumb}
+            alt={att.filename}
+            className="w-full h-full object-cover"
+          />
+        </button>
+      ) : (
+        <div className="h-24 grid place-items-center text-[var(--color-neutral-700)]">
+          <FileText size={22} />
+        </div>
+      )}
+      <div className="px-2.5 py-2 flex items-center gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface-1)]">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium truncate" title={att.filename}>
+            {att.filename}
+          </div>
+          <div className="text-[10px] text-[var(--color-neutral-800)]">
+            {fmtSize(att.size)}
+          </div>
+        </div>
+        {busy ? (
+          <Spinner size={14} />
+        ) : (
+          <IconButton size="sm" aria-label={`Download ${att.filename}`} onClick={download}>
+            <Download size={13} />
+          </IconButton>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -577,10 +744,12 @@ function UnlockScreen({
 function ComposePanel({
   orgId,
   mailboxId,
+  initial,
   onClose,
 }: {
   orgId: string;
   mailboxId: string;
+  initial?: ComposeInit;
   onClose: () => void;
 }) {
   const f = useForm<{
@@ -589,12 +758,19 @@ function ComposePanel({
     subject: string;
     text: string;
   }>({
-    defaultValues: { to: "", cc: "", subject: "", text: "" },
+    defaultValues: {
+      to: initial?.to ?? "",
+      cc: "",
+      subject: initial?.subject ?? "",
+      text: initial?.text ?? "",
+    },
   });
   const { toast } = useToast();
   const [err, setErr] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [files, setFiles] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
   const mut = useMutation({
     mutationFn: (b: ComposeRequest) =>
       api.post(`/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/send`, b),
@@ -628,8 +804,29 @@ function ComposePanel({
     window.addEventListener("pointerup", up);
   };
 
+  const onPick = (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (picked.length === 0) return;
+    const next = [...files, ...picked].slice(0, 16);
+    if (next.reduce((s, x) => s + x.size, 0) > 15_000_000) {
+      setErr("Attachments must stay under 15 MB total.");
+      return;
+    }
+    setErr(null);
+    setFiles(next);
+  };
+
+  const toB64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve((r.result as string).split(",")[1] ?? "");
+      r.onerror = () => reject(new Error(`Could not read ${file.name}`));
+      r.readAsDataURL(file);
+    });
+
   const subject = f.watch("subject");
-  const send = f.handleSubmit((v) => {
+  const send = f.handleSubmit(async (v) => {
     setErr(null);
     const to = v.to
       .split(/[,\s]+/)
@@ -640,11 +837,27 @@ function ComposePanel({
       .map((s) => s.trim())
       .filter(Boolean);
     if (to.length === 0) return setErr("At least one recipient required.");
+    let attachments: ComposeRequest["attachments"];
+    try {
+      attachments =
+        files.length > 0
+          ? await Promise.all(
+              files.map(async (file) => ({
+                filename: file.name,
+                mime: file.type || "application/octet-stream",
+                content_base64: await toB64(file),
+              })),
+            )
+          : undefined;
+    } catch (e) {
+      return setErr((e as Error).message);
+    }
     mut.mutate({
       to,
       cc: cc.length > 0 ? cc : undefined,
       subject: v.subject,
       text: v.text,
+      attachments,
     });
   });
 
@@ -705,6 +918,36 @@ function ComposePanel({
         <FormField label="Message">
           <Textarea rows={10} {...f.register("text")} />
         </FormField>
+        {files.length > 0 && (
+          <ul className="flex flex-wrap gap-2">
+            {files.map((file, i) => (
+              <li
+                key={`${file.name}-${i}`}
+                className="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs"
+              >
+                <Paperclip
+                  size={11}
+                  className="text-[var(--color-neutral-800)] shrink-0"
+                />
+                <span className="max-w-40 truncate font-medium">
+                  {file.name}
+                </span>
+                <span className="text-[var(--color-neutral-800)]">
+                  {fmtSize(file.size)}
+                </span>
+                <IconButton
+                  size="sm"
+                  aria-label={`Remove ${file.name}`}
+                  onClick={() =>
+                    setFiles((p) => p.filter((_, j) => j !== i))
+                  }
+                >
+                  <X size={12} />
+                </IconButton>
+              </li>
+            ))}
+          </ul>
+        )}
         {err && (
           <p className="text-xs text-[var(--color-bad)]" role="alert">
             {err}
@@ -712,9 +955,28 @@ function ComposePanel({
         )}
       </form>
       <footer className="shrink-0 px-4 py-3 border-t border-[var(--color-border)] flex items-center justify-between gap-2">
-        <span className="text-[11px] text-[var(--color-neutral-700)]">
-          Plain text
-        </span>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            hidden
+            onChange={onPick}
+            aria-label="Attach files"
+          />
+          <Tooltip content="Attach files (15 MB max)">
+            <IconButton
+              size="sm"
+              aria-label="Attach files"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Paperclip size={14} />
+            </IconButton>
+          </Tooltip>
+          <span className="text-[11px] text-[var(--color-neutral-700)]">
+            Plain text
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={onClose}>
             Discard

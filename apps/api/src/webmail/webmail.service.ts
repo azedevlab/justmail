@@ -95,12 +95,29 @@ export class WebmailService {
     const creds = await this.creds(principal, orgId, mailboxId);
     return this.withImap(creds, async (client) => {
       const boxes = await client.list();
-      return boxes.map((b) => ({
-        path: b.path,
-        name: b.name,
-        specialUse: b.specialUse ?? null,
-        flags: [...(b.flags ?? [])],
-      }));
+      const out = [];
+      for (const b of boxes) {
+        let unread = 0;
+        let total = 0;
+        try {
+          const st = await client.status(b.path, {
+            unseen: true,
+            messages: true,
+          });
+          unread = st.unseen ?? 0;
+          total = st.messages ?? 0;
+        } catch {
+          // \Noselect folders cannot be STATUSed
+        }
+        out.push({
+          path: b.path,
+          name: b.name,
+          special_use: b.specialUse ?? null,
+          unread,
+          total,
+        });
+      }
+      return out;
     });
   }
 
@@ -167,19 +184,67 @@ export class WebmailService {
         const raw = await client.download(String(uid), undefined, { uid: true });
         if (!raw) throw new NotFoundException({ title: "Message not found" });
         const parsed = await parseMime(raw.content);
+        // Inline cid: images as data URIs so the sandboxed viewer can render
+        // them without a credentialed cross-origin request.
+        let html = parsed.html;
+        if (html) {
+          for (const a of parsed.attachments) {
+            if (!a.contentId || a.size > 2_000_000) continue;
+            const cid = a.contentId.replace(/[<>]/g, "");
+            if (cid && html.includes(`cid:${cid}`)) {
+              html = html
+                .split(`cid:${cid}`)
+                .join(
+                  `data:${a.contentType};base64,${a.content.toString("base64")}`,
+                );
+            }
+          }
+        }
         return {
           uid,
+          message_id: parsed.message_id,
           subject: parsed.subject,
           from: parsed.from,
           to: parsed.to,
+          cc: parsed.cc,
           date: parsed.date?.toISOString() ?? null,
           text: parsed.text,
-          html: parsed.html,
-          attachments: parsed.attachments.map((a) => ({
+          html,
+          attachments: parsed.attachments.map((a, i) => ({
+            id: String(i),
             filename: a.filename,
             size: a.size,
             mime: a.contentType,
+            inline: a.disposition === "inline",
           })),
+        };
+      } finally {
+        lock.release();
+      }
+    });
+  }
+
+  async getAttachment(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    folder: string,
+    uid: number,
+    index: number,
+  ): Promise<{ filename: string; mime: string; content: Buffer }> {
+    const creds = await this.creds(principal, orgId, mailboxId);
+    return this.withImap(creds, async (client) => {
+      const lock = await client.getMailboxLock(folder);
+      try {
+        const raw = await client.download(String(uid), undefined, { uid: true });
+        if (!raw) throw new NotFoundException({ title: "Message not found" });
+        const parsed = await parseMime(raw.content);
+        const a = parsed.attachments[index];
+        if (!a) throw new NotFoundException({ title: "Attachment not found" });
+        return {
+          filename: a.filename || `attachment-${index}`,
+          mime: a.contentType,
+          content: a.content,
         };
       } finally {
         lock.release();
@@ -253,15 +318,18 @@ export class WebmailService {
     principal: SessionPrincipal,
     orgId: string,
     mailboxId: string,
-    input: {
-      to: string[];
-      cc?: string[];
-      bcc?: string[];
-      subject: string;
-      text: string;
-      html?: string;
-    },
+    input: SendRequest,
   ) {
+    const totalBytes = (input.attachments ?? []).reduce(
+      (sum, a) => sum + Math.ceil(a.content_base64.length * 0.75),
+      0,
+    );
+    if (totalBytes > 15_000_000) {
+      throw new BadRequestException({
+        title: "Attachments too large",
+        detail: "Total attachment size must stay under 15 MB.",
+      });
+    }
     const creds = await this.creds(principal, orgId, mailboxId);
     const transport = nodemailer.createTransport({
       host: SMTP_HOST,
@@ -279,6 +347,7 @@ export class WebmailService {
       subject: input.subject,
       text: input.text,
       html: input.html,
+      attachments: toNodemailerAttachments(input.attachments),
     });
     // Append to Sent for a proper "sent" trail.
     try {
@@ -383,8 +452,31 @@ export const SendRequest = z.object({
   subject: z.string().max(998).default(""),
   text: z.string().max(1_000_000).default(""),
   html: z.string().max(1_000_000).optional(),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string().min(1).max(255),
+        mime: z.string().max(255).default("application/octet-stream"),
+        content_base64: z.string().max(20_000_000),
+      }),
+    )
+    .max(16)
+    .optional(),
 });
 export type SendRequest = z.infer<typeof SendRequest>;
+
+function toNodemailerAttachments(
+  attachments: SendRequest["attachments"],
+):
+  | Array<{ filename: string; content: Buffer; contentType: string }>
+  | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+  return attachments.map((a) => ({
+    filename: a.filename,
+    content: Buffer.from(a.content_base64, "base64"),
+    contentType: a.mime,
+  }));
+}
 
 export const UnlockRequest = z.object({
   password: z.string().min(1).max(256),
@@ -402,18 +494,16 @@ async function findSentBox(client: ImapFlow): Promise<string | null> {
   return sent?.path ?? boxes.find((b) => b.name.toLowerCase() === "sent")?.path ?? null;
 }
 
-async function buildMimeMessage(input: {
-  from: string;
-  to: string[];
-  cc?: string[];
-  bcc?: string[];
-  subject: string;
-  text: string;
-  html?: string;
-}): Promise<string> {
+async function buildMimeMessage(
+  input: SendRequest & { from: string },
+): Promise<Buffer> {
   // Reuse nodemailer's compiler so we get a spec-compliant MIME body without
   // pulling in a second library.
-  const compiler = nodemailer.createTransport({ jsonTransport: true });
+  const compiler = nodemailer.createTransport({
+    streamTransport: true,
+    buffer: true,
+    newline: "\r\n",
+  });
   const compiled = await compiler.sendMail({
     from: input.from,
     to: input.to.join(", "),
@@ -422,8 +512,9 @@ async function buildMimeMessage(input: {
     subject: input.subject,
     text: input.text,
     html: input.html,
+    attachments: toNodemailerAttachments(input.attachments),
   });
-  return (compiled.message as unknown as string) ?? "";
+  return compiled.message as Buffer;
 }
 
 void config;
