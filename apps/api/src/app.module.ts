@@ -32,6 +32,7 @@ import { ContactsModule } from "./contacts/contacts.module";
 import { CalendarModule } from "./calendar/calendar.module";
 import { SsoModule } from "./sso/sso.module";
 import { LdapModule } from "./ldap/ldap.module";
+import { ScimModule } from "./scim/scim.module";
 import { StorageModule } from "./storage/storage.module";
 import { AvModule } from "./av/av.module";
 import { AttachmentsModule } from "./attachments/attachments.module";
@@ -76,6 +77,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     CalendarModule,
     SsoModule,
     LdapModule,
+    ScimModule,
     StorageModule,
     AvModule,
     AttachmentsModule,
