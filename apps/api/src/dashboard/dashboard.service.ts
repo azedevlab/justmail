@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import type { DashboardOverview } from "@justmail/types";
+import type { DashboardOverview } from "@justmail/contracts";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 

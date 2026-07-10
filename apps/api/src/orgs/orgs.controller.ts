@@ -17,7 +17,7 @@ import {
   CreateOrgRequest,
   UpdateMemberRequest,
   UpdateOrgRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
@@ -98,6 +98,7 @@ export class OrgsController {
     @Body(new ZodPipe(UpdateMemberRequest)) body: UpdateMemberRequest,
     @Req() req: Request,
   ) {
+    if (!body.role) return;
     return this.orgs.updateMember(principal, id, userId, body.role, req.ip);
   }
 

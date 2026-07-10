@@ -1,9 +1,14 @@
 {
   "name": "justmail",
   "private": true,
-  "version": "0.1.0",
-  "description": "JustMail — self-hosted mail platform with a control plane you actually want to use",
+  "version": "1.0.0-alpha.1",
+  "description": "Self-hosted mail platform with a control plane you actually want to use",
   "license": "AGPL-3.0-only",
+  "homepage": "https://justmail.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justmaildev/justmail.git"
+  },
   "packageManager": "pnpm@10.12.1",
   "engines": {
     "node": ">=22"
@@ -13,9 +18,14 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "turbo test",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,yaml,yml,css}\"",
+    "changeset": "changeset",
+    "release": "changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "prettier": "^3.4.0",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0"
   },

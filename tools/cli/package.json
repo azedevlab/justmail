@@ -1,0 +1,21 @@
+{
+  "name": "@justmail/cli",
+  "version": "1.0.0-alpha.1",
+  "description": "Operator CLI for JustMail.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "justmail": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@justmail/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.0"
+  }
+}

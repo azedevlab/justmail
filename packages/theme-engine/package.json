@@ -1,0 +1,26 @@
+{
+  "name": "@justmail/theme-engine",
+  "version": "1.0.0-alpha.1",
+  "description": "Runtime theme compiler: token → CSS with :root / [data-org] / [data-domain] cascade.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@justmail/contracts": "workspace:*",
+    "@justmail/design-tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

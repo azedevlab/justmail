@@ -5,7 +5,9 @@
     "rootDir": "src",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "strictPropertyInitialization": false
+    "strictPropertyInitialization": false,
+    "isolatedModules": false,
+    "verbatimModuleSyntax": false
   },
   "include": ["src"]
 }

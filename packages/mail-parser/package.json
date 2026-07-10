@@ -1,0 +1,29 @@
+{
+  "name": "@justmail/mail-parser",
+  "version": "1.0.0-alpha.1",
+  "description": "Hardened MIME parser wrapping mailparser with defensive limits.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "mailparser": "^3.7.1"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.5",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -17,7 +17,7 @@ import {
   LoginRequest,
   TwoFaDisableRequest,
   TwoFaVerifyRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
 import { AuthService, SessionPrincipal } from "./auth.service";

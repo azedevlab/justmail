@@ -1,7 +1,10 @@
 {
   "name": "@justmail/api",
-  "version": "0.1.0",
+  "version": "1.0.0-alpha.1",
+  "description": "JustMail control-plane API: REST, WebSocket, workers.",
+  "license": "AGPL-3.0-only",
   "private": true,
+  "type": "commonjs",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
@@ -9,28 +12,37 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@justmail/types": "workspace:*",
+    "@justmail/contracts": "workspace:*",
+    "@justmail/mail-parser": "workspace:*",
+    "@justmail/openapi": "workspace:*",
+    "@justmail/plugin-sdk": "workspace:*",
+    "@justmail/storage": "workspace:*",
+    "@justmail/theme-engine": "workspace:*",
     "@nestjs/common": "^11.1.0",
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
+    "@nestjs/platform-ws": "^11.1.0",
+    "@nestjs/websockets": "^11.1.0",
     "argon2": "^0.43.0",
     "cookie-parser": "^1.4.7",
     "imapflow": "^1.0.180",
-    "mailparser": "^3.7.1",
     "nodemailer": "^6.9.16",
     "otplib": "^12.0.1",
     "pg": "^8.16.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "web-push": "^3.6.7",
+    "ws": "^8.18.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.1",
-    "@types/mailparser": "^3.4.5",
     "@types/node": "^22.15.0",
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.15.0",
+    "@types/web-push": "^3.6.4",
+    "@types/ws": "^8.5.12",
     "typescript": "^5.8.0"
   }
 }

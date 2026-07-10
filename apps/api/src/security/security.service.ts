@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type {
   BlockedIp,
   CreateBlockedIpRequest,
-} from "@justmail/types";
+} from "@justmail/contracts";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
