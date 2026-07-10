@@ -35,8 +35,8 @@ export class StorageService {
     });
   }
 
-  stream(orgId: string, path: string) {
-    return this.adapter.getStream(this.key(orgId, path));
+  stream(orgId: string, path: string, range?: { start: number; end?: number }) {
+    return this.adapter.getStream(this.key(orgId, path), range);
   }
 
   head(orgId: string, path: string) {
