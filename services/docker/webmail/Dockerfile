@@ -12,7 +12,8 @@ COPY packages/shared-utils/package.json packages/shared-utils/
 COPY packages/theme-engine/package.json packages/theme-engine/
 RUN pnpm install --frozen-lockfile --filter @justmail/webmail...
 COPY packages packages
-RUN pnpm -r --filter='./packages/**' build
+# Build only what webmail transitively needs, honouring the dep graph.
+RUN pnpm -r --filter '@justmail/shared-ui...' build
 COPY apps/webmail apps/webmail
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @justmail/webmail build

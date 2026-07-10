@@ -16,7 +16,13 @@ COPY packages/design-tokens/package.json packages/design-tokens/
 RUN pnpm install --frozen-lockfile --filter @justmail/api...
 COPY packages packages
 COPY apps/api apps/api
-RUN pnpm -r --filter='./packages/**' build \
+# Build only the packages @justmail/api transitively depends on. Topological
+# order via `...` suffix; UI-only packages are skipped.
+RUN pnpm -r --filter '@justmail/contracts...' \
+      --filter '@justmail/mail-parser...' \
+      --filter '@justmail/openapi...' \
+      --filter '@justmail/plugin-sdk...' \
+      --filter '@justmail/storage...' build \
     && pnpm --filter @justmail/api build
 
 FROM node:22-bookworm-slim AS prod-deps
