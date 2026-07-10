@@ -110,30 +110,19 @@ export class WebmailService {
   async listFolders(principal: SessionPrincipal, orgId: string, mailboxId: string) {
     const creds = await this.creds(principal, orgId, mailboxId);
     return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
-      const boxes = await client.list();
-      const out = [];
-      for (const b of boxes) {
-        let unread = 0;
-        let total = 0;
-        try {
-          const st = await client.status(b.path, {
-            unseen: true,
-            messages: true,
-          });
-          unread = st.unseen ?? 0;
-          total = st.messages ?? 0;
-        } catch {
-          // \Noselect folders cannot be STATUSed
-        }
-        out.push({
-          path: b.path,
-          name: b.name,
-          special_use: b.specialUse ?? null,
-          unread,
-          total,
-        });
-      }
-      return out;
+      // LIST-STATUS (RFC 5819) folds STATUS into a single LIST round-trip when
+      // the server supports it (Dovecot does); ImapFlow falls back to per-folder
+      // STATUS commands otherwise. \Noselect folders surface status.error.
+      const boxes = await client.list({
+        statusQuery: { unseen: true, messages: true },
+      });
+      return boxes.map((b) => ({
+        path: b.path,
+        name: b.name,
+        special_use: b.specialUse ?? null,
+        unread: b.status?.unseen ?? 0,
+        total: b.status?.messages ?? 0,
+      }));
     });
   }
 
@@ -148,10 +137,15 @@ export class WebmailService {
     return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
-        const status = client.mailbox && typeof client.mailbox === "object"
-          ? (client.mailbox as { exists: number }).exists
-          : 0;
-        if (!status) return { messages: [], total: 0 };
+        const mb =
+          client.mailbox && typeof client.mailbox === "object"
+            ? client.mailbox
+            : null;
+        const uid_validity = mb?.uidValidity != null ? String(mb.uidValidity) : null;
+        const mod_seq = mb?.highestModseq != null ? String(mb.highestModseq) : null;
+        const status = mb?.exists ?? 0;
+        if (!status)
+          return { messages: [], total: 0, uid_validity, mod_seq };
         const from = Math.max(status - limit + 1, 1);
         const range = `${from}:${status}`;
         type Item = {
@@ -233,7 +227,49 @@ export class WebmailService {
           it.preview = previews.get(it.uid) ?? "";
         }
         items.reverse();
-        return { messages: items, total: status };
+        return { messages: items, total: status, uid_validity, mod_seq };
+      } finally {
+        lock.release();
+      }
+    });
+  }
+
+  // CONDSTORE delta: returns flag changes since the client's last modseq so the
+  // realtime client can patch its cache instead of re-listing the whole folder.
+  async syncMessages(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    folder: string,
+    since: bigint | null,
+    clientUidValidity: string | null,
+  ) {
+    const creds = await this.creds(principal, orgId, mailboxId);
+    return this.withImap(principal.sessionId, mailboxId, creds, async (client) => {
+      const lock = await client.getMailboxLock(folder);
+      try {
+        const mb =
+          client.mailbox && typeof client.mailbox === "object"
+            ? client.mailbox
+            : null;
+        const uid_validity = mb?.uidValidity != null ? String(mb.uidValidity) : null;
+        const mod_seq = mb?.highestModseq != null ? String(mb.highestModseq) : null;
+        // UIDs are only stable within a uidvalidity generation; a change means
+        // the client's cached UIDs are meaningless and it must reload in full.
+        if (clientUidValidity && uid_validity && clientUidValidity !== uid_validity) {
+          return { uid_validity, mod_seq, stale: true, changed: [] };
+        }
+        const changed: { uid: number; flags: string[] }[] = [];
+        if (since != null && mb?.exists) {
+          for await (const msg of client.fetch(
+            "1:*",
+            { uid: true, flags: true },
+            { changedSince: since },
+          )) {
+            changed.push({ uid: msg.uid, flags: [...(msg.flags ?? [])] });
+          }
+        }
+        return { uid_validity, mod_seq, stale: false, changed };
       } finally {
         lock.release();
       }

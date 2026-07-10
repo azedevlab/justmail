@@ -9,7 +9,13 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useForm } from "react-hook-form";
-import type { Folder, MessageSummary, Message, ComposeRequest } from "@justmail/contracts";
+import type {
+  Folder,
+  MessageList,
+  MessageSync,
+  Message,
+  ComposeRequest,
+} from "@justmail/contracts";
 import { ApiError, useHotkey } from "@justmail/shared-utils";
 import {
   AuroraBackdrop,
@@ -115,7 +121,7 @@ export default function MailboxView() {
     queryKey: ["messages", orgId, mailboxId, folder],
     enabled: !!orgId && !!folders.data,
     queryFn: () =>
-      api.get<{ messages: MessageSummary[]; total: number }>(
+      api.get<MessageList>(
         `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(folder)}/messages?limit=100`,
       ),
   });
@@ -132,6 +138,50 @@ export default function MailboxView() {
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: ["messages", orgId, mailboxId, folder] });
 
+  const listKey = ["messages", orgId, mailboxId, folder] as const;
+  // A flag change (read/star/…) is the highest-frequency event; rather than
+  // re-listing the folder, pull the CONDSTORE delta and patch flags in place.
+  const syncFlags = async () => {
+    const cached = qc.getQueryData<MessageList>(listKey);
+    if (!cached?.mod_seq) {
+      invalidate();
+      return;
+    }
+    const params = new URLSearchParams({ since: cached.mod_seq });
+    if (cached.uid_validity) params.set("uid_validity", cached.uid_validity);
+    let delta: MessageSync;
+    try {
+      delta = await api.get<MessageSync>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(folder)}/sync?${params}`,
+      );
+    } catch {
+      invalidate();
+      return;
+    }
+    if (delta.stale) {
+      invalidate();
+    } else if (delta.changed.length > 0) {
+      const byUid = new Map(delta.changed.map((c) => [c.uid, c.flags]));
+      qc.setQueryData<MessageList>(listKey, (prev) =>
+        prev
+          ? {
+              ...prev,
+              mod_seq: delta.mod_seq,
+              messages: prev.messages.map((m) =>
+                byUid.has(m.uid) ? { ...m, flags: byUid.get(m.uid)! } : m,
+              ),
+            }
+          : prev,
+      );
+    } else {
+      qc.setQueryData<MessageList>(listKey, (prev) =>
+        prev ? { ...prev, mod_seq: delta.mod_seq } : prev,
+      );
+    }
+    // Unread badges live in the folder query, which CONDSTORE flag deltas move.
+    qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+  };
+
   useMailboxRealtime({
     orgId,
     mailboxId,
@@ -139,16 +189,16 @@ export default function MailboxView() {
     enabled: !!orgId && !!folders.data,
     onChange: (event) => {
       if (event.type === "mail:flags") {
+        void syncFlags();
         const uid = event.data.uid;
         if (typeof uid === "number") {
           qc.invalidateQueries({
             queryKey: ["message", orgId, mailboxId, folder, uid],
           });
         }
-        invalidate();
         return;
       }
-      // mail:new / mail:expunge: refresh the list and folder unread counts.
+      // mail:new / mail:expunge change the message set itself: full refresh.
       invalidate();
       qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
     },

@@ -80,6 +80,25 @@ export class WebmailController {
     );
   }
 
+  @Get("folders/:folder/sync")
+  sync(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("folder") folder: string,
+    @Query("since") since?: string,
+    @Query("uid_validity") uidValidity?: string,
+  ) {
+    return this.svc.syncMessages(
+      principal,
+      orgId,
+      mailboxId,
+      decodeURIComponent(folder),
+      since && /^\d+$/.test(since) ? BigInt(since) : null,
+      uidValidity && /^\d+$/.test(uidValidity) ? uidValidity : null,
+    );
+  }
+
   @Get("folders/:folder/messages/:uid")
   getMessage(
     @Principal() principal: SessionPrincipal,
