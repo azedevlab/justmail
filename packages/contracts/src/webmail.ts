@@ -108,6 +108,26 @@ export const ComposeRequest = z.object({
 });
 export type ComposeRequest = z.infer<typeof ComposeRequest>;
 
+// Result of a send: the message is not dispatched immediately but held as a
+// scheduled_send row. `id` lets the client cancel it during the undo window;
+// `scheduled` is true when the user picked a future send_at (vs. the undo delay).
+export const SendResult = z.object({
+  id: Uuid,
+  send_at: IsoDate,
+  scheduled: z.boolean(),
+});
+export type SendResult = z.infer<typeof SendResult>;
+
+// An outstanding deferred send (undo window or future schedule) awaiting dispatch.
+export const ScheduledSend = z.object({
+  id: Uuid,
+  to: z.array(z.string()),
+  subject: z.string(),
+  send_at: IsoDate,
+  created_at: IsoDate,
+});
+export type ScheduledSend = z.infer<typeof ScheduledSend>;
+
 export const Draft = z.object({
   id: Uuid,
   subject: z.string(),
