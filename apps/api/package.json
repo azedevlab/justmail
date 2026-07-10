@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsc -p tsconfig.build.json --watch",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@justmail/contracts": "workspace:*",
@@ -26,6 +27,7 @@
     "argon2": "^0.43.0",
     "cookie-parser": "^1.4.7",
     "imapflow": "^1.0.180",
+    "ioredis": "^5.4.1",
     "nodemailer": "^6.9.16",
     "otplib": "^12.0.1",
     "pg": "^8.16.0",
@@ -43,6 +45,7 @@
     "@types/pg": "^8.15.0",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.5.12",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^2.1.0"
   }
 }

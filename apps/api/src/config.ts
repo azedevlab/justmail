@@ -12,6 +12,30 @@ const Env = z.object({
   DKIM_DIR: z.string().default("/var/lib/justmail/dkim"),
   MAIL_HOSTNAME: z.string().default("mail.localhost"),
 
+  // Internal mail service discovery (compose service names by default).
+  IMAP_HOST: z.string().default("dovecot"),
+  IMAP_PORT: z.coerce.number().int().positive().default(993),
+  IMAP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
+  SMTP_HOST: z.string().default("postfix"),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
+
+  // Webmail limits (bytes / counts). Defaults are conservative; raise per deploy.
+  WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES: z.coerce.number().int().positive().default(15_000_000),
+  WEBMAIL_ATTACHMENT_MAX_COUNT: z.coerce.number().int().positive().default(16),
+  WEBMAIL_ATTACHMENT_INLINE_MAX_BYTES: z.coerce.number().int().positive().default(2_000_000),
+  WEBMAIL_SEND_BODY_LIMIT: z.string().default("32mb"),
+  WEBMAIL_MESSAGE_LIST_MAX: z.coerce.number().int().positive().default(200),
+  // Sliding TTL for an unlocked-mailbox credential. Refreshed on each use, so
+  // it expires after this many seconds of inactivity rather than living forever.
+  WEBMAIL_CREDENTIAL_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+
+  // Rate limiting (window seconds / max hits). Generous defaults; tune per deploy.
+  RATE_LIMIT_GLOBAL_TTL: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_AUTH_TTL: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_AUTH_MAX: z.coerce.number().int().positive().default(10),
+
   // Hostnames — kept optional so the API boots in dev without a full stack.
   JM_WEB_HOST: z.string().optional(),
   JM_ADMIN_HOST: z.string().optional(),

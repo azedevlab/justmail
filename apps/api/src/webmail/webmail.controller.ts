@@ -13,7 +13,9 @@ import {
 } from "@nestjs/common";
 import type { Response } from "express";
 import { z } from "zod";
+import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
+import { Throttle } from "../common/throttle.decorator";
 import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
 import {
@@ -26,12 +28,18 @@ import {
 
 const FlagBody = z.object({ action: FlagAction });
 
+const AUTH_THROTTLE = {
+  limit: config.RATE_LIMIT_AUTH_MAX,
+  ttl: config.RATE_LIMIT_AUTH_TTL,
+};
+
 @Controller("orgs/:orgId/webmail/mailboxes/:mailboxId")
 @UseGuards(SessionGuard)
 export class WebmailController {
   constructor(private readonly svc: WebmailService) {}
 
   @Post("unlock")
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(204)
   unlock(
     @Principal() principal: SessionPrincipal,
@@ -73,7 +81,7 @@ export class WebmailController {
       orgId,
       mailboxId,
       decodeURIComponent(folder),
-      Math.min(Number(limit) || 50, 200),
+      Math.min(Number(limit) || 50, config.WEBMAIL_MESSAGE_LIST_MAX),
     );
   }
 
@@ -112,7 +120,12 @@ export class WebmailController {
       uid,
       idx,
     );
-    res.setHeader("Content-Type", a.mime);
+    // Sender-controlled MIME can be active content (text/html, svg with script).
+    // nosniff is already set globally; additionally collapse anything outside a
+    // known-inert allowlist to octet-stream, and always serve as attachment so
+    // a direct URL open downloads rather than renders.
+    res.setHeader("Content-Type", safeAttachmentMime(a.mime));
+    res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename*=UTF-8''${encodeURIComponent(a.filename)}`,
@@ -180,6 +193,7 @@ export class WebmailController {
   }
 
   @Post("send")
+  @Throttle(AUTH_THROTTLE)
   send(
     @Principal() principal: SessionPrincipal,
     @Param("orgId", ParseUUIDPipe) orgId: string,
@@ -188,4 +202,27 @@ export class WebmailController {
   ) {
     return this.svc.send(principal, orgId, mailboxId, body);
   }
+}
+
+// MIME types safe to hand to a browser with a Content-Type. Anything else
+// (text/html, image/svg+xml, application/xhtml+xml, …) is collapsed to a
+// generic binary type so it can never be interpreted as active content.
+const INERT_MIME = new Set<string>([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+  "image/tiff",
+  "text/plain",
+  "text/csv",
+  "application/json",
+  "application/zip",
+  "application/octet-stream",
+]);
+
+function safeAttachmentMime(mime: string): string {
+  const base = (mime || "").split(";")[0]!.trim().toLowerCase();
+  return INERT_MIME.has(base) ? base : "application/octet-stream";
 }

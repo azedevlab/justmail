@@ -18,6 +18,7 @@ import {
 } from "@justmail/contracts";
 import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
+import { Throttle } from "../common/throttle.decorator";
 import { Principal, SESSION_COOKIE, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { InvitesService } from "./invites.service";
@@ -65,6 +66,7 @@ export class InvitesController {
   }
 
   @Post("invites/:token/accept")
+  @Throttle({ limit: config.RATE_LIMIT_AUTH_MAX, ttl: config.RATE_LIMIT_AUTH_TTL })
   async accept(
     @Param("token") token: string,
     @Body(new ZodPipe(AcceptInviteRequest)) body: AcceptInviteRequest,
