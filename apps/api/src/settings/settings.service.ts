@@ -2,7 +2,17 @@ import { Injectable } from "@nestjs/common";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
+import { config } from "../config";
 import type { SessionPrincipal } from "../auth/auth.service";
+
+export interface AttachmentLimits {
+  maxTotalBytes: number;
+  maxCount: number;
+}
+
+// Key under which per-org attachment limits are stored in the settings table.
+export const ATTACHMENT_LIMITS_KEY = (orgId: string) =>
+  `org:${orgId}.attachments`;
 
 /**
  * Platform-wide settings. Namespace with `org:{orgId}.<key>` for org-scoped
@@ -34,6 +44,31 @@ export class SettingsService {
       value: r.value,
       updated_at: (r.updated_at as Date).toISOString(),
     }));
+  }
+
+  /**
+   * Effective attachment limits for an org: stored overrides fall back to the
+   * global config defaults. Read-path only — no role check (called internally
+   * from the send path). Values are clamped positive and never exceed the
+   * global ceiling so an org cannot raise limits above what the deploy allows.
+   */
+  async attachmentLimits(orgId: string): Promise<AttachmentLimits> {
+    const { rows } = await this.db.query<{ value: unknown }>(
+      "SELECT value FROM settings WHERE key = $1",
+      [ATTACHMENT_LIMITS_KEY(orgId)],
+    );
+    const v = rows[0]?.value as
+      | { max_total_bytes?: number; max_count?: number }
+      | undefined;
+    const clamp = (n: number | undefined, ceiling: number) =>
+      n && Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), ceiling) : ceiling;
+    return {
+      maxTotalBytes: clamp(
+        v?.max_total_bytes,
+        config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES,
+      ),
+      maxCount: clamp(v?.max_count, config.WEBMAIL_ATTACHMENT_MAX_COUNT),
+    };
   }
 
   async upsert(
