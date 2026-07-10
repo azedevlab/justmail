@@ -115,6 +115,7 @@ services:
       JM_HOSTNAME: ${JM_HOSTNAME}
       MAILPLANE_DB_PASSWORD: ${MAILPLANE_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
     volumes:
       - ../mail/dovecot:/opt/justmail/templates:ro
       - vmail:/var/vmail
@@ -130,6 +131,7 @@ services:
     restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
     volumes:
       - ../mail/rspamd:/etc/rspamd/local.d:ro
       - rspamd-data:/var/lib/rspamd
