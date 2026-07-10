@@ -31,6 +31,12 @@ const Env = z.object({
   SIEVE_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
   SIEVE_SCRIPT_NAME: z.string().default("justmail"),
 
+  // Radicale CardDAV/CalDAV store. The API reaches it over the internal network
+  // and brokers per-user access with the X-Remote-User header (Radicale trusts
+  // it there); external clients authenticate via the caldav.* proxy instead.
+  RADICALE_URL: z.string().url().default("http://radicale:5232"),
+  RADICALE_CONTACTS_COLLECTION: z.string().default("contacts"),
+
   // Thumbnail generation (sharp) for image attachments.
   THUMBNAIL_ENABLED: z.coerce.boolean().default(true),
   THUMBNAIL_MAX_DIM: z.coerce.number().int().positive().default(320),

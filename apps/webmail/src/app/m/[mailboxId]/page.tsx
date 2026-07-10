@@ -13,7 +13,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import type {
   Folder,
   MessageList,
@@ -35,6 +35,8 @@ import type {
   SieveMatch,
   Upload,
   Attachment,
+  Contact,
+  ContactRequest,
 } from "@justmail/contracts";
 import { ApiError, useHotkey } from "@justmail/shared-utils";
 import {
@@ -87,6 +89,7 @@ import {
   Star,
   Trash2,
   Underline,
+  Users,
   X,
 } from "lucide-react";
 import { useMe } from "@/lib/session";
@@ -146,6 +149,7 @@ export default function MailboxView() {
   const [openUid, setOpenUid] = useState<number | null>(null);
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contactsOpen, setContactsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [listW, setListW] = useState(360);
@@ -513,6 +517,15 @@ export default function MailboxView() {
             <RefreshCw size={14} />
           </button>
         </Tooltip>
+        <Tooltip content="Contacts">
+          <button
+            onClick={() => setContactsOpen(true)}
+            className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
+            aria-label="Contacts"
+          >
+            <Users size={14} />
+          </button>
+        </Tooltip>
         <Tooltip content="Signatures & templates">
           <button
             onClick={() => setSettingsOpen(true)}
@@ -820,6 +833,14 @@ export default function MailboxView() {
           orgId={orgId}
           mailboxId={mailboxId}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {contactsOpen && orgId && (
+        <ContactsModal
+          orgId={orgId}
+          mailboxId={mailboxId}
+          onClose={() => setContactsOpen(false)}
         />
       )}
 
@@ -2009,6 +2030,479 @@ function splitAddresses(value: string): string[] {
     .filter(Boolean);
 }
 
+interface Suggestion {
+  name: string;
+  address: string;
+}
+
+// Flatten a contact list into one suggestion per email address for recipient
+// autocomplete.
+function toSuggestions(contacts: Contact[]): Suggestion[] {
+  const out: Suggestion[] = [];
+  for (const c of contacts) {
+    for (const e of c.emails) {
+      out.push({ name: c.full_name, address: e.address });
+    }
+  }
+  return out;
+}
+
+// Chip-style recipient input backed by a comma+space joined string so it stays
+// compatible with the compose form's existing address splitting. Committed
+// addresses render as chips; the trailing text is an editable draft that also
+// contributes to the emitted value so a half-typed address is never dropped.
+function RecipientField({
+  value,
+  onChange,
+  suggestions,
+  placeholder,
+  autoFocus,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  suggestions: Suggestion[];
+  placeholder?: string;
+  autoFocus?: boolean;
+  ariaLabel: string;
+}) {
+  // Local source of truth, seeded once from the incoming value.
+  const [emails, setEmails] = useState<string[]>(() => splitAddresses(value));
+  const [draft, setDraft] = useState("");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+
+  const emit = (nextEmails: string[], nextDraft: string) => {
+    onChange([...nextEmails, nextDraft].filter(Boolean).join(", "));
+  };
+
+  const addEmail = (addr: string) => {
+    const clean = addr.trim();
+    if (!clean) return;
+    const next = emails.includes(clean) ? emails : [...emails, clean];
+    setEmails(next);
+    setDraft("");
+    setOpen(false);
+    setActive(0);
+    emit(next, "");
+  };
+
+  const removeAt = (i: number) => {
+    const next = emails.filter((_, j) => j !== i);
+    setEmails(next);
+    emit(next, draft);
+  };
+
+  const matches =
+    draft.trim().length === 0
+      ? []
+      : suggestions
+          .filter((s) => {
+            const q = draft.toLowerCase();
+            return (
+              !emails.includes(s.address) &&
+              (s.address.toLowerCase().includes(q) ||
+                s.name.toLowerCase().includes(q))
+            );
+          })
+          .slice(0, 6);
+
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === "Enter" || e.key === "," || e.key === "Tab") && draft.trim()) {
+      if (e.key !== "Tab") e.preventDefault();
+      if (open && matches[active]) addEmail(matches[active]!.address);
+      else addEmail(draft);
+    } else if (e.key === "Backspace" && !draft && emails.length > 0) {
+      removeAt(emails.length - 1);
+    } else if (e.key === "ArrowDown" && matches.length > 0) {
+      e.preventDefault();
+      setOpen(true);
+      setActive((a) => (a + 1) % matches.length);
+    } else if (e.key === "ArrowUp" && matches.length > 0) {
+      e.preventDefault();
+      setOpen(true);
+      setActive((a) => (a - 1 + matches.length) % matches.length);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2 py-1.5 focus-within:border-[var(--color-accent)] transition-colors">
+        {emails.map((addr, i) => (
+          <span
+            key={`${addr}-${i}`}
+            className="flex items-center gap-1 rounded-md bg-[var(--color-surface-2)] border border-[var(--color-border)] pl-2 pr-1 py-0.5 text-xs font-medium"
+          >
+            <span className="max-w-52 truncate">{addr}</span>
+            <IconButton
+              size="sm"
+              aria-label={`Remove ${addr}`}
+              onClick={() => removeAt(i)}
+            >
+              <X size={11} />
+            </IconButton>
+          </span>
+        ))}
+        <input
+          className="flex-1 min-w-[8rem] bg-transparent outline-none text-[13px] font-mono py-0.5"
+          aria-label={ariaLabel}
+          autoFocus={autoFocus}
+          placeholder={emails.length === 0 ? placeholder : undefined}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setOpen(true);
+            setActive(0);
+            emit(emails, e.target.value);
+          }}
+          onKeyDown={onKeyDown}
+          onBlur={() => {
+            if (draft.trim()) addEmail(draft);
+            setOpen(false);
+          }}
+        />
+      </div>
+      {open && matches.length > 0 && (
+        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] shadow-[var(--shadow-4)]">
+          {matches.map((s, i) => (
+            <li key={s.address}>
+              <button
+                type="button"
+                className={`w-full text-left px-3 py-2 flex flex-col ${
+                  i === active
+                    ? "bg-[var(--color-surface-2)]"
+                    : "hover:bg-[var(--hover-overlay)]"
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  addEmail(s.address);
+                }}
+              >
+                <span className="text-[13px] font-medium truncate">
+                  {s.name}
+                </span>
+                <span className="text-xs text-[var(--color-neutral-800)] truncate font-mono">
+                  {s.address}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ContactsModal({
+  orgId,
+  mailboxId,
+  onClose,
+}: {
+  orgId: string;
+  mailboxId: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/contacts`;
+  const key = ["contacts", orgId, mailboxId];
+  const list = useQuery({ queryKey: key, queryFn: () => api.get<Contact[]>(base) });
+  const [editing, setEditing] = useState<Contact | "new" | null>(null);
+  const [query, setQuery] = useState("");
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`${base}/${encodeURIComponent(id)}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: key });
+      toast({ title: "Contact deleted", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Delete failed",
+        tone: "bad",
+      }),
+  });
+
+  const contacts = (list.data ?? []).filter((c) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.full_name.toLowerCase().includes(q) ||
+      c.emails.some((e) => e.address.toLowerCase().includes(q)) ||
+      (c.organization ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title="Contacts"
+      description="Your address book, synced over CardDAV."
+    >
+      {editing !== null ? (
+        <ContactForm
+          orgId={orgId}
+          mailboxId={mailboxId}
+          contact={editing === "new" ? null : editing}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: key });
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search contacts…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              leadingIcon={<Plus size={13} />}
+              onClick={() => setEditing("new")}
+            >
+              New
+            </Button>
+          </div>
+          {list.isLoading ? (
+            <div className="py-8 grid place-items-center">
+              <Spinner size={18} />
+            </div>
+          ) : contacts.length === 0 ? (
+            <Empty
+              icon={<Users size={20} />}
+              title={query ? "No matches" : "No contacts yet"}
+              description={
+                query
+                  ? "Try a different search."
+                  : "Add your first contact to start building your address book."
+              }
+            />
+          ) : (
+            <ul className="max-h-[50vh] overflow-y-auto divide-y divide-[var(--color-border)]">
+              {contacts.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center gap-3 py-2.5 group"
+                >
+                  <Avatar name={c.full_name} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-medium truncate">
+                      {c.full_name}
+                    </div>
+                    <div className="text-xs text-[var(--color-neutral-800)] truncate font-mono">
+                      {c.emails[0]?.address ??
+                        c.organization ??
+                        "No email"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <IconButton
+                      size="sm"
+                      aria-label={`Edit ${c.full_name}`}
+                      onClick={() => setEditing(c)}
+                    >
+                      <PenLine size={13} />
+                    </IconButton>
+                    <IconButton
+                      size="sm"
+                      aria-label={`Delete ${c.full_name}`}
+                      onClick={() => remove.mutate(c.id)}
+                    >
+                      <Trash2 size={13} />
+                    </IconButton>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function ContactForm({
+  orgId,
+  mailboxId,
+  contact,
+  onDone,
+  onCancel,
+}: {
+  orgId: string;
+  mailboxId: string;
+  contact: Contact | null;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { toast } = useToast();
+  const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/contacts`;
+  const [fullName, setFullName] = useState(contact?.full_name ?? "");
+  const [emails, setEmails] = useState<string[]>(
+    contact?.emails.map((e) => e.address) ?? [""],
+  );
+  const [phones, setPhones] = useState<string[]>(
+    contact && contact.phones.length > 0
+      ? contact.phones.map((p) => p.number)
+      : [""],
+  );
+  const [organization, setOrganization] = useState(contact?.organization ?? "");
+  const [note, setNote] = useState(contact?.note ?? "");
+
+  const save = useMutation({
+    mutationFn: (body: ContactRequest) =>
+      contact
+        ? api.put<Contact>(`${base}/${encodeURIComponent(contact.id)}`, body)
+        : api.post<Contact>(base, body),
+    onSuccess: () => {
+      toast({ title: "Contact saved", tone: "ok" });
+      onDone();
+    },
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : "Save failed",
+        tone: "bad",
+      }),
+  });
+
+  const submit = () => {
+    if (!fullName.trim()) return toast({ title: "Name is required", tone: "bad" });
+    save.mutate({
+      full_name: fullName.trim(),
+      emails: emails
+        .map((a) => a.trim())
+        .filter(Boolean)
+        .map((address) => ({ address })),
+      phones: phones
+        .map((n) => n.trim())
+        .filter(Boolean)
+        .map((number) => ({ number })),
+      organization: organization.trim() || undefined,
+      note: note.trim() || undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <FormField label="Name">
+        <Input
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Full name"
+          autoFocus
+        />
+      </FormField>
+      <MultiTextField
+        label="Emails"
+        values={emails}
+        onChange={setEmails}
+        placeholder="name@example.com"
+        monospace
+      />
+      <MultiTextField
+        label="Phones"
+        values={phones}
+        onChange={setPhones}
+        placeholder="+1 555 123 4567"
+      />
+      <FormField label="Organization">
+        <Input
+          value={organization}
+          onChange={(e) => setOrganization(e.target.value)}
+          placeholder="(optional)"
+        />
+      </FormField>
+      <FormField label="Note">
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="(optional)"
+          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors resize-y"
+        />
+      </FormField>
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <Button variant="secondary" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={submit}
+          disabled={save.isPending}
+        >
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// A list of single-line inputs with add/remove controls, used for the
+// repeatable email and phone rows on a contact.
+function MultiTextField({
+  label,
+  values,
+  onChange,
+  placeholder,
+  monospace,
+}: {
+  label: string;
+  values: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  monospace?: boolean;
+}) {
+  return (
+    <FormField label={label}>
+      <div className="space-y-2">
+        {values.map((v, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              monospace={monospace}
+              value={v}
+              placeholder={placeholder}
+              onChange={(e) =>
+                onChange(values.map((x, j) => (j === i ? e.target.value : x)))
+              }
+            />
+            <IconButton
+              size="sm"
+              aria-label={`Remove ${label} row`}
+              onClick={() =>
+                onChange(
+                  values.length === 1
+                    ? [""]
+                    : values.filter((_, j) => j !== i),
+                )
+              }
+            >
+              <X size={14} />
+            </IconButton>
+          </div>
+        ))}
+        <Button
+          variant="ghost"
+          size="xs"
+          leadingIcon={<Plus size={12} />}
+          onClick={() => onChange([...values, ""])}
+        >
+          Add
+        </Button>
+      </div>
+    </FormField>
+  );
+}
+
 function ComposePanel({
   orgId,
   mailboxId,
@@ -2095,6 +2589,17 @@ function ComposePanel({
         `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/templates`,
       ),
   });
+  const contacts = useQuery({
+    queryKey: ["contacts", orgId, mailboxId],
+    queryFn: () =>
+      api.get<Contact[]>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/contacts`,
+      ),
+  });
+  const recipientSuggestions = useMemo(
+    () => toSuggestions(contacts.data ?? []),
+    [contacts.data],
+  );
 
   const insertHtml = (html: string) => {
     const el = editorRef.current;
@@ -2381,15 +2886,36 @@ function ComposePanel({
       </header>
       <form className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         <FormField label="To">
-          <Input
-            monospace
-            autoFocus
-            placeholder="alice@example.com"
-            {...f.register("to", { required: true })}
+          <Controller
+            control={f.control}
+            name="to"
+            rules={{ required: true }}
+            render={({ field }) => (
+              <RecipientField
+                ariaLabel="To"
+                value={field.value}
+                onChange={field.onChange}
+                suggestions={recipientSuggestions}
+                placeholder="alice@example.com"
+                autoFocus
+              />
+            )}
           />
         </FormField>
         <FormField label="Cc">
-          <Input monospace placeholder="(optional)" {...f.register("cc")} />
+          <Controller
+            control={f.control}
+            name="cc"
+            render={({ field }) => (
+              <RecipientField
+                ariaLabel="Cc"
+                value={field.value}
+                onChange={field.onChange}
+                suggestions={recipientSuggestions}
+                placeholder="(optional)"
+              />
+            )}
+          />
         </FormField>
         <FormField label="Subject">
           <Input {...f.register("subject")} />

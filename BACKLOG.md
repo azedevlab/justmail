@@ -58,19 +58,19 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 
 | ID | P | Task | Effort | Deps | Status |
 |---|---|---|---|---|---|
-| M6-1 | P1 | Conversation threading (server grouping + threaded read view) | L | M3-2 | todo |
-| M6-2 | P1 | Drafts: autosave/restore/discard to `\Drafts` | M | M4-2 | todo |
-| M6-3 | P1 | Server-side search + operators (Dovecot SEARCH) | L | M4-2 | todo |
-| M6-4 | P2 | Undo send (window) + scheduled send (delayed job) | M | M5-2 | todo |
-| M6-5 | P2 | Rich-text compose (sanitized) + signatures + templates | L | M6-2 | todo |
-| M6-6 | P2 | Sieve rules/filters UI (managesieve) | L | — | todo |
-| M6-7 | P2 | Designed confirm modals; `?` shortcut sheet; compose focus trap; keyboard resizer | M | — | todo |
+| M6-1 | P1 | Conversation threading (server grouping + threaded read view) | L | M3-2 | done |
+| M6-2 | P1 | Drafts: autosave/restore/discard to `\Drafts` | M | M4-2 | done |
+| M6-3 | P1 | Server-side search + operators (Dovecot SEARCH) | L | M4-2 | done |
+| M6-4 | P2 | Undo send (window) + scheduled send (delayed job) | M | M5-2 | done |
+| M6-5 | P2 | Rich-text compose (sanitized) + signatures + templates | L | M6-2 | done |
+| M6-6 | P2 | Sieve rules/filters UI (managesieve) | L | — | done |
+| M6-7 | P2 | Designed confirm modals; `?` shortcut sheet; compose focus trap; keyboard resizer | M | — | done |
 
 ## M7 — Contacts, calendar, PWA
 
 | ID | P | Task | Effort | Deps | Status |
 |---|---|---|---|---|---|
-| M7-1 | P2 | Contacts UI (CardDAV) + compose autocomplete/chips | L | M6-5 | todo |
+| M7-1 | P2 | Contacts UI (CardDAV) + compose autocomplete/chips | L | M6-5 | done |
 | M7-2 | P2 | Calendar UI (CalDAV) read + basic CRUD | L | — | todo |
 | M7-3 | P2 | PWA manifest + service worker + offline read + web-push | L | M4-3 | todo |
 
