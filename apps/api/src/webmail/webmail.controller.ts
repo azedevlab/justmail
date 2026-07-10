@@ -283,6 +283,26 @@ export class WebmailController {
     return this.svc.send(principal, orgId, mailboxId, body);
   }
 
+  @Get("scheduled")
+  listScheduled(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+  ) {
+    return this.svc.listScheduledSends(principal, orgId, mailboxId);
+  }
+
+  @Post("scheduled/:id/cancel")
+  @HttpCode(204)
+  cancelScheduled(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.cancelScheduledSend(principal, orgId, mailboxId, id);
+  }
+
   @Post("drafts")
   saveDraft(
     @Principal() principal: SessionPrincipal,

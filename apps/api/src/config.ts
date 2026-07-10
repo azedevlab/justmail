@@ -51,6 +51,19 @@ const Env = z.object({
   // staleness for folders the session is not actively watching.
   WEBMAIL_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(20),
 
+  // Undo-send: every send is held for this many seconds before dispatch so the
+  // user can cancel it. A user-chosen send_at overrides this delay.
+  WEBMAIL_UNDO_SEND_SECONDS: z.coerce.number().int().min(0).default(10),
+  // Upper bound on how far ahead a scheduled send may be placed.
+  WEBMAIL_SCHEDULED_SEND_MAX_DAYS: z.coerce.number().int().positive().default(30),
+  // Worker dispatch loop: how often due sends are claimed, and the retry/backoff
+  // budget for a send that fails at the SMTP step.
+  WEBMAIL_SEND_POLL_SECONDS: z.coerce.number().int().positive().default(3),
+  WEBMAIL_SEND_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  WEBMAIL_SEND_RETRY_SECONDS: z.coerce.number().int().positive().default(60),
+  // A 'sending' row older than this was stranded by a crashed dispatch; reclaim it.
+  WEBMAIL_SEND_CLAIM_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(120),
+
   // Rate limiting (window seconds / max hits). Generous defaults; tune per deploy.
   RATE_LIMIT_GLOBAL_TTL: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().positive().default(300),

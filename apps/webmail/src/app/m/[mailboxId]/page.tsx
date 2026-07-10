@@ -19,6 +19,7 @@ import type {
   Message,
   ComposeRequest,
   SavedDraft,
+  SendResult,
   Upload,
   Attachment,
 } from "@justmail/contracts";
@@ -44,6 +45,7 @@ import {
   Archive,
   ArrowLeft,
   ChevronRight,
+  Clock,
   Download,
   Edit3,
   FileText,
@@ -1089,6 +1091,8 @@ function ComposePanel({
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   // Live UID of this compose session's draft, carried across autosaves.
   const draftUidRef = useRef<number | undefined>(initial?.draftUid);
@@ -1111,11 +1115,45 @@ function ComposePanel({
 
   const mut = useMutation({
     mutationFn: (b: ComposeRequest) =>
-      api.post(`/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/send`, b),
-    onSuccess: async () => {
+      api.post<SendResult>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/send`,
+        b,
+      ),
+    onSuccess: async (res) => {
       await discardDraft();
       onClose();
-      toast({ title: "Sent", tone: "ok" });
+      const cancel = () =>
+        api
+          .post(
+            `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/scheduled/${res.id}/cancel`,
+          )
+          .then(() => toast({ title: "Send cancelled", tone: "ok" }))
+          .catch((e) =>
+            toast({
+              title:
+                e instanceof ApiError
+                  ? e.problem.detail ?? e.problem.title
+                  : "Could not cancel",
+              tone: "bad",
+            }),
+          );
+      if (res.scheduled) {
+        toast({
+          title: "Scheduled",
+          description: `Sends ${new Date(res.send_at).toLocaleString()}`,
+          tone: "ok",
+          action: { label: "Cancel", onClick: () => void cancel() },
+        });
+        return;
+      }
+      // Undo window: keep the toast up until the send actually fires.
+      const windowMs = Math.max(0, new Date(res.send_at).getTime() - Date.now());
+      toast({
+        title: "Sending…",
+        tone: "info",
+        durationMs: windowMs,
+        action: { label: "Undo", onClick: () => void cancel() },
+      });
     },
     onError: (e) =>
       setErr(
@@ -1229,42 +1267,56 @@ function ComposePanel({
     return () => clearTimeout(timer);
   }, [toVal, ccVal, subject, textVal, orgId, mailboxId, initial]);
 
-  const send = f.handleSubmit(async (v) => {
-    setErr(null);
-    const to = v.to
-      .split(/[,\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const cc = v.cc
-      .split(/[,\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (to.length === 0) return setErr("At least one recipient required.");
-    let attachmentIds: string[] | undefined;
-    if (files.length > 0) {
-      setUploading(true);
-      try {
-        attachmentIds = await Promise.all(files.map(uploadFile));
-      } catch (e) {
+  const submit = (sendAt?: string) =>
+    f.handleSubmit(async (v) => {
+      setErr(null);
+      const to = v.to
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const cc = v.cc
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (to.length === 0) return setErr("At least one recipient required.");
+      let attachmentIds: string[] | undefined;
+      if (files.length > 0) {
+        setUploading(true);
+        try {
+          attachmentIds = await Promise.all(files.map(uploadFile));
+        } catch (e) {
+          setUploading(false);
+          return setErr(
+            e instanceof ApiError
+              ? e.problem.detail ?? e.problem.title
+              : (e as Error).message,
+          );
+        }
         setUploading(false);
-        return setErr(
-          e instanceof ApiError
-            ? e.problem.detail ?? e.problem.title
-            : (e as Error).message,
-        );
       }
-      setUploading(false);
+      mut.mutate({
+        to,
+        cc: cc.length > 0 ? cc : undefined,
+        subject: v.subject,
+        text: v.text,
+        attachment_ids: attachmentIds,
+        in_reply_to: initial?.in_reply_to,
+        references: initial?.references,
+        send_at: sendAt,
+      });
+    })();
+
+  const send = () => void submit();
+  const scheduleSend = () => {
+    if (!scheduleAt) return;
+    const at = new Date(scheduleAt);
+    if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) {
+      setErr("Pick a send time in the future.");
+      return;
     }
-    mut.mutate({
-      to,
-      cc: cc.length > 0 ? cc : undefined,
-      subject: v.subject,
-      text: v.text,
-      attachment_ids: attachmentIds,
-      in_reply_to: initial?.in_reply_to,
-      references: initial?.references,
-    });
-  });
+    setScheduleOpen(false);
+    void submit(at.toISOString());
+  };
 
   if (minimized) {
     return (
@@ -1392,6 +1444,47 @@ function ComposePanel({
           >
             Discard
           </Button>
+          <div className="relative">
+            <Tooltip content="Schedule send">
+              <IconButton
+                size="sm"
+                aria-label="Schedule send"
+                onClick={() => setScheduleOpen((o) => !o)}
+              >
+                <Clock size={14} />
+              </IconButton>
+            </Tooltip>
+            {scheduleOpen && (
+              <div className="absolute bottom-full right-0 mb-2 w-64 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] p-3 shadow-[var(--shadow-3)] animate-in fade-in-0 slide-in-from-bottom-1">
+                <label className="block text-[11px] font-medium text-[var(--color-neutral-900)] mb-1">
+                  Send later
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduleAt}
+                  onChange={(e) => setScheduleAt(e.target.value)}
+                  className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-1 text-[13px]"
+                />
+                <div className="mt-2 flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setScheduleOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={!scheduleAt}
+                    onClick={scheduleSend}
+                  >
+                    Schedule
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
           <Button
             variant="primary"
             loading={mut.isPending || uploading}

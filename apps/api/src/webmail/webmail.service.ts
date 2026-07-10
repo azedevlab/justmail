@@ -18,12 +18,15 @@ import {
   type MessageSummary,
   type SaveDraftRequest,
   type SavedDraft,
+  type ScheduledSend,
+  type SendResult,
 } from "@justmail/contracts";
 import MailComposer from "nodemailer/lib/mail-composer";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
 import { config } from "../config";
+import { open, seal } from "../common/secretbox";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { AttachmentsService } from "../attachments/attachments.service";
 import { StorageService } from "../storage/storage.service";
@@ -61,6 +64,20 @@ interface StoredNodemailerAttachment {
   filename: string;
   contentType: string;
   content: Readable;
+}
+
+interface ScheduledSendRow {
+  id: string;
+  org_id: string;
+  mailbox_id: string;
+  user_id: string | null;
+  session_id: string;
+  from_address: string;
+  sealed_password: string;
+  payload: ComposeRequest;
+  send_at: string;
+  status: string;
+  attempts: number;
 }
 
 interface MessageSummaryItem {
@@ -611,22 +628,25 @@ export class WebmailService {
     await this.cache.bustMailbox(principal.sessionId, mailboxId);
   }
 
+  /**
+   * A send is never dispatched inline: it is written to scheduled_sends with a
+   * send_at that is either now+undo-window (so the user can cancel during the
+   * undo toast) or a user-chosen future time. A background worker claims the row
+   * when due and dispatches it. Attachments are resolved and virus-scanned here
+   * so the caller gets immediate feedback and only clean rows are enqueued. The
+   * mailbox password is sealed onto the row so dispatch does not depend on the
+   * interactive session's credential still being live at fire time.
+   */
   async send(
     principal: SessionPrincipal,
     orgId: string,
     mailboxId: string,
     input: ComposeRequest,
-  ) {
-    if (input.send_at) {
-      throw new BadRequestException({
-        title: "Scheduled send not supported yet",
-        detail: "Remove send_at; scheduled delivery is not available yet.",
-      });
-    }
-    // Resolve + virus-scan stored attachments before we touch SMTP.
+  ): Promise<SendResult> {
+    // Resolve + virus-scan stored attachments before we enqueue anything.
     const stored = await this.resolveStoredAttachments(
-      principal,
       orgId,
+      principal.userId,
       input.attachment_ids ?? [],
     );
     const inlineBytes = (input.attachments ?? []).reduce(
@@ -649,6 +669,182 @@ export class WebmailService {
       });
     }
     const creds = await this.creds(principal, orgId, mailboxId);
+    const scheduled = !!input.send_at;
+    const sendAt = resolveSendAt(
+      input.send_at ?? null,
+      Date.now(),
+      config.WEBMAIL_UNDO_SEND_SECONDS,
+      config.WEBMAIL_SCHEDULED_SEND_MAX_DAYS,
+    );
+    const { rows } = await this.db.query<{ id: string; send_at: Date }>(
+      `INSERT INTO scheduled_sends
+         (org_id, mailbox_id, user_id, session_id, from_address, sealed_password, payload, send_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, send_at`,
+      [
+        orgId,
+        mailboxId,
+        principal.userId,
+        principal.sessionId,
+        creds.address,
+        seal(creds.password),
+        JSON.stringify(input),
+        sendAt.toISOString(),
+      ],
+    );
+    this.audit.log({
+      orgId,
+      actorType: "user",
+      actorId: principal.userId,
+      action: "webmail.send.schedule",
+      targetType: "mailbox",
+      targetId: mailboxId,
+      meta: { subject: input.subject, to: input.to.length, scheduled },
+    });
+    return {
+      id: rows[0]!.id,
+      send_at: rows[0]!.send_at.toISOString(),
+      scheduled,
+    };
+  }
+
+  /** Cancel a still-pending scheduled send (undo window or future schedule). */
+  async cancelScheduledSend(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    id: string,
+  ): Promise<void> {
+    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    const { rowCount } = await this.db.query(
+      `UPDATE scheduled_sends
+         SET status = 'cancelled', updated_at = now()
+       WHERE id = $1 AND org_id = $2 AND mailbox_id = $3 AND status = 'pending'`,
+      [id, orgId, mailboxId],
+    );
+    if (!rowCount) {
+      throw new BadRequestException({
+        title: "Cannot cancel",
+        detail: "This message has already been sent or cancelled.",
+      });
+    }
+    this.audit.log({
+      orgId,
+      actorType: "user",
+      actorId: principal.userId,
+      action: "webmail.send.cancel",
+      targetType: "mailbox",
+      targetId: mailboxId,
+      meta: { id },
+    });
+  }
+
+  /** Outstanding scheduled sends for a mailbox (future-dated, not yet sent). */
+  async listScheduledSends(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+  ): Promise<ScheduledSend[]> {
+    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    const { rows } = await this.db.query<{
+      id: string;
+      payload: ComposeRequest;
+      send_at: Date;
+      created_at: Date;
+    }>(
+      `SELECT id, payload, send_at, created_at
+         FROM scheduled_sends
+        WHERE org_id = $1 AND mailbox_id = $2 AND status = 'pending'
+        ORDER BY send_at ASC`,
+      [orgId, mailboxId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      to: r.payload.to ?? [],
+      subject: r.payload.subject ?? "",
+      send_at: r.send_at.toISOString(),
+      created_at: r.created_at.toISOString(),
+    }));
+  }
+
+  /**
+   * Worker entry point: claim due sends and dispatch them. Claims 'pending' rows
+   * past send_at plus 'sending' rows a crashed dispatch stranded, marking each
+   * 'sending' under a row lock (SKIP LOCKED) so concurrent workers never double
+   * dispatch. On success the row becomes 'sent'; on failure it is retried until
+   * the attempt budget is spent, then marked 'failed'.
+   */
+  async processDueSends(): Promise<void> {
+    const claimTimeout = config.WEBMAIL_SEND_CLAIM_TIMEOUT_SECONDS;
+    const { rows } = await this.db.query<ScheduledSendRow>(
+      `UPDATE scheduled_sends
+         SET status = 'sending', attempts = attempts + 1, updated_at = now()
+       WHERE id IN (
+         SELECT id FROM scheduled_sends
+          WHERE (status = 'pending' AND send_at <= now())
+             OR (status = 'sending' AND updated_at < now() - ($1 || ' seconds')::interval)
+          ORDER BY send_at ASC
+          LIMIT 10
+          FOR UPDATE SKIP LOCKED
+       )
+       RETURNING id, org_id, mailbox_id, user_id, session_id,
+                 from_address, sealed_password, payload, send_at, status, attempts`,
+      [String(claimTimeout)],
+    );
+    for (const row of rows) {
+      try {
+        await this.dispatchScheduled(row);
+        await this.db.query(
+          `UPDATE scheduled_sends
+             SET status = 'sent', sent_at = now(), updated_at = now(), last_error = NULL
+           WHERE id = $1`,
+          [row.id],
+        );
+        this.audit.log({
+          orgId: row.org_id,
+          actorType: row.user_id ? "user" : "system",
+          actorId: row.user_id ?? undefined,
+          action: "webmail.send",
+          targetType: "mailbox",
+          targetId: row.mailbox_id,
+          meta: { subject: row.payload.subject, to: row.payload.to?.length ?? 0 },
+        });
+      } catch (err) {
+        const message = (err as Error).message;
+        const exhausted = row.attempts >= config.WEBMAIL_SEND_MAX_ATTEMPTS;
+        this.logger.warn(
+          `scheduled send ${row.id} attempt ${row.attempts} failed: ${message}`,
+        );
+        if (exhausted) {
+          await this.db.query(
+            `UPDATE scheduled_sends
+               SET status = 'failed', last_error = $2, updated_at = now()
+             WHERE id = $1`,
+            [row.id, message],
+          );
+        } else {
+          await this.db.query(
+            `UPDATE scheduled_sends
+               SET status = 'pending', last_error = $2, updated_at = now(),
+                   send_at = now() + ($3 || ' seconds')::interval
+             WHERE id = $1`,
+            [row.id, message, String(config.WEBMAIL_SEND_RETRY_SECONDS)],
+          );
+        }
+      }
+    }
+  }
+
+  /** Actually dispatch one claimed row: SMTP send then append to Sent. */
+  private async dispatchScheduled(row: ScheduledSendRow): Promise<void> {
+    const input = row.payload;
+    const password = open(row.sealed_password);
+    const creds: CachedCreds = { address: row.from_address, password };
+    const stored = await this.resolveStoredAttachments(
+      row.org_id,
+      row.user_id ?? "",
+      input.attachment_ids ?? [],
+    );
     const transport = nodemailer.createTransport({
       host: SMTP_HOST,
       port: SMTP_PORT,
@@ -657,7 +853,7 @@ export class WebmailService {
       auth: { user: creds.address, pass: creds.password },
       tls: { rejectUnauthorized: config.SMTP_TLS_REJECT_UNAUTHORIZED },
     });
-    const info = await transport.sendMail({
+    await transport.sendMail({
       from: creds.address,
       to: input.to.join(", "),
       cc: input.cc?.join(", ") ?? undefined,
@@ -669,42 +865,27 @@ export class WebmailService {
       references: input.references,
       attachments: [
         ...(toNodemailerAttachments(input.attachments) ?? []),
-        ...(await this.storedNodemailerAttachments(orgId, stored)),
+        ...(await this.storedNodemailerAttachments(row.org_id, stored)),
       ],
     });
     // Append to Sent for a proper "sent" trail.
     try {
-      await this.withImap(
-        principal.sessionId,
-        mailboxId,
-        creds,
-        async (client) => {
-          const sent = await findSentBox(client);
-          if (sent) {
-            const message = await buildMimeMessage(
-              { from: creds.address, ...input },
-              // Fresh streams: the send transport already consumed the first set.
-              await this.storedNodemailerAttachments(orgId, stored),
-            );
-            await client.append(sent, message, ["\\Seen"]);
-          }
-        },
-      );
+      await this.withImap(row.session_id, row.mailbox_id, creds, async (client) => {
+        const sent = await findSentBox(client);
+        if (sent) {
+          const message = await buildMimeMessage(
+            { from: creds.address, ...input },
+            // Fresh streams: the send transport already consumed the first set.
+            await this.storedNodemailerAttachments(row.org_id, stored),
+          );
+          await client.append(sent, message, ["\\Seen"]);
+        }
+      });
     } catch (err) {
       this.logger.warn(`append to Sent failed: ${(err as Error).message}`);
     }
     // The Sent folder gained a message; drop this session's cached views.
-    await this.cache.bustMailbox(principal.sessionId, mailboxId);
-    this.audit.log({
-      orgId,
-      actorType: "user",
-      actorId: principal.userId,
-      action: "webmail.send",
-      targetType: "mailbox",
-      targetId: mailboxId,
-      meta: { subject: input.subject, to: input.to.length },
-    });
-    return { messageId: info.messageId };
+    await this.cache.bustMailbox(row.session_id, row.mailbox_id);
   }
 
   /**
@@ -788,13 +969,13 @@ export class WebmailService {
    * or unscannable.
    */
   private async resolveStoredAttachments(
-    principal: SessionPrincipal,
     orgId: string,
+    userId: string,
     ids: string[],
   ): Promise<StoredAttachment[]> {
     const out: StoredAttachment[] = [];
     for (const id of ids) {
-      const att = await this.attachments.get(orgId, id, principal.userId);
+      const att = await this.attachments.get(orgId, id, userId);
       if (att.virus_status === "infected") {
         throw new BadRequestException({
           title: "Attachment blocked",
@@ -906,6 +1087,37 @@ export class WebmailService {
   ): Promise<T> {
     return this.sessions.run(sessionId, mailboxId, creds, fn);
   }
+}
+
+/**
+ * Resolve the effective dispatch time for a send. With no user-chosen time the
+ * send fires after the undo window (now + undoSeconds), which is also the floor:
+ * a user-chosen time earlier than that is clamped up so the undo toast is always
+ * honoured. A time beyond the max horizon is rejected.
+ */
+export function resolveSendAt(
+  sendAt: string | null,
+  nowMs: number,
+  undoSeconds: number,
+  maxDays: number,
+): Date {
+  const floor = nowMs + undoSeconds * 1000;
+  if (!sendAt) return new Date(floor);
+  const requested = new Date(sendAt).getTime();
+  if (Number.isNaN(requested)) {
+    throw new BadRequestException({
+      title: "Invalid send time",
+      detail: "send_at is not a valid date.",
+    });
+  }
+  const horizon = nowMs + maxDays * 24 * 60 * 60 * 1000;
+  if (requested > horizon) {
+    throw new BadRequestException({
+      title: "Send time too far ahead",
+      detail: `Scheduled sends may be at most ${maxDays} days in the future.`,
+    });
+  }
+  return new Date(Math.max(requested, floor));
 }
 
 function toNodemailerAttachments(
