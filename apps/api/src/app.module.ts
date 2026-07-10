@@ -28,6 +28,7 @@ import { DeliverabilityModule } from "./deliverability/deliverability.module";
 import { OpenApiModule } from "./openapi/openapi.module";
 import { WebmailModule } from "./webmail/webmail.module";
 import { CaldavModule } from "./caldav/caldav.module";
+import { ContactsModule } from "./contacts/contacts.module";
 import { StorageModule } from "./storage/storage.module";
 import { AvModule } from "./av/av.module";
 import { AttachmentsModule } from "./attachments/attachments.module";
@@ -68,6 +69,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     OpenApiModule,
     WebmailModule,
     CaldavModule,
+    ContactsModule,
     StorageModule,
     AvModule,
     AttachmentsModule,
