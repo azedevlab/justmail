@@ -130,6 +130,109 @@ person would choose.
 - **Acceptance:** `RELEASE_READINESS.md` shows no Critical/High; a stranger reaches a
   working inbox from the README in under 15 minutes.
 
+## M10 — Final polish: UI/UX, functionality, design system, a11y (release-grade)
+
+**Goal:** treat the app as if it ships publicly tomorrow. Every page, route, component,
+dialog, form, table, and interaction is reviewed and brought to a premium, handcrafted
+bar (Apple / Linear / Vercel / Stripe / Proton). No placeholder actions, no TODO
+functionality, no admin-template feel. Every value configurable; nothing hardcoded.
+**Complexity:** XL · **Dependencies:** feature set stable (M5–M8); runs continuously,
+gated last. Overlaps and absorbs M6-7 (designed modals/shortcuts) and M9-1 (a11y).
+
+- **Design tokens:** complete semantic color palette — light (pure/off white, background,
+  surface, elevated, sidebar, card, input, hover, border, divider, muted/primary/secondary
+  text, accent, primary-blue, success, warning, danger, info) and OLED-first dark (proper
+  neutral elevation, not inverted). Typography scale, spacing, radius, shadow, and motion
+  durations as reusable tokens. Zero hardcoded colors/values in either app.
+- **Component redesign pass:** buttons (default/ghost/icon/split/dropdown × hover/pressed/
+  focus/disabled/loading/success/danger), inputs (spacing/placeholder/validation/error/
+  focus/password-visibility/autocomplete), tables (modern, virtualized, sortable,
+  searchable, sticky headers, hover, bulk actions, expandable rows), cards, dropdowns,
+  dialogs/drawers/modals, tooltips, toasts, context menus.
+- **Functionality audit (per surface):** walk every page in webmail + admin; click every
+  button/icon/dropdown; open every dialog; submit every form; exercise search/filter/
+  pagination/upload/download/attachment/shortcut/context-menu; verify empty/loading/error/
+  success states; fix every dead, placeholder, or TODO action so every visible control
+  performs a real action.
+- **Responsive pass:** desktop, laptop, tablet, phone, ultra-wide — nothing overflows or
+  breaks.
+- **Dark-mode pass:** premium neutral tones, correct contrast/elevation/shadows/borders/
+  hover/text — designed, not inverted.
+- **Motion pass:** subtle, fast, natural transitions (hover, page, dialog, sidebar, toast);
+  remove gratuitous animation.
+- **Accessibility pass:** keyboard nav, focus order + rings, ARIA labels, screen-reader,
+  color contrast, accessible forms/dialogs (feeds M9-1 axe gate).
+- **Config sweep:** grep the whole codebase for hardcoded values (upload/attachment/SMTP/
+  IMAP limits, timeouts, retries, storage paths, ports, worker counts, colors, fonts,
+  spacing, animation durations) → config/tokens.
+- **Enterprise feature-parity gap analysis** vs Gmail, Outlook, Proton, Fastmail, Apple
+  Mail, Mailcow, Exchange, Google Workspace → produce a gap list, file tasks, implement.
+- **Self-review gate:** for every surface ask "would Apple/Vercel/Linear/Stripe ship
+  this?" Iterate until yes. Score each page 1–10 in `RELEASE_READINESS.md`.
+- **Acceptance:** every page scores ≥ 8/10; no placeholder/dead control remains; a
+  `grep`-audit for hardcoded colors/limits is clean; axe passes; the experience reads as a
+  premium commercial product, not an admin template.
+
+## M11 — Portability & provider abstraction (deploy-anywhere)
+
+**Goal:** the core codebase runs unchanged from a Raspberry Pi to an HA Kubernetes cluster
+with external DB/Redis/object-storage. Every external dependency is a swappable adapter
+behind an interface; nothing is coupled to one provider, OS, or topology.
+**Complexity:** XL · **Dependencies:** M2 (typed config), M5 (storage adapters exist).
+
+- **Adapters behind interfaces** for: object storage (S3/R2/MinIO/B2/Azure Blob/GCS/Ceph/
+  Wasabi/DO Spaces/Scaleway/local — extend existing `@justmail/storage`), database
+  (Postgres remote/HA/Patroni/read-replicas/PgBouncer), cache (standalone/Sentinel/Cluster/
+  Valkey/remote/TLS/auth/auto-reconnect), search (PG FTS/OpenSearch/Elasticsearch/
+  Meilisearch/Typesense), auth (local/LDAP/OIDC/SAML/passkeys — see M8), DNS
+  (Cloudflare/Route53/Google/Azure/DO/Hetzner/Namecheap/GoDaddy/Porkbun/manual, as
+  plugins), notifications, monitoring, logging. No tight coupling anywhere.
+- **HA topologies:** support remote/replicated Postgres + PgBouncer, Redis Sentinel/Cluster,
+  distributed/networked mail storage (NFS/SMB/CephFS/ZFS) — all via config, no code change.
+- **Storage migration:** admin can migrate attachments between providers with no downtime;
+  storage + DB + cache health monitoring.
+- **Config system:** strongly-typed, validated at startup, fail-fast with meaningful errors;
+  sources = env / config file / admin UI / secrets manager / CLI / API; auto-generate sample
+  config. (Extends `config.ts`.)
+- **No-personalization audit:** zero hardcoded domains, hostnames, IPs, ports, paths, emails,
+  company/brand names, secrets, API keys, maintainer/GitHub identifiers — all placeholders/
+  templates/config. Repo reusable by anyone with no edits.
+- **Multi-arch:** ARM64 + AMD64 images.
+- **Acceptance:** a fresh clone deploys on (a) single VM, (b) Docker Compose, (c) Kubernetes
+  with external managed Postgres/Redis/S3 — each by config only; a `grep`-audit for personal/
+  hardcoded values is clean; swapping storage provider is a config change.
+
+## M12 — Packaging & deployment targets
+
+**Goal:** first-class artifacts for every common deployment shape.
+**Complexity:** L · **Dependencies:** M11.
+
+- Generate & maintain: `.env.example`, `config.example.yaml`, `docker-compose.{example,
+  production,dev,cluster}.yml`, Helm chart (`values.yaml`) + Kubernetes manifests, systemd
+  unit files, reverse-proxy examples (Nginx, Traefik, Caddy, HAProxy, Apache).
+- Deployment targets validated: single/multi VM, Docker, Compose, K8s/Helm, LXC/Proxmox,
+  bare metal, major clouds (AWS/Azure/GCP/Oracle/DO/Hetzner/OVH/Linode/Vultr/Scaleway),
+  self-hosted/NAS.
+- **Acceptance:** each artifact boots a working stack; docs point to the right one per target.
+
+## M13 — Migration & import from other providers
+
+**Goal:** organizations can move in from existing mail platforms.
+**Complexity:** XL · **Dependencies:** M6 (mailbox/folder model), M8 (identity).
+
+- Importers for Google Workspace, Microsoft 365/Exchange, Fastmail, Zoho, Proton, Mailcow,
+  iRedMail, Zimbra, cPanel/Plesk: users, mailboxes (IMAP/MBOX/PST as applicable), calendars,
+  contacts, aliases.
+- **Acceptance:** a test import from at least one IMAP source reproduces folders + messages
+  + aliases into a new org.
+
+> **Docs (extends M9):** full OSS doc suite — README, CONTRIBUTING, SECURITY, SUPPORT,
+> CODE_OF_CONDUCT, ARCHITECTURE, INSTALL, DEPLOYMENT, CONFIGURATION, MIGRATION, UPGRADE,
+> BACKUP, RESTORE, HIGH_AVAILABILITY, KUBERNETES, DOCKER, API, SDK, CLI, THEMES, PLUGINS,
+> FAQ, TROUBLESHOOTING — plus install/upgrade/DR/scaling/monitoring/hardening/tuning guides.
+> **API parity (extends M9/M6):** everything in the UI is reachable via REST; ship OpenAPI,
+> SDK, CLI, webhooks, WS events, API versioning.
+
 ---
 
 ## Sequencing rationale
@@ -138,4 +241,6 @@ M2 first because every other milestone builds on a base that today is brute-forc
 untested. M3 before M4 so the session layer is built against honest contracts. M4 is the
 keystone — realtime and performance unlock the entire product. M5–M7 are the webmail
 product. M8 is orthogonal (enterprise identity) and can parallelize after M2 if a second
-track opens. M9 is continuous but gated as the release checklist.
+track opens. M9 is continuous but gated as the release checklist. M10 is the final
+release-grade polish/review pass — it runs continuously alongside feature work but is
+gated last, when there are real surfaces to hold to the premium bar.

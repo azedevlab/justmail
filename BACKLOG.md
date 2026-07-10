@@ -94,3 +94,63 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 | M9-3 | P2 | Docs: quickstart, backup/restore, upgrade, troubleshooting, rendered OpenAPI, arch diagram | M | — | todo |
 | M9-4 | P2 | OSS hygiene: issue/PR templates, CODEOWNERS, dependabot, CodeQL, CoC, labels, release notes | M | — | todo |
 | M9-5 | P1 | `RELEASE_READINESS.md` final audit; iterate until no Critical/High | M | all | todo |
+
+## M10 — Final polish: UI/UX, functionality, design system, a11y (release-grade)
+
+Treat as if shipping publicly tomorrow. No page is "done" until reviewed. No placeholder
+buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
+(Apple/Linear/Vercel/Stripe/Proton). Absorbs M6-7 and M9-1.
+
+| ID | P | Task | Effort | Deps | Status |
+|---|---|---|---|---|---|
+| M10-1 | P1 | Design tokens: full semantic color palette (light + OLED dark), type scale, spacing, radius, shadow, motion durations; zero hardcoded colors/values in both apps | L | — | todo |
+| M10-2 | P1 | Component redesign pass: buttons (all states), inputs (validation/focus/password/autocomplete), tables (virtualized/sortable/sticky/bulk/expandable), cards, dropdowns, dialogs/drawers/modals, tooltips, toasts, context menus | XL | M10-1 | todo |
+| M10-3 | P1 | Functionality audit per surface (webmail + admin): every page/button/icon/dropdown/dialog/form/search/filter/pagination/upload/download/shortcut/context-menu + empty/loading/error/success states; fix every dead/placeholder/TODO action | XL | — | todo |
+| M10-4 | P1 | Responsive pass: desktop/laptop/tablet/phone/ultra-wide; no overflow or breakage | L | M10-2 | todo |
+| M10-5 | P1 | Dark-mode pass: premium neutral tones, correct contrast/elevation/shadows/borders/hover/text (designed, not inverted) | M | M10-1 | todo |
+| M10-6 | P2 | Motion pass: subtle/fast/natural transitions (hover/page/dialog/sidebar/toast); remove gratuitous animation | M | M10-2 | todo |
+| M10-7 | P1 | Accessibility pass: keyboard nav, focus order + rings, ARIA, screen-reader, contrast, accessible forms/dialogs (feeds M9-1) | L | M10-2 | todo |
+| M10-8 | P1 | Config sweep: grep whole codebase for hardcoded values (limits, timeouts, retries, ports, worker counts, storage paths, colors, fonts, spacing, animation durations) → config/tokens | M | M10-1 | todo |
+| M10-9 | P2 | Enterprise feature-parity gap analysis vs Gmail/Outlook/Proton/Fastmail/Apple Mail/Mailcow/Exchange/Workspace → gap list → file + implement tasks | L | — | todo |
+| M10-10 | P1 | Self-review gate: score every page 1–10 in `RELEASE_READINESS.md` ("would Apple/Vercel/Linear/Stripe ship this?"); iterate until every surface ≥ 8/10 | M | M10-2..8 | todo |
+
+## M11 — Portability & provider abstraction (deploy-anywhere)
+
+| ID | P | Task | Effort | Deps | Status |
+|---|---|---|---|---|---|
+| M11-1 | P1 | Strongly-typed config system: sources (env/file/admin-UI/secrets/CLI/API), zod-validated at startup, fail-fast with meaningful errors, auto-generate sample config | M | — | todo |
+| M11-2 | P1 | Object-storage adapter completeness: extend `@justmail/storage` to R2/MinIO/B2/Ceph/Wasabi/DO Spaces/Scaleway; capability probe + health check | L | M5-1 | todo |
+| M11-3 | P1 | Database adapter: remote/HA Postgres, read-replicas, PgBouncer, connection-pool + failover config; no code coupling | M | — | todo |
+| M11-4 | P1 | Cache adapter: standalone/Sentinel/Cluster/Valkey/remote, TLS + auth + auto-reconnect | M | — | todo |
+| M11-5 | P2 | Search adapter interface: PG FTS default, pluggable OpenSearch/Elasticsearch/Meilisearch/Typesense | L | M6-3 | todo |
+| M11-6 | P2 | DNS provider plugins: Cloudflare/Route53/Google/Azure/DO/Hetzner/Namecheap/GoDaddy/Porkbun/manual behind one interface | L | — | todo |
+| M11-7 | P1 | Distributed mail storage support (NFS/SMB/CephFS/ZFS) via config; document Dovecot index/lock constraints | M | — | todo |
+| M11-8 | P2 | Admin storage-migration tool: move attachments between providers with no downtime + progress/health | M | M11-2 | todo |
+| M11-9 | P0 | No-personalization audit: grep out every hardcoded domain/host/IP/port/path/email/brand/secret/maintainer id → placeholders/config; repo reusable with zero edits | M | M11-1 | todo |
+| M11-10 | P1 | Multi-arch (ARM64 + AMD64) image builds in CI | S | — | todo |
+
+## M12 — Packaging & deployment targets
+
+| ID | P | Task | Effort | Deps | Status |
+|---|---|---|---|---|---|
+| M12-1 | P1 | Generate & maintain config artifacts: `.env.example`, `config.example.yaml`, compose variants (example/production/dev/cluster) | M | M11-1 | todo |
+| M12-2 | P1 | Helm chart (`values.yaml`) + Kubernetes manifests | L | M11-1 | todo |
+| M12-3 | P2 | systemd unit files + bare-metal install guide | S | M11-1 | todo |
+| M12-4 | P1 | Reverse-proxy examples: Nginx, Traefik, Caddy, HAProxy, Apache | S | — | todo |
+| M12-5 | P2 | Validate deployment targets: single/multi VM, Docker, Compose, K8s/Helm, LXC/Proxmox, bare metal, major clouds, NAS | L | M12-1..4 | todo |
+
+## M13 — Migration & import from other providers
+
+| ID | P | Task | Effort | Deps | Status |
+|---|---|---|---|---|---|
+| M13-1 | P1 | Generic IMAP importer (folders + messages + flags) with resumable progress | L | M6-1 | todo |
+| M13-2 | P2 | MBOX + PST import path | L | M13-1 | todo |
+| M13-3 | P2 | Provider presets: Google Workspace, Microsoft 365/Exchange, Fastmail, Zoho, Proton, Mailcow, iRedMail, Zimbra, cPanel/Plesk | XL | M13-1 | todo |
+| M13-4 | P2 | Import calendars + contacts + aliases | L | M7-1, M7-2 | todo |
+
+## Cross-cutting (extends M9)
+
+| ID | P | Task | Effort | Deps | Status |
+|---|---|---|---|---|---|
+| X-1 | P1 | Full OSS docs suite (README, CONTRIBUTING, SECURITY, ARCHITECTURE, INSTALL, DEPLOYMENT, CONFIGURATION, MIGRATION, UPGRADE, BACKUP/RESTORE, HA, KUBERNETES, DOCKER, API, SDK, CLI, THEMES, PLUGINS, FAQ, TROUBLESHOOTING) | L | — | todo |
+| X-2 | P1 | REST API parity for every UI action + OpenAPI, SDK, CLI, webhooks, WS events, API versioning | XL | — | todo |
