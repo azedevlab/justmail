@@ -15,6 +15,7 @@ import {
   Card,
   FormField,
   Input,
+  PasswordInput,
   Wordmark,
 } from "@justmail/shared-ui";
 import { api } from "@/lib/api";
@@ -132,8 +133,7 @@ export default function LoginPage() {
             />
           </FormField>
           <FormField label="Password">
-            <Input
-              type="password"
+            <PasswordInput
               autoComplete="current-password"
               {...f.register("password", { required: true })}
             />

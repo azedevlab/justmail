@@ -20,6 +20,7 @@ import {
   Empty,
   FormField,
   Input,
+  PasswordInput,
   Modal,
   PageBody,
   PageHeader,
@@ -254,8 +255,7 @@ function DisableTotpModal({
       }
     >
       <FormField label="Password">
-        <Input
-          type="password"
+        <PasswordInput
           autoComplete="current-password"
           autoFocus
           {...f.register("password", { required: true })}

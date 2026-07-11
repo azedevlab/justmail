@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { useState } from "react";
 import type { AcceptInviteRequest, InvitePreview } from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
-import { Button, Card, FormField, Input, Spinner, Badge } from "@justmail/shared-ui";
+import { Button, Card, FormField, Input, PasswordInput, Spinner, Badge } from "@justmail/shared-ui";
 import { api } from "@/lib/api";
 
 export default function InviteAcceptPage() {
@@ -73,8 +73,7 @@ export default function InviteAcceptPage() {
               preview.data.needs_signup ? "Password (min 12)" : "Confirm password"
             }
           >
-            <Input
-              type="password"
+            <PasswordInput
               {...f.register("password", { required: true, minLength: 12 })}
             />
           </FormField>
