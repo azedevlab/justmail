@@ -151,7 +151,7 @@ function StatCard({
 }) {
   return (
     <Card className="p-4">
-      <div className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-800)]">
+      <div className="text-[11px] font-medium text-[var(--color-neutral-800)]">
         {label}
       </div>
       {loading ? (

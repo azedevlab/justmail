@@ -471,7 +471,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
   return (
     <div>
-      <span className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+      <span className="text-[11px] font-medium text-[var(--color-neutral-900)]">
         {label}
       </span>
       <div className="mt-1 flex items-center gap-2">

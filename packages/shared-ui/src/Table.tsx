@@ -43,7 +43,7 @@ export function TH({
   return (
     <th
       className={cn(
-        "text-left px-3 py-2.5 text-[11px] uppercase tracking-[0.08em] font-medium",
+        "text-left px-3 py-2.5 text-xs font-medium",
         "text-[var(--color-neutral-800)] bg-[var(--color-surface-1)] sticky top-0 z-[1]",
         className,
       )}

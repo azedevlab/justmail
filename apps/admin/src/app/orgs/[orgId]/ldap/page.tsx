@@ -574,7 +574,7 @@ function ManageModal({
         )}
 
         <div>
-          <h3 className="text-xs uppercase tracking-wider text-[var(--color-neutral-900)] mb-2">
+          <h3 className="text-xs font-medium text-[var(--color-neutral-900)] mb-2">
             Recent runs
           </h3>
           {runs.isLoading && <SkeletonRows count={2} />}

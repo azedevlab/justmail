@@ -91,7 +91,7 @@ export function CommandPalette({
               <Command.Group
                 key={section}
                 heading={section}
-                className="text-[10px] uppercase tracking-wider text-[var(--color-neutral-700)] px-2 py-1"
+                className="text-[11px] font-medium text-[var(--color-neutral-700)] px-2 py-1"
               >
                 {group.map((item) => (
                   <Command.Item

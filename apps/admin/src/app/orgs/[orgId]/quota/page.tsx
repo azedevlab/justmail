@@ -122,7 +122,7 @@ export default function QuotaPage() {
                 )}
                 <dl className="grid grid-cols-3 gap-4 pt-2">
                   <div>
-                    <dt className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-800)]">
+                    <dt className="text-[11px] font-medium text-[var(--color-neutral-800)]">
                       Allocated
                     </dt>
                     <dd className="mt-0.5 text-sm font-medium">
@@ -130,7 +130,7 @@ export default function QuotaPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-800)]">
+                    <dt className="text-[11px] font-medium text-[var(--color-neutral-800)]">
                       Actually used
                     </dt>
                     <dd className="mt-0.5 text-sm font-medium">
@@ -138,7 +138,7 @@ export default function QuotaPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-800)]">
+                    <dt className="text-[11px] font-medium text-[var(--color-neutral-800)]">
                       Mailboxes
                     </dt>
                     <dd className="mt-0.5 text-sm font-medium">

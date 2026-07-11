@@ -32,7 +32,7 @@ export function Stat({
   return (
     <Card className={cn("p-4 flex flex-col gap-2", className)}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-[0.08em] text-[var(--color-neutral-800)] font-medium">
+        <span className="text-xs text-[var(--color-neutral-800)] font-medium">
           {label}
         </span>
         {icon && (

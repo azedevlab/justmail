@@ -700,7 +700,7 @@ export default function MailboxView() {
           aria-label="Folders"
         >
           <div className="flex-1 overflow-y-auto p-2">
-            <div className="px-2 pt-2 pb-1 text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-700)]">
+            <div className="px-2 pt-2 pb-1 text-[11px] font-medium text-[var(--color-neutral-700)]">
               Folders
             </div>
             {folders.isPending ? (
@@ -755,7 +755,7 @@ export default function MailboxView() {
             )}
           </div>
           <div className="shrink-0 border-t border-[var(--color-border)] p-3 space-y-1.5 text-[11px] text-[var(--color-neutral-700)]">
-            <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.08em] text-[var(--color-neutral-600)]">
+            <div className="px-1 pb-1 text-[10px] font-medium text-[var(--color-neutral-600)]">
               Shortcuts
             </div>
             <div className="flex items-center gap-2">
@@ -990,7 +990,7 @@ export default function MailboxView() {
               </div>
               {message.data.attachments.length > 0 && (
                 <div className="pt-4 border-t border-[var(--color-border)]">
-                  <div className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-800)] mb-2">
+                  <div className="text-[11px] font-medium text-[var(--color-neutral-800)] mb-2">
                     Attachments ({message.data.attachments.length})
                   </div>
                   <ul className="flex flex-wrap gap-3">
@@ -1229,7 +1229,7 @@ function RecipientMeta({
 function RecipientRow({ label, addrs }: { label: string; addrs: string[] }) {
   return (
     <div className="flex gap-2">
-      <dt className="w-6 shrink-0 text-[10px] uppercase tracking-wider text-[var(--color-neutral-700)] pt-0.5">
+      <dt className="w-6 shrink-0 text-[10px] font-medium text-[var(--color-neutral-700)] pt-0.5">
         {label}
       </dt>
       <dd className="flex flex-wrap gap-1">
@@ -3935,7 +3935,7 @@ function ComposePanel({
             </>
           )}
           <div>
-            <label className="mb-1 block text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+            <label className="mb-1.5 block text-[13px] font-medium text-[var(--color-neutral-1000)]">
               Subject
             </label>
             <Input

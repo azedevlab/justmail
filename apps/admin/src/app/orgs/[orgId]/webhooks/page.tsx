@@ -235,7 +235,7 @@ function CreateModal({ orgId, onClose }: { orgId: string; onClose: () => void })
           />
         </FormField>
         <div>
-          <span className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+          <span className="text-[11px] font-medium text-[var(--color-neutral-900)]">
             Events
           </span>
           <div className="grid grid-cols-2 gap-1 mt-1">

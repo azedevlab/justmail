@@ -133,7 +133,7 @@ function QueueStat({
   return (
     <Card>
       <CardBody>
-        <div className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+        <div className="text-[11px] font-medium text-[var(--color-neutral-900)]">
           {label}
         </div>
         <div

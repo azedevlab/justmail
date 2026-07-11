@@ -81,7 +81,7 @@ export default function DomainsPage() {
                     <TD>
                       <span className="mono">{d.name}</span>
                       {d.is_primary && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+                        <span className="ml-2 text-[10px] font-medium text-[var(--color-neutral-900)]">
                           primary
                         </span>
                       )}
