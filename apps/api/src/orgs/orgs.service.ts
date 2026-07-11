@@ -65,6 +65,28 @@ export class OrgsService {
     return role;
   }
 
+  /**
+   * Authorize a session for an org action. A mailbox-first webmail session has
+   * no `org_members` row but is legitimately bound to its mailbox's org; treat
+   * it as member-level access to exactly that org (enough to up/download and
+   * send its own attachments). Console/API-key principals fall back to the
+   * `org_members` check.
+   */
+  async requireOrgAccess(
+    principal: SessionPrincipal,
+    orgId: string,
+    minRole: OrgRole,
+  ): Promise<void> {
+    if (principal.mailboxId && principal.orgId === orgId) {
+      if (ROLE_RANK.member >= ROLE_RANK[minRole]) return;
+      throw new ForbiddenException({
+        title: "Insufficient role",
+        detail: `Requires ${minRole} or higher.`,
+      });
+    }
+    await this.requireRole(orgId, principal.userId, minRole);
+  }
+
   async listForUser(userId: string): Promise<Org[]> {
     const { rows } = await this.db.query(
       `SELECT o.id, o.name, o.slug, o.plan, o.created_at

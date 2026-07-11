@@ -92,7 +92,7 @@ export class AttachmentsController {
     @Param("orgId", ParseUUIDPipe) orgId: string,
     @Param("id", ParseUUIDPipe) id: string,
   ) {
-    return this.svc.get(orgId, id, principal.userId);
+    return this.svc.get(orgId, id, principal);
   }
 
   @Get("attachments/:id/download")
@@ -104,7 +104,7 @@ export class AttachmentsController {
     @Headers("if-none-match") ifNoneMatch: string | undefined,
     @Res() res: Response,
   ) {
-    const att = await this.svc.forDownload(orgId, id, principal.userId);
+    const att = await this.svc.forDownload(orgId, id, principal);
     const etag = `"${att.content_hash}"`;
     const size = att.size_bytes;
 
@@ -154,7 +154,7 @@ export class AttachmentsController {
     @Res() res: Response,
   ) {
     // Validates access and rejects quarantined attachments before serving.
-    await this.svc.forDownload(orgId, id, principal.userId);
+    await this.svc.forDownload(orgId, id, principal);
     const thumb = await this.thumbnails.open(orgId, id);
     if (!thumb) throw new NotFoundException({ title: "Thumbnail not ready" });
 

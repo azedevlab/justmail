@@ -650,7 +650,7 @@ export class WebmailService {
     // Resolve + virus-scan stored attachments before we enqueue anything.
     const stored = await this.resolveStoredAttachments(
       orgId,
-      principal.userId,
+      principal,
       input.attachment_ids ?? [],
     );
     const inlineBytes = (input.attachments ?? []).reduce(
@@ -928,9 +928,19 @@ export class WebmailService {
     const input = row.payload;
     const password = open(row.sealed_password);
     const creds: CachedCreds = { address: row.from_address, password };
+    // The scheduled row carries the originating mailbox binding, so rebuild the
+    // mailbox principal it was created under to authorize its stored attachments.
+    const principal: SessionPrincipal = {
+      userId: row.user_id ?? "",
+      email: row.from_address,
+      name: row.from_address,
+      sessionId: "",
+      mailboxId: row.mailbox_id,
+      orgId: row.org_id,
+    };
     const stored = await this.resolveStoredAttachments(
       row.org_id,
-      row.user_id ?? "",
+      principal,
       input.attachment_ids ?? [],
     );
     const transport = nodemailer.createTransport({
@@ -1062,12 +1072,12 @@ export class WebmailService {
    */
   private async resolveStoredAttachments(
     orgId: string,
-    userId: string,
+    principal: SessionPrincipal,
     ids: string[],
   ): Promise<StoredAttachment[]> {
     const out: StoredAttachment[] = [];
     for (const id of ids) {
-      const att = await this.attachments.get(orgId, id, userId);
+      const att = await this.attachments.get(orgId, id, principal);
       if (att.virus_status === "infected") {
         throw new BadRequestException({
           title: "Attachment blocked",

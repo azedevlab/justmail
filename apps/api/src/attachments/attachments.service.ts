@@ -62,7 +62,7 @@ export class AttachmentsService {
     req: CreateUploadRequest,
     ip?: string,
   ): Promise<Upload> {
-    await this.orgs.requireRole(orgId, principal.userId, "member");
+    await this.orgs.requireOrgAccess(principal, orgId, "member");
     const id = randomUUID();
     const key = `uploads/${id}`;
     const expiresAt = new Date(Date.now() + UPLOAD_TTL_MS);
@@ -104,7 +104,7 @@ export class AttachmentsService {
     orgId: string,
     uploadId: string,
   ): Promise<Upload> {
-    await this.orgs.requireRole(orgId, principal.userId, "member");
+    await this.orgs.requireOrgAccess(principal, orgId, "member");
     const { rows } = await this.db.query<UploadRow>(
       `SELECT id, org_id, filename, mime, size_bytes, uploaded_bytes,
               offset_bytes, storage_kind, storage_key, expires_at, created_at
@@ -122,7 +122,7 @@ export class AttachmentsService {
     offset: number,
     chunk: Buffer,
   ): Promise<Upload> {
-    await this.orgs.requireRole(orgId, principal.userId, "member");
+    await this.orgs.requireOrgAccess(principal, orgId, "member");
     const { rows } = await this.db.query<UploadRow>(
       `SELECT id, org_id, filename, mime, size_bytes, uploaded_bytes,
               offset_bytes, storage_kind, storage_key, expires_at, created_at
@@ -171,7 +171,7 @@ export class AttachmentsService {
     uploadId: string,
     ip?: string,
   ): Promise<Attachment> {
-    await this.orgs.requireRole(orgId, principal.userId, "member");
+    await this.orgs.requireOrgAccess(principal, orgId, "member");
     const { rows: uploads } = await this.db.query<UploadRow>(
       "SELECT * FROM uploads WHERE id = $1 AND org_id = $2",
       [uploadId, orgId],
@@ -263,8 +263,12 @@ export class AttachmentsService {
     return toAttachment(attachment);
   }
 
-  async get(orgId: string, id: string, userId: string): Promise<Attachment> {
-    await this.orgs.requireRole(orgId, userId, "viewer");
+  async get(
+    orgId: string,
+    id: string,
+    principal: SessionPrincipal,
+  ): Promise<Attachment> {
+    await this.orgs.requireOrgAccess(principal, orgId, "viewer");
     const { rows } = await this.db.query<AttachmentRow>(
       `SELECT id, filename, mime, size_bytes, content_hash, virus_status,
               preview_state, storage_kind, storage_key, created_at
@@ -290,9 +294,9 @@ export class AttachmentsService {
   async forDownload(
     orgId: string,
     id: string,
-    userId: string,
+    principal: SessionPrincipal,
   ): Promise<Attachment> {
-    const att = await this.get(orgId, id, userId);
+    const att = await this.get(orgId, id, principal);
     if (att.virus_status === "infected")
       throw new BadRequestException({ title: "Attachment quarantined" });
     return att;
