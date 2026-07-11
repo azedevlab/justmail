@@ -6,12 +6,14 @@ import {
 } from "@nestjs/common";
 import { generateKeyPairSync } from "node:crypto";
 import { chmod, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { resolveTxt } from "node:dns/promises";
 import path from "node:path";
 import { config } from "../config";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { seal, open } from "../common/secretbox";
+import { getDnsProvider } from "./dns-provider";
 import type { SessionPrincipal } from "../auth/auth.service";
 
 interface DkimRow {
@@ -170,6 +172,178 @@ export class DkimService {
       targetId: keyId,
       ip,
     });
+  }
+
+  /**
+   * Worker-driven automatic rotation. Two idempotent phases per tick:
+   *  1. Any domain whose active key is older than DKIM_ROTATION_DAYS and has no
+   *     successor gets a fresh key generated + its TXT published to Cloudflare,
+   *     stored as 'published' (signing stays on the old key).
+   *  2. A 'published' successor that has existed for DKIM_ROTATION_OVERLAP_HOURS
+   *     and whose TXT now resolves is promoted to 'active'; the prior key retires.
+   * Only runs when Cloudflare publishing is configured — a fresh selector must be
+   * publishable and verifiable before it can sign, or rotation would break DKIM.
+   */
+  async rotateDue(): Promise<{ started: string[]; promoted: string[] }> {
+    if (
+      !config.DKIM_ROTATION_ENABLED ||
+      config.DNS_PROVIDER !== "cloudflare" ||
+      !config.CLOUDFLARE_API_TOKEN
+    ) {
+      return { started: [], promoted: [] };
+    }
+    return {
+      started: await this.startDueRotations(),
+      promoted: await this.promoteReadyRotations(),
+    };
+  }
+
+  private async startDueRotations(): Promise<string[]> {
+    const { rows } = await this.db.query<{
+      domain_id: string;
+      domain_name: string;
+      org_id: string;
+      algorithm: "rsa2048" | "ed25519";
+    }>(
+      `SELECT k.domain_id, d.name AS domain_name, d.org_id, k.algorithm
+         FROM dkim_keys k JOIN domains d ON d.id = k.domain_id
+        WHERE k.status = 'active'
+          AND k.activated_at < now() - make_interval(days => $1)
+          AND NOT EXISTS (
+            SELECT 1 FROM dkim_keys s
+             WHERE s.domain_id = k.domain_id
+               AND s.status IN ('pending', 'published'))`,
+      [config.DKIM_ROTATION_DAYS],
+    );
+    const started: string[] = [];
+    for (const d of rows) {
+      try {
+        const selector = await this.freshSelector(d.domain_id);
+        const { publicKeyPem, publicKeyB64, privateKeyPem } = generate(d.algorithm);
+        const dnsContent = dnsRecordContent(d.algorithm, publicKeyB64);
+        const recordName = `${selector}._domainkey.${d.domain_name}`;
+        await this.db.tx(async (tx) => {
+          await tx.query(
+            `INSERT INTO dkim_keys (domain_id, selector, algorithm, private_key_enc, public_key, status)
+             VALUES ($1, $2, $3, $4, $5, 'published')`,
+            [d.domain_id, selector, d.algorithm, seal(privateKeyPem), publicKeyPem],
+          );
+          await tx.query(
+            `INSERT INTO dns_records (domain_id, purpose, type, name, content, ttl)
+             VALUES ($1, 'dkim', 'TXT', $2, $3, 3600)
+             ON CONFLICT (domain_id, purpose, name, type) DO UPDATE
+               SET content = EXCLUDED.content, updated_at = now()`,
+            [d.domain_id, recordName, dnsContent],
+          );
+        });
+        await this.publishTxt(d.domain_name, recordName, dnsContent);
+        await this.writeKeyFile(d.domain_name, selector, privateKeyPem);
+        await this.rebuildSelectorMap();
+        this.audit.log({
+          orgId: d.org_id,
+          actorType: "system",
+          action: "dkim.rotate.start",
+          targetType: "domain",
+          targetId: d.domain_id,
+          meta: { selector, algorithm: d.algorithm },
+        });
+        started.push(recordName);
+      } catch (err) {
+        this.logger.warn(`rotate start ${d.domain_name}: ${(err as Error).message}`);
+      }
+    }
+    return started;
+  }
+
+  private async promoteReadyRotations(): Promise<string[]> {
+    const { rows } = await this.db.query<{
+      id: string;
+      domain_id: string;
+      domain_name: string;
+      org_id: string;
+      selector: string;
+      public_key: string;
+    }>(
+      `SELECT k.id, k.domain_id, d.name AS domain_name, d.org_id, k.selector, k.public_key
+         FROM dkim_keys k JOIN domains d ON d.id = k.domain_id
+        WHERE k.status = 'published'
+          AND k.created_at < now() - make_interval(hours => $1)`,
+      [config.DKIM_ROTATION_OVERLAP_HOURS],
+    );
+    const promoted: string[] = [];
+    for (const k of rows) {
+      const recordName = `${k.selector}._domainkey.${k.domain_name}`;
+      if (!(await this.txtResolves(recordName, pemToDkimB64(k.public_key)))) {
+        this.logger.warn(`rotate promote deferred: ${recordName} not resolving yet`);
+        continue;
+      }
+      await this.db.tx(async (tx) => {
+        await tx.query(
+          `UPDATE dkim_keys SET status = 'active', activated_at = now() WHERE id = $1`,
+          [k.id],
+        );
+        await tx.query(
+          `UPDATE dkim_keys SET status = 'retired', retired_at = now()
+            WHERE domain_id = $1 AND id <> $2 AND status = 'active'`,
+          [k.domain_id, k.id],
+        );
+      });
+      await this.syncKeysToDisk();
+      this.audit.log({
+        orgId: k.org_id,
+        actorType: "system",
+        action: "dkim.rotate.promote",
+        targetType: "dkim_key",
+        targetId: k.id,
+        meta: { selector: k.selector },
+      });
+      promoted.push(recordName);
+    }
+    return promoted;
+  }
+
+  /** yyyymm selector, disambiguated with a -N suffix if already taken this month. */
+  private async freshSelector(domainId: string): Promise<string> {
+    const base = nextSelector();
+    const { rows } = await this.db.query<{ selector: string }>(
+      "SELECT selector FROM dkim_keys WHERE domain_id = $1 AND selector LIKE $2",
+      [domainId, `${base}%`],
+    );
+    const taken = new Set(rows.map((r) => r.selector));
+    if (!taken.has(base)) return base;
+    for (let i = 2; ; i++) {
+      const candidate = `${base}-${i}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+  }
+
+  private async publishTxt(domain: string, name: string, content: string) {
+    const provider = getDnsProvider();
+    const zoneId = await provider.findZoneId(domain);
+    if (!zoneId) throw new Error(`no ${provider.name} zone for ${domain}`);
+    const existing = await provider.listRecords(zoneId, name, "TXT");
+    const match = existing.find((e) => e.content === content) ?? existing[0];
+    const rec = await provider.upsertRecord(zoneId, match, {
+      type: "TXT",
+      name,
+      content,
+      ttl: 3600,
+    });
+    await this.db.query(
+      `UPDATE dns_records SET provider_record_id = $2, check_status = 'propagating',
+         updated_at = now()
+       WHERE type = 'TXT' AND name = $1`,
+      [name, rec.id],
+    );
+  }
+
+  private async txtResolves(name: string, expectedB64: string): Promise<boolean> {
+    try {
+      const txt = await resolveTxt(name);
+      return txt.map((c) => c.join("")).join(" ").includes(expectedB64);
+    } catch {
+      return false;
+    }
   }
 
   /** Rewrites all key files + selectors.map from DB. Used on startup + rotations. */

@@ -28,6 +28,7 @@ import {
   THead,
   Textarea,
   TR,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Plus, RefreshCw, Settings2 } from "lucide-react";
@@ -131,6 +132,7 @@ export default function LdapPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<LdapDirectory | null>(null);
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<LdapDirectory | null>(null);
@@ -219,8 +221,15 @@ export default function LdapPage() {
                       </button>
                       <button
                         className="text-xs text-[var(--color-bad)] hover:underline"
-                        onClick={() => {
-                          if (confirm(`Delete "${d.name}"?`)) remove.mutate(d.id);
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: `Delete "${d.name}"?`,
+                              tone: "danger",
+                              confirmLabel: "Delete",
+                            })
+                          )
+                            remove.mutate(d.id);
                         }}
                       >
                         Delete

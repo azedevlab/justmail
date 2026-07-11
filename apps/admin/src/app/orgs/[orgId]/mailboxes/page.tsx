@@ -30,6 +30,7 @@ import {
   TH,
   THead,
   TR,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Mail, MoreVertical, Plus, Search } from "lucide-react";
@@ -39,6 +40,7 @@ export default function MailboxesPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState("");
   const list = useQuery({
@@ -186,8 +188,15 @@ export default function MailboxesPage() {
                           </DropdownItem>
                           <DropdownItem
                             destructive
-                            onSelect={() => {
-                              if (confirm(`Delete ${m.address}?`)) del.mutate(m.id);
+                            onSelect={async () => {
+                              if (
+                                await confirm({
+                                  title: `Delete ${m.address}?`,
+                                  tone: "danger",
+                                  confirmLabel: "Delete",
+                                })
+                              )
+                                del.mutate(m.id);
                             }}
                           >
                             Delete

@@ -14,6 +14,7 @@ import { InternalModule } from "./internal/internal.module";
 import { DomainsModule } from "./domains/domains.module";
 import { MailboxesModule } from "./mailboxes/mailboxes.module";
 import { AliasesModule } from "./aliases/aliases.module";
+import { GroupsModule } from "./groups/groups.module";
 import { DkimModule } from "./dkim/dkim.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { QueueModule } from "./queue/queue.module";
@@ -61,6 +62,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     DomainsModule,
     MailboxesModule,
     AliasesModule,
+    GroupsModule,
     DkimModule,
     DashboardModule,
     QueueModule,

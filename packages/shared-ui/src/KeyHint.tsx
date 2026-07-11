@@ -41,7 +41,7 @@ export function KeyHint({ combo, className, ...rest }: KeyHintProps) {
       {parts.map((p, i) => (
         <span
           key={i}
-          className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded bg-white/5 border border-[var(--color-border)]"
+          className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded bg-[var(--hover-overlay)] border border-[var(--color-border)]"
         >
           {render(p)}
         </span>

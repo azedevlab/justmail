@@ -60,7 +60,7 @@ export class SieveService {
     orgId: string,
     mailboxId: string,
   ): Promise<SieveRule[]> {
-    await this.resolveMailbox(orgId, mailboxId, principal.userId);
+    await this.resolveMailbox(orgId, mailboxId, principal);
     return (await this.loadRules(mailboxId)).map(toRule);
   }
 
@@ -70,7 +70,7 @@ export class SieveService {
     mailboxId: string,
     input: SieveRuleRequest,
   ): Promise<SieveRule> {
-    const address = await this.resolveMailbox(orgId, mailboxId, principal.userId);
+    const address = await this.resolveMailbox(orgId, mailboxId, principal);
     const scriptSource = compileRule(input);
     const { rows } = await this.db.query<SieveRuleRow>(
       `INSERT INTO sieve_rules
@@ -111,7 +111,7 @@ export class SieveService {
     id: string,
     input: SieveRuleRequest,
   ): Promise<SieveRule> {
-    const address = await this.resolveMailbox(orgId, mailboxId, principal.userId);
+    const address = await this.resolveMailbox(orgId, mailboxId, principal);
     const scriptSource = compileRule(input);
     const { rows } = await this.db.query<SieveRuleRow>(
       `UPDATE sieve_rules
@@ -151,7 +151,7 @@ export class SieveService {
     mailboxId: string,
     id: string,
   ): Promise<void> {
-    const address = await this.resolveMailbox(orgId, mailboxId, principal.userId);
+    const address = await this.resolveMailbox(orgId, mailboxId, principal);
     const { rowCount } = await this.db.query(
       `DELETE FROM sieve_rules WHERE id = $1 AND mailbox_id = $2`,
       [id, mailboxId],
@@ -219,9 +219,18 @@ export class SieveService {
   private async resolveMailbox(
     orgId: string,
     mailboxId: string,
-    userId: string,
+    principal: SessionPrincipal,
   ): Promise<string> {
-    await this.orgs.requireRole(orgId, userId, "member");
+    if (principal.mailboxId) {
+      if (
+        principal.mailboxId !== mailboxId ||
+        (principal.orgId != null && principal.orgId !== orgId)
+      ) {
+        throw new ForbiddenException({ title: "Mailbox not accessible" });
+      }
+    } else {
+      await this.orgs.requireRole(orgId, principal.userId, "member");
+    }
     const { rows } = await this.db.query<{ address: string }>(
       `SELECT (m.local_part || '@' || d.name) AS address
          FROM mailboxes m JOIN domains d ON d.id = m.domain_id

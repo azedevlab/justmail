@@ -65,8 +65,10 @@ async function ensureCollection(user: string): Promise<void> {
     headers: headers(user, { "Content-Type": "application/xml; charset=utf-8" }),
     body,
   });
-  // 201 = created; 405 = already exists. Anything else is a real failure.
-  if (res.status !== 201 && res.status !== 405) {
+  // 201 = created; 405/409 = already exists. Radicale returns 409 Conflict
+  // (rather than the WebDAV-conventional 405) for an existing collection, so we
+  // must treat it as success and let the subsequent PROPFIND enumerate it.
+  if (res.status !== 201 && res.status !== 405 && res.status !== 409) {
     const text = await res.text().catch(() => "");
     throw new Error(`MKCOL failed (${res.status}): ${text.slice(0, 200)}`);
   }
