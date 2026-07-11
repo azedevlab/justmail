@@ -1,15 +1,5 @@
 import { cn } from "@justmail/shared-utils";
-
-const gradients = [
-  "linear-gradient(135deg, #0A84FF 0%, #0071E3 100%)",
-  "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)",
-  "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
-  "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
-  "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
-  "linear-gradient(135deg, #EC4899 0%, #BE185D 100%)",
-  "linear-gradient(135deg, #14B8A6 0%, #0F766E 100%)",
-  "linear-gradient(135deg, #F97316 0%, #C2410C 100%)",
-];
+import { avatarGradients as gradients } from "@justmail/design-tokens";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);

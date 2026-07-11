@@ -113,7 +113,7 @@ function PolicyCard({ orgId }: { orgId: string }) {
         {policy.data && (
           <>
             {!policy.data.master_configured && (
-              <div className="flex items-start gap-2 rounded-lg border border-[color:rgb(255_159_10/0.3)] bg-[color:rgb(255_159_10/0.08)] p-3 text-xs">
+              <div className="flex items-start gap-2 rounded-lg border border-[var(--color-warn-border)] bg-[var(--color-warn-surface)] p-3 text-xs">
                 <ShieldAlert
                   size={15}
                   className="mt-0.5 shrink-0 text-[var(--color-warn)]"

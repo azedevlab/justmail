@@ -310,7 +310,7 @@ function ProviderModal({
                 key={k}
                 className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm transition-colors ${
                   kind === k
-                    ? "border-[var(--color-accent)] bg-[color:rgb(10_132_255/0.08)]"
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                     : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]"
                 }`}
               >

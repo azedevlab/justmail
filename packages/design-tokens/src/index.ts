@@ -77,6 +77,19 @@ export const semantic = {
   info: "#3B82F6",
 } as const;
 
+// Deterministic identity palette for generated avatars (hash → index). Kept as
+// a token so the same colours back every avatar surface across apps.
+export const avatarGradients = [
+  "linear-gradient(135deg, #0A84FF 0%, #0071E3 100%)",
+  "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)",
+  "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
+  "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+  "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+  "linear-gradient(135deg, #EC4899 0%, #BE185D 100%)",
+  "linear-gradient(135deg, #14B8A6 0%, #0F766E 100%)",
+  "linear-gradient(135deg, #F97316 0%, #C2410C 100%)",
+] as const;
+
 // Darker semantic set for light backgrounds (AA contrast on white).
 export const semanticLight = {
   ok: "#15803D",
@@ -184,6 +197,7 @@ export type Tokens = {
   brand: typeof brand;
   semantic: typeof semantic;
   semanticLight: typeof semanticLight;
+  avatarGradients: typeof avatarGradients;
   elevationLight: typeof elevationLight;
   spacing: typeof spacing;
   radius: typeof radius;
@@ -203,6 +217,7 @@ export const tokens: Tokens = {
   brand,
   semantic,
   semanticLight,
+  avatarGradients,
   elevationLight,
   spacing,
   radius,

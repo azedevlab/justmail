@@ -19,10 +19,8 @@ export function Wordmark({
         style={{
           width: size,
           height: size,
-          background:
-            "linear-gradient(135deg, var(--color-brand-400) 0%, var(--color-brand-600) 100%)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 8px rgba(92,61,255,0.35)",
+          background: "var(--gradient-brand-mark)",
+          boxShadow: "var(--shadow-brand-mark)",
         }}
       >
         <svg

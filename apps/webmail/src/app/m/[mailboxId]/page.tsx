@@ -41,6 +41,7 @@ import type {
   CalendarEventRequest,
 } from "@justmail/contracts";
 import { ApiError, useHotkey } from "@justmail/shared-utils";
+import { brand, fontFamily, neutralLight } from "@justmail/design-tokens";
 import {
   AuroraBackdrop,
   Avatar,
@@ -626,7 +627,7 @@ export default function MailboxView() {
                 className={
                   "w-full flex items-center gap-2.5 h-8 px-2 rounded-[7px] text-[13px] transition-colors " +
                   (active
-                    ? "bg-[color:rgb(10_132_255/0.14)] text-[var(--color-neutral-1100)]"
+                    ? "bg-[var(--color-accent-muted)] text-[var(--color-neutral-1100)]"
                     : "text-[var(--color-neutral-1000)] hover:bg-[var(--hover-overlay)]")
                 }
               >
@@ -645,7 +646,7 @@ export default function MailboxView() {
                 </span>
                 <span className="flex-1 text-left truncate">{f.name}</span>
                 {f.unread > 0 && (
-                  <span className="text-[10px] font-medium tabular-nums px-1.5 py-px rounded-full bg-[color:rgb(10_132_255/0.16)] text-[var(--color-accent)]">
+                  <span className="text-[10px] font-medium tabular-nums px-1.5 py-px rounded-full bg-[var(--color-accent-strong)] text-[var(--color-accent)]">
                     {f.unread}
                   </span>
                 )}
@@ -760,7 +761,7 @@ export default function MailboxView() {
           aria-valuemax={560}
           onPointerDown={startResize}
           onKeyDown={resizeKey}
-          className="w-[5px] shrink-0 cursor-col-resize border-l border-[var(--color-border)] hover:bg-[color:rgb(10_132_255/0.25)] focus-visible:bg-[color:rgb(10_132_255/0.4)] focus-visible:outline-none transition-colors"
+          className="w-[5px] shrink-0 cursor-col-resize border-l border-[var(--color-border)] hover:bg-[var(--color-accent-border)] focus-visible:bg-[var(--color-accent-hover)] focus-visible:outline-none transition-colors"
         />
 
         {/* Read pane */}
@@ -837,7 +838,7 @@ export default function MailboxView() {
                   <Tooltip content="Delete (#)">
                     <button
                       onClick={() => setConfirmDelete(true)}
-                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[color:rgb(239_68_68/0.12)] hover:text-[var(--color-bad)] transition-colors"
+                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--color-bad-surface)] hover:text-[var(--color-bad)] transition-colors"
                       aria-label="Delete"
                     >
                       <Trash2 size={15} />
@@ -996,13 +997,15 @@ function ShortcutsSheet({ open, onClose }: { open: boolean; onClose: () => void 
 
 function HtmlViewer({ html }: { html: string }) {
   const [height, setHeight] = useState(480);
+  // Rendered inside an isolated srcDoc iframe, so app theme vars cannot cascade
+  // in — base readability styles are interpolated from the token constants.
   const doc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>
-body{margin:16px;font:14px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","Segoe UI",Roboto,sans-serif;color:#1a1d21;word-break:break-word}
+body{margin:16px;font:14px/1.6 ${fontFamily.sans};color:${neutralLight[10]};word-break:break-word}
 img{max-width:100%;height:auto}
-a{color:#0071e3}
+a{color:${brand[6]}}
 table{max-width:100%}
 pre{white-space:pre-wrap}
-blockquote{border-left:3px solid #d9dce1;margin:8px 0;padding:2px 12px;color:#5c6470}
+blockquote{border-left:3px solid ${neutralLight[3]};margin:8px 0;padding:2px 12px;color:${neutralLight[8]}}
 </style></head><body>${html}</body></html>`;
   // No allow-scripts: message JS never runs. allow-same-origin lets the
   // parent measure the rendered height; popups escape the sandbox so links open.
@@ -1139,7 +1142,7 @@ function MessageRow({
         "relative w-full text-left py-3 border-b border-[var(--color-border)] transition-colors " +
         (child ? "pl-9 pr-4 bg-[var(--color-surface-1)] " : "px-4 ") +
         (selected
-          ? "bg-[color:rgb(10_132_255/0.1)]"
+          ? "bg-[var(--color-accent-subtle)]"
           : "hover:bg-[var(--hover-overlay-faint)]")
       }
     >

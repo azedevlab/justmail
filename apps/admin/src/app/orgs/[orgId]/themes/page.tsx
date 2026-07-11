@@ -1,11 +1,14 @@
 "use client";
 import { Badge, Card, PageBody, PageHeader } from "@justmail/shared-ui";
+import { brand, surfaceDark, surfaceLight } from "@justmail/design-tokens";
 import { Check } from "lucide-react";
 
+// Swatches preview a theme's own palette, so they render literal token colours
+// (not the active-theme CSS vars) sourced from the design-token constants.
 const SWATCHES: { name: string; vars: [string, string, string]; active?: boolean }[] = [
-  { name: "Meridian Light", vars: ["#F7F8FA", "#FFFFFF", "#0071E3"], active: true },
-  { name: "Aurora Dark", vars: ["#0B0D12", "#13161C", "#3D9BFF"] },
-  { name: "Custom", vars: ["#F7F8FA", "#FFFFFF", "#0EA5E9"] },
+  { name: "Meridian Light", vars: [surfaceLight.bg, surfaceLight["1"], brand[6]], active: true },
+  { name: "Aurora Dark", vars: [surfaceDark["1"], surfaceDark["2"], brand[4]] },
+  { name: "Custom", vars: [surfaceLight.bg, surfaceLight["1"], brand[5]] },
 ];
 
 export default function ThemesPage() {

@@ -18,7 +18,7 @@ a:hover { color: var(--color-brand-400); }
 .container-p { max-width: 1120px; margin: 0 auto; padding: 0 2rem; }
 
 .gradient-text {
-  background: linear-gradient(135deg, var(--color-brand-400), #22c55e);
+  background: var(--gradient-brand);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

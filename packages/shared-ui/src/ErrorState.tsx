@@ -20,7 +20,7 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="border border-[color:rgb(239_68_68/0.3)] bg-[color:rgb(239_68_68/0.05)] rounded-xl p-6 text-center"
+      className="border border-[var(--color-bad-border)] bg-[var(--color-bad-surface)] rounded-xl p-6 text-center"
     >
       <AlertTriangle
         className="mx-auto mb-2 text-[var(--color-bad)]"
