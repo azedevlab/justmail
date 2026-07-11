@@ -3603,6 +3603,7 @@ function ComposePanel({
           Math.min(start + UPLOAD_CHUNK_BYTES, file.size),
         );
         let sent = false;
+        let lastFailure = "";
         for (let attempt = 0; attempt < UPLOAD_MAX_RETRIES && !sent; attempt++) {
           if (attempt > 0) {
             // Back off, then resync to the server's authoritative offset: a lost
@@ -3640,11 +3641,12 @@ function ComposePanel({
             sent = true;
           } catch (e) {
             if (controller.signal.aborted) throw e;
+            lastFailure = e instanceof Error ? e.message : String(e);
           }
         }
         if (!sent) {
           throw new Error(
-            `Couldn't upload ${file.name} — check your connection and try again.`,
+            `Couldn't upload ${file.name}${lastFailure ? ` (${lastFailure})` : ""} — check your connection and try again.`,
           );
         }
         patchItem(item.key, {

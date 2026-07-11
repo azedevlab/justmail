@@ -112,6 +112,12 @@ async function bootstrap(): Promise<void> {
   }
   app.enableShutdownHooks();
 
+  // Traefik's websecure readTimeout (10m) is the intended boundary for slow
+  // attachment-chunk uploads; Node's default 5-minute requestTimeout would cut
+  // them off first, so sit just above it. headersTimeout keeps its 60s guard.
+  const server = app.getHttpServer() as import("node:http").Server;
+  server.requestTimeout = 11 * 60 * 1000;
+
   await app.listen(config.PORT, "0.0.0.0");
   logger.log(`justmail api listening on :${config.PORT}`);
 }

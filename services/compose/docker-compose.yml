@@ -17,6 +17,12 @@ services:
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.websecure.address=:443
+      # Traefik v3 defaults readTimeout to 60s (v2: unlimited), which kills
+      # slow attachment-chunk uploads mid-body — the api logs "BadRequestError:
+      # request aborted" and the composer retries into the same wall. 10m lets
+      # a 4 MB chunk finish on even a very slow uplink while still bounding
+      # slow-request abuse.
+      - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=10m
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=justmail_edge
