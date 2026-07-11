@@ -13,7 +13,7 @@ import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { seal, open } from "../common/secretbox";
-import * as cf from "./cloudflare";
+import { getDnsProvider } from "./dns-provider";
 import type { SessionPrincipal } from "../auth/auth.service";
 
 interface DkimRow {
@@ -318,11 +318,12 @@ export class DkimService {
   }
 
   private async publishTxt(domain: string, name: string, content: string) {
-    const zoneId = await cf.findZoneId(domain);
-    if (!zoneId) throw new Error(`no Cloudflare zone for ${domain}`);
-    const existing = await cf.listRecords(zoneId, name, "TXT");
+    const provider = getDnsProvider();
+    const zoneId = await provider.findZoneId(domain);
+    if (!zoneId) throw new Error(`no ${provider.name} zone for ${domain}`);
+    const existing = await provider.listRecords(zoneId, name, "TXT");
     const match = existing.find((e) => e.content === content) ?? existing[0];
-    const rec = await cf.upsertRecord(zoneId, match, {
+    const rec = await provider.upsertRecord(zoneId, match, {
       type: "TXT",
       name,
       content,

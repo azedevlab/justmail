@@ -4,7 +4,7 @@ import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import type { SessionPrincipal } from "../auth/auth.service";
-import * as cf from "./cloudflare";
+import { getDnsProvider } from "./dns-provider";
 
 interface RecordRow {
   id: string;
@@ -42,11 +42,12 @@ export class DnsService {
       [domainId, orgId],
     );
     if (!dr[0]) throw new NotFoundException({ title: "Domain not found" });
-    const zoneId = await cf.findZoneId(dr[0].name);
+    const provider = getDnsProvider();
+    const zoneId = await provider.findZoneId(dr[0].name);
     if (!zoneId) {
       throw new NotFoundException({
-        title: "Cloudflare zone not found",
-        detail: `No zone for ${dr[0].name}. Add it to Cloudflare first.`,
+        title: "DNS zone not found",
+        detail: `No ${provider.name} zone for ${dr[0].name}. Add it to your DNS provider first.`,
       });
     }
 
@@ -58,10 +59,10 @@ export class DnsService {
     const applied: Array<{ purpose: string; action: string }> = [];
     for (const r of records) {
       try {
-        const existing = await cf.listRecords(zoneId, r.name, r.type);
+        const existing = await provider.listRecords(zoneId, r.name, r.type);
         const match = existing.find((e) => e.content === r.content);
         const first = existing[0];
-        const cfRec = await cf.upsertRecord(zoneId, match ?? first, {
+        const cfRec = await provider.upsertRecord(zoneId, match ?? first, {
           type: r.type,
           name: r.name,
           content: r.content,
