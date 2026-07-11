@@ -47,10 +47,10 @@ export class SettingsService {
   }
 
   /**
-   * Effective attachment limits for an org: stored overrides fall back to the
-   * global config defaults. Read-path only — no role check (called internally
-   * from the send path). Values are clamped positive and never exceed the
-   * global ceiling so an org cannot raise limits above what the deploy allows.
+   * Effective attachment limits for an org. An admin-set override is
+   * authoritative; the global config values are only the default used when no
+   * override is stored. Read-path only — no role check (called internally from
+   * the send path). Non-positive/invalid overrides fall back to the default.
    */
   async attachmentLimits(orgId: string): Promise<AttachmentLimits> {
     const { rows } = await this.db.query<{ value: unknown }>(
@@ -60,14 +60,14 @@ export class SettingsService {
     const v = rows[0]?.value as
       | { max_total_bytes?: number; max_count?: number }
       | undefined;
-    const clamp = (n: number | undefined, ceiling: number) =>
-      n && Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), ceiling) : ceiling;
+    const override = (n: number | undefined, fallback: number) =>
+      n && Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
     return {
-      maxTotalBytes: clamp(
+      maxTotalBytes: override(
         v?.max_total_bytes,
         config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES,
       ),
-      maxCount: clamp(v?.max_count, config.WEBMAIL_ATTACHMENT_MAX_COUNT),
+      maxCount: override(v?.max_count, config.WEBMAIL_ATTACHMENT_MAX_COUNT),
     };
   }
 

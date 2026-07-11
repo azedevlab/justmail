@@ -21,6 +21,7 @@ import {
   TH,
   THead,
   TR,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Plus } from "lucide-react";
@@ -30,6 +31,7 @@ export default function AliasesPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const list = useQuery({
     queryKey: ["aliases", orgId],
@@ -89,8 +91,14 @@ export default function AliasesPage() {
                     <TD className="text-right">
                       <button
                         className="text-xs text-[var(--color-bad)] hover:underline"
-                        onClick={() => {
-                          if (confirm(`Delete alias ${a.address}?`))
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: `Delete alias ${a.address}?`,
+                              tone: "danger",
+                              confirmLabel: "Delete",
+                            })
+                          )
                             del.mutate(a.id);
                         }}
                       >

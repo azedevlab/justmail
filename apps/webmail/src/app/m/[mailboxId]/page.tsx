@@ -66,6 +66,7 @@ import {
   TabsTrigger,
   ThemeToggle,
   Tooltip,
+  usePrompt,
   useToast,
   Wordmark,
   type ToastItem,
@@ -1465,13 +1466,20 @@ function RichTextEditor({
   onInput: () => void;
   toolbarExtra?: ReactNode;
 }) {
+  const prompt = usePrompt();
   const exec = (command: string, value?: string) => {
     editorRef.current?.focus();
     document.execCommand(command, false, value);
     onInput();
   };
-  const addLink = () => {
-    const url = window.prompt("Link URL");
+  const addLink = async () => {
+    const url = await prompt({
+      title: "Insert link",
+      label: "Link URL",
+      placeholder: "https://example.com",
+      inputType: "url",
+      confirmLabel: "Insert",
+    });
     if (url) exec("createLink", url);
   };
   const btn = (
@@ -2273,7 +2281,7 @@ function RecipientField({
         className={
           unstyled
             ? "flex flex-wrap items-center gap-1.5"
-            : "flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2 py-1.5 focus-within:border-[var(--color-accent)] transition-colors"
+            : "flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent-ring)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]"
         }
       >
         {emails.map((addr, i) => (
@@ -2292,7 +2300,7 @@ function RecipientField({
           </span>
         ))}
         <input
-          className="flex-1 min-w-[8rem] bg-transparent outline-none text-[13px] font-mono py-0.5"
+          className="flex-1 min-w-[8rem] bg-transparent outline-none text-[13px] py-0.5"
           aria-label={ariaLabel}
           autoFocus={autoFocus}
           placeholder={emails.length === 0 ? placeholder : undefined}

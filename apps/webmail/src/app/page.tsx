@@ -27,6 +27,8 @@ export default function WebmailIndex() {
 
   useEffect(() => {
     if (me.data === null) router.replace("/login");
+    // Mailbox-first session: bound to a single inbox — skip the picker.
+    else if (me.data?.mailbox_id) router.replace(`/m/${me.data.mailbox_id}`);
   }, [me.data, router]);
 
   const orgId = me.data?.orgs[0]?.id;

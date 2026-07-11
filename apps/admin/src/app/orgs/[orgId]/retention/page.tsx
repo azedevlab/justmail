@@ -28,6 +28,7 @@ import {
   THead,
   TR,
   Textarea,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Download, Lock, ShieldAlert } from "lucide-react";
@@ -181,6 +182,7 @@ function HoldsCard({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const holds = useQuery({
     queryKey: ["legal-holds", orgId],
     queryFn: () => api.get<LegalHold[]>(`/v1/orgs/${orgId}/retention/holds`),
@@ -293,8 +295,14 @@ function HoldsCard({
                         variant="ghost"
                         size="sm"
                         loading={release.isPending}
-                        onClick={() => {
-                          if (confirm("Release this legal hold?"))
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: "Release this legal hold?",
+                              tone: "danger",
+                              confirmLabel: "Release",
+                            })
+                          )
                             release.mutate(h.id);
                         }}
                       >

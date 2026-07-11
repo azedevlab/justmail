@@ -137,7 +137,7 @@ export class WebmailService {
     mailboxId: string,
     password: string,
   ): Promise<void> {
-    const mb = await this.mailboxFor(orgId, mailboxId, principal.userId);
+    const mb = await this.mailboxFor(orgId, mailboxId, principal);
     // Try a lightweight IMAP login to confirm the password works.
     const client = this.imap(mb.address, password);
     try {
@@ -723,7 +723,7 @@ export class WebmailService {
     mailboxId: string,
     id: string,
   ): Promise<void> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const { rowCount } = await this.db.query(
       `UPDATE scheduled_sends
          SET status = 'cancelled', updated_at = now()
@@ -753,7 +753,7 @@ export class WebmailService {
     orgId: string,
     mailboxId: string,
   ): Promise<ScheduledSend[]> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const { rows } = await this.db.query<{
       id: string;
       payload: ComposeRequest;
@@ -782,7 +782,7 @@ export class WebmailService {
     mailboxId: string,
     id: string,
   ): Promise<SendStatus> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const { rows } = await this.db.query<{
       id: string;
       status: SendStatus["status"];
@@ -1083,7 +1083,7 @@ export class WebmailService {
     orgId: string,
     mailboxId: string,
   ): Promise<CachedCreds> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const creds = await this.credStore.get(principal.sessionId, mailboxId);
     if (!creds) {
       throw new ForbiddenException({
@@ -1097,9 +1097,19 @@ export class WebmailService {
   private async mailboxFor(
     orgId: string,
     mailboxId: string,
-    userId: string,
+    principal: SessionPrincipal,
   ): Promise<MailboxAccess> {
-    await this.orgs.requireRole(orgId, userId, "member");
+    if (principal.mailboxId) {
+      // Mailbox-bound session: authorized for exactly its own mailbox/org.
+      if (
+        principal.mailboxId !== mailboxId ||
+        (principal.orgId != null && principal.orgId !== orgId)
+      ) {
+        throw new ForbiddenException({ title: "Mailbox not accessible" });
+      }
+    } else {
+      await this.orgs.requireRole(orgId, principal.userId, "member");
+    }
     const { rows } = await this.db.query<{
       id: string;
       address: string;

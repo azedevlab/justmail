@@ -31,6 +31,7 @@ import {
   TH,
   THead,
   TR,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Plus } from "lucide-react";
@@ -40,6 +41,7 @@ export default function TeamPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [showInvite, setShowInvite] = useState(false);
 
   const members = useQuery({
@@ -142,8 +144,14 @@ export default function TeamPage() {
                       <TD className="text-right">
                         <button
                           className="text-xs text-[var(--color-bad)] hover:underline"
-                          onClick={() => {
-                            if (confirm(`Remove ${m.email}?`))
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                title: `Remove ${m.email}?`,
+                                tone: "danger",
+                                confirmLabel: "Remove",
+                              })
+                            )
                               removeMember.mutate(m.user_id);
                           }}
                         >
