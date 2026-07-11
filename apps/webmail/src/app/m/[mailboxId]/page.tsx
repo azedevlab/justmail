@@ -77,11 +77,13 @@ import {
   Bell,
   Bold,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   Clock,
   Download,
   Edit3,
   FileText,
+  Image as ImageIcon,
   Filter,
   Folder as FolderIcon,
   Forward,
@@ -856,11 +858,11 @@ export default function MailboxView() {
                   <div className="text-[13px] font-medium truncate">
                     {message.data.from}
                   </div>
-                  <div className="text-xs text-[var(--color-neutral-800)] truncate">
-                    to {message.data.to}
-                    {message.data.date &&
-                      ` · ${new Date(message.data.date).toLocaleString()}`}
-                  </div>
+                  <RecipientMeta
+                    to={message.data.to}
+                    cc={message.data.cc}
+                    date={message.data.date}
+                  />
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <Tooltip content="Star (s)">
@@ -1091,6 +1093,89 @@ blockquote{border-left:3px solid ${neutralLight[3]};margin:8px 0;padding:2px 12p
         }
       }}
     />
+  );
+}
+
+// Split a header address string ("Alice <a@x>, b@y") into display parts.
+function parseAddresses(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// Recipient summary under the sender line. Collapses long To/Cc lists behind a
+// toggle so the header stays compact but full recipients are one click away.
+function RecipientMeta({
+  to,
+  cc,
+  date,
+}: {
+  to: string;
+  cc: string;
+  date?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const toList = parseAddresses(to);
+  const ccList = parseAddresses(cc);
+  const extra = Math.max(0, toList.length - 1) + ccList.length;
+
+  return (
+    <div className="text-xs text-[var(--color-neutral-800)]">
+      <button
+        type="button"
+        onClick={() => extra > 0 && setOpen((o) => !o)}
+        className={
+          "flex items-center gap-1 max-w-full text-left " +
+          (extra > 0 ? "hover:text-[var(--color-neutral-1000)] cursor-pointer" : "cursor-default")
+        }
+        aria-expanded={extra > 0 ? open : undefined}
+      >
+        <span className="truncate">
+          to {toList[0] ?? to}
+          {extra > 0 && !open && (
+            <span className="text-[var(--color-neutral-700)]"> +{extra}</span>
+          )}
+        </span>
+        {date && (
+          <span className="shrink-0 text-[var(--color-neutral-700)]">
+            · {new Date(date).toLocaleString()}
+          </span>
+        )}
+        {extra > 0 &&
+          (open ? (
+            <ChevronDown size={12} className="shrink-0" />
+          ) : (
+            <ChevronRight size={12} className="shrink-0" />
+          ))}
+      </button>
+      {open && (
+        <dl className="mt-1.5 space-y-1 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] px-2.5 py-2">
+          <RecipientRow label="To" addrs={toList} />
+          {ccList.length > 0 && <RecipientRow label="Cc" addrs={ccList} />}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function RecipientRow({ label, addrs }: { label: string; addrs: string[] }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-6 shrink-0 text-[10px] uppercase tracking-wider text-[var(--color-neutral-700)] pt-0.5">
+        {label}
+      </dt>
+      <dd className="flex flex-wrap gap-1">
+        {addrs.map((a, i) => (
+          <span
+            key={`${a}-${i}`}
+            className="rounded-md bg-[var(--color-surface-1)] border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] text-[var(--color-neutral-1000)]"
+          >
+            {a}
+          </span>
+        ))}
+      </dd>
+    </div>
   );
 }
 
@@ -2954,6 +3039,53 @@ function EventForm({
   );
 }
 
+// Picked-file preview in the composer: image files get an inline thumbnail so
+// the sender can confirm what they are attaching before it uploads.
+function ComposeAttachment({
+  file,
+  onRemove,
+}: {
+  file: File;
+  onRemove: () => void;
+}) {
+  const isImage = file.type.startsWith("image/") && file.size < 5_000_000;
+  const [thumb, setThumb] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isImage) return;
+    const obj = URL.createObjectURL(file);
+    setThumb(obj);
+    return () => URL.revokeObjectURL(obj);
+  }, [file, isImage]);
+
+  return (
+    <li className="group relative flex items-center gap-2 pl-1.5 pr-1 py-1 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs">
+      {thumb ? (
+        <img
+          src={thumb}
+          alt={file.name}
+          className="w-7 h-7 rounded object-cover shrink-0"
+        />
+      ) : (
+        <span className="w-7 h-7 rounded grid place-items-center bg-[var(--color-surface-1)] text-[var(--color-neutral-700)] shrink-0">
+          {isImage ? <ImageIcon size={13} /> : <Paperclip size={13} />}
+        </span>
+      )}
+      <span className="min-w-0">
+        <span className="block max-w-40 truncate font-medium" title={file.name}>
+          {file.name}
+        </span>
+        <span className="block text-[10px] text-[var(--color-neutral-800)]">
+          {fmtSize(file.size)}
+        </span>
+      </span>
+      <IconButton size="sm" aria-label={`Remove ${file.name}`} onClick={onRemove}>
+        <X size={12} />
+      </IconButton>
+    </li>
+  );
+}
+
 function ComposePanel({
   orgId,
   mailboxId,
@@ -3480,30 +3612,13 @@ function ComposePanel({
             {files.length > 0 && (
               <ul className="flex flex-wrap gap-2">
                 {files.map((file, i) => (
-                  <li
+                  <ComposeAttachment
                     key={`${file.name}-${i}`}
-                    className="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs"
-                  >
-                    <Paperclip
-                      size={11}
-                      className="text-[var(--color-neutral-800)] shrink-0"
-                    />
-                    <span className="max-w-40 truncate font-medium">
-                      {file.name}
-                    </span>
-                    <span className="text-[var(--color-neutral-800)]">
-                      {fmtSize(file.size)}
-                    </span>
-                    <IconButton
-                      size="sm"
-                      aria-label={`Remove ${file.name}`}
-                      onClick={() =>
-                        setFiles((p) => p.filter((_, j) => j !== i))
-                      }
-                    >
-                      <X size={12} />
-                    </IconButton>
-                  </li>
+                    file={file}
+                    onRemove={() =>
+                      setFiles((p) => p.filter((_, j) => j !== i))
+                    }
+                  />
                 ))}
               </ul>
             )}
