@@ -29,15 +29,16 @@ export class SettingsService {
 
   async list(orgId: string, userId: string, prefix?: string) {
     await this.orgs.requireRole(orgId, userId, "viewer");
-    const args: unknown[] = [];
-    let where = "";
-    if (prefix) {
-      args.push(`${prefix}%`);
-      where = "WHERE key LIKE $1";
-    }
+    // Hard-scope to this org's own namespace. Without it, an absent prefix would
+    // select the entire table — leaking other tenants' rows and, critically, the
+    // `webmail.session:*` sealed-credential blobs the fallback cred store writes
+    // here. A caller-supplied prefix may only narrow within the org scope.
+    const orgScope = `org:${orgId}.`;
+    const like =
+      prefix && prefix.startsWith(orgScope) ? prefix : orgScope;
     const { rows } = await this.db.query(
-      `SELECT key, value, updated_at FROM settings ${where} ORDER BY key`,
-      args,
+      `SELECT key, value, updated_at FROM settings WHERE key LIKE $1 ORDER BY key`,
+      [`${like}%`],
     );
     return rows.map((r) => ({
       key: r.key as string,

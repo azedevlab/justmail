@@ -15,11 +15,6 @@ import {
   PageBody,
   PageHeader,
   SkeletonRows,
-  Table,
-  TD,
-  TH,
-  THead,
-  TR,
   useToast,
 } from "@justmail/shared-ui";
 import { api } from "@/lib/api";
@@ -37,54 +32,89 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Platform preferences. Values live in the database — never in a config file."
+        description="Preferences for this organization. Values are stored in the database, not in config files."
       />
       <PageBody>
         <AttachmentLimitsCard orgId={orgId} rows={list.data} />
-        <Card>
-          <CardHeader>
-            <CardTitle>Stored values</CardTitle>
-          </CardHeader>
-          <CardBody>
-            {list.isLoading && <SkeletonRows count={3} />}
-            {list.data && list.data.length === 0 && (
-              <Empty
-                title="No settings stored yet"
-                description="Modules register defaults as they land."
-              />
-            )}
-            {list.data && list.data.length > 0 && (
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Key</TH>
-                    <TH>Value</TH>
-                    <TH>Updated</TH>
-                  </TR>
-                </THead>
-                <tbody>
-                  {list.data.map((r) => (
-                    <TR key={r.key}>
-                      <TD>
-                        <span className="mono text-xs">{r.key}</span>
-                      </TD>
-                      <TD>
-                        <span className="mono text-xs">
-                          {JSON.stringify(r.value)}
-                        </span>
-                      </TD>
-                      <TD className="text-xs">
-                        {new Date(r.updated_at).toLocaleString()}
-                      </TD>
-                    </TR>
-                  ))}
-                </tbody>
-              </Table>
-            )}
-          </CardBody>
-        </Card>
+        <AdvancedSettingsCard
+          orgId={orgId}
+          rows={list.data}
+          loading={list.isLoading}
+        />
       </PageBody>
     </>
+  );
+}
+
+// Turn a namespaced settings key into a readable label, dropping the
+// `org:{orgId}.` prefix: `security.country_block` → "Security · Country block".
+function humanizeKey(key: string, orgId: string): string {
+  const prefix = `org:${orgId}.`;
+  const suffix = key.startsWith(prefix) ? key.slice(prefix.length) : key;
+  return suffix
+    .split(".")
+    .map((seg) =>
+      seg
+        .split(/[_-]/)
+        .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+        .join(" "),
+    )
+    .join(" · ");
+}
+
+function AdvancedSettingsCard({
+  orgId,
+  rows,
+  loading,
+}: {
+  orgId: string;
+  rows: SettingRow[] | undefined;
+  loading: boolean;
+}) {
+  const items = (rows ?? []).filter(
+    (r) => r.key !== ATTACHMENT_LIMITS_KEY(orgId),
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Advanced</CardTitle>
+      </CardHeader>
+      <CardBody>
+        <p className="mb-4 text-xs text-[var(--color-neutral-700)]">
+          Low-level values other modules store for this organization. Most have a
+          dedicated page — this is a read-only reference.
+        </p>
+        {loading && <SkeletonRows count={2} />}
+        {!loading && items.length === 0 && (
+          <Empty
+            title="Nothing stored yet"
+            description="Modules record values here as you configure them."
+          />
+        )}
+        {items.length > 0 && (
+          <ul className="divide-y divide-[var(--color-neutral-200)]">
+            {items.map((r) => (
+              <li
+                key={r.key}
+                className="flex items-start justify-between gap-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm text-[var(--color-neutral-1100)]">
+                    {humanizeKey(r.key, orgId)}
+                  </div>
+                  <div className="mt-0.5 text-xs text-[var(--color-neutral-600)]">
+                    Updated {new Date(r.updated_at).toLocaleString()}
+                  </div>
+                </div>
+                <code className="mono max-w-[55%] truncate rounded-md bg-[var(--color-neutral-100)] px-2 py-1 text-xs text-[var(--color-neutral-900)]">
+                  {JSON.stringify(r.value)}
+                </code>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
