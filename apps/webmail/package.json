@@ -19,12 +19,12 @@
     "@simplewebauthn/browser": "^13.3.0",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-virtual": "^3.10.0",
-    "lucide-react": "^0.469.0",
+    "lucide-react": "^1.24.0",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.0",
-    "zod": "^3.25.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
