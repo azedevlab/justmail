@@ -16,6 +16,7 @@ import {
   Card,
   FormField,
   Input,
+  PasswordInput,
   Spinner,
   Wordmark,
 } from "@justmail/shared-ui";
@@ -169,7 +170,7 @@ function LoginForm({ onDone }: { onDone: () => void }) {
         <Input type="email" autoComplete="email" {...f.register("email", { required: true })} />
       </FormField>
       <FormField label="Password">
-        <Input type="password" autoComplete="current-password" {...f.register("password", { required: true })} />
+        <PasswordInput autoComplete="current-password" {...f.register("password", { required: true })} />
       </FormField>
       {needsTotp && (
         <FormField label="2FA code">
@@ -242,7 +243,7 @@ function BootstrapForm({ onDone }: { onDone: () => void }) {
         <Input type="email" autoComplete="email" {...f.register("email", { required: true })} />
       </FormField>
       <FormField label="Password (min 12)">
-        <Input type="password" autoComplete="new-password" {...f.register("password", { required: true, minLength: 12 })} />
+        <PasswordInput autoComplete="new-password" {...f.register("password", { required: true, minLength: 12 })} />
       </FormField>
       <FormField label="Organization name">
         <Input {...f.register("org_name", { required: true })} />
