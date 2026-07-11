@@ -1463,9 +1463,12 @@ function UnlockScreen({
   );
 }
 
-// Chunk size for tus uploads. Kept under the API's 10 MB raw-body cap so a
-// single chunk never trips the parser limit.
-const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+// Chunk size for tus uploads. Kept well under the API's 10 MB raw-body cap so a
+// single chunk never trips the parser limit, and small enough that a flaky
+// uplink retries a modest amount of work rather than the whole file.
+const UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
+// Per-chunk retry budget before an upload is reported as failed.
+const UPLOAD_MAX_RETRIES = 4;
 
 // Idle delay before a compose draft is autosaved to \Drafts.
 const DRAFT_AUTOSAVE_MS = 2500;
@@ -3366,23 +3369,57 @@ function ComposePanel({
       mime: file.type || "application/octet-stream",
       size_bytes: file.size,
     });
+    const chunksUrl = `${API_BASE}/v1/orgs/${orgId}/uploads/${upload.id}/chunks`;
     let offset = 0;
     while (offset < file.size) {
-      const end = Math.min(offset + UPLOAD_CHUNK_BYTES, file.size);
-      const res = await fetch(
-        `${API_BASE}/v1/orgs/${orgId}/uploads/${upload.id}/chunks`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "content-type": "application/offset+octet-stream",
-            "upload-offset": String(offset),
-          },
-          body: file.slice(offset, end),
-        },
+      const start = offset;
+      const slice = file.slice(
+        start,
+        Math.min(start + UPLOAD_CHUNK_BYTES, file.size),
       );
-      if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
-      offset = end;
+      let sent = false;
+      for (let attempt = 0; attempt < UPLOAD_MAX_RETRIES && !sent; attempt++) {
+        if (attempt > 0) {
+          // Back off, then resync to the server's authoritative offset: a lost
+          // response may already have committed this chunk, advancing the
+          // server past our local position.
+          await new Promise((r) => setTimeout(r, 400 * attempt));
+          try {
+            const status = await api.get<Upload>(
+              `/v1/orgs/${orgId}/uploads/${upload.id}`,
+            );
+            offset = status.offset_bytes;
+            if (offset >= start + slice.size) {
+              sent = true;
+              break;
+            }
+          } catch {
+            // Status probe failed too; retry the chunk from our local offset.
+          }
+        }
+        try {
+          const res = await fetch(chunksUrl, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "content-type": "application/offset+octet-stream",
+              "upload-offset": String(offset),
+            },
+            body: slice,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const next = (await res.json()) as Upload;
+          offset = next.offset_bytes;
+          sent = true;
+        } catch {
+          // Network error or non-2xx; loop retries after a resync.
+        }
+      }
+      if (!sent) {
+        throw new Error(
+          `Couldn't upload ${file.name} — check your connection and try again.`,
+        );
+      }
     }
     const att = await api.post<Attachment>(
       `/v1/orgs/${orgId}/uploads/${upload.id}/finalise`,
