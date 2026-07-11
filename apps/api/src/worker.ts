@@ -14,17 +14,15 @@ import { RetentionService } from "./retention/retention.service";
 import { BackupEngine } from "./backups/backup-engine.service";
 import { config } from "./config";
 
-// Ticks: webhook deliveries every 5s, queue snapshot every 60s, DNSBL check
-// every 30 minutes, expired-credential sweep every 10 minutes, LDAP directory
-// sync every minute (each directory honours its own interval), retention
-// pruning hourly, backup due-check on its own cadence. Scheduled/undo send
-// dispatch polls on its own cadence.
-const WEBHOOK_MS = 5_000;
-const QUEUE_MS = 60_000;
-const DNSBL_MS = 30 * 60_000;
-const CRED_SWEEP_MS = 10 * 60_000;
-const LDAP_MS = 60_000;
-const RETENTION_MS = 60 * 60_000;
+// Ticks: each background loop no-ops when nothing is due, so its cadence bounds
+// latency, not load. All intervals are config-driven (seconds → ms). LDAP polls
+// frequently but each directory honours its own configured interval.
+const WEBHOOK_MS = config.WEBHOOK_POLL_SECONDS * 1_000;
+const QUEUE_MS = config.QUEUE_SNAPSHOT_POLL_SECONDS * 1_000;
+const DNSBL_MS = config.DNSBL_POLL_SECONDS * 1_000;
+const CRED_SWEEP_MS = config.CRED_SWEEP_POLL_SECONDS * 1_000;
+const LDAP_MS = config.LDAP_POLL_SECONDS * 1_000;
+const RETENTION_MS = config.RETENTION_POLL_SECONDS * 1_000;
 const BACKUP_MS = config.BACKUP_POLL_SECONDS * 1_000;
 const SEND_MS = config.WEBMAIL_SEND_POLL_SECONDS * 1_000;
 
