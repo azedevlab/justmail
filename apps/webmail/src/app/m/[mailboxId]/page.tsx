@@ -1561,6 +1561,17 @@ function RichTextEditor({
   toolbarExtra?: ReactNode;
 }) {
   const prompt = usePrompt();
+  // Seed the contentEditable imperatively so React never re-commits its
+  // children on re-render — using dangerouslySetInnerHTML here can wipe typed
+  // input and the caret when the parent re-renders (e.g. autosave/body-rev).
+  const seeded = useRef(false);
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el || seeded.current) return;
+    seeded.current = true;
+    if (initialHtml) el.innerHTML = initialHtml;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const exec = (command: string, value?: string) => {
     editorRef.current?.focus();
     // Emit CSS (style="text-align:…") for alignment so it survives the
@@ -1648,7 +1659,6 @@ function RichTextEditor({
         contentEditable
         suppressContentEditableWarning
         onInput={onInput}
-        dangerouslySetInnerHTML={{ __html: initialHtml }}
         className="min-h-[220px] max-h-[420px] overflow-y-auto px-3 py-2 text-[14px] leading-relaxed outline-none [&_a]:text-[var(--color-accent)] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h3]:text-[16px] [&_h3]:font-semibold [&_h3]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border-strong)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--color-neutral-700)] [&_blockquote]:my-2 [&_pre]:bg-[var(--color-surface-2)] [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[13px] [&_pre]:my-2 [&_pre]:whitespace-pre-wrap"
       />
     </div>
