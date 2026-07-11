@@ -1,12 +1,15 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Get,
   Headers,
   HttpCode,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Post,
+  Query,
   UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
@@ -61,6 +64,20 @@ export class DmarcController {
     @Param("id", ParseUUIDPipe) id: string,
   ) {
     return this.svc.getReport(orgId, id, principal.userId);
+  }
+
+  @Get("orgs/:orgId/deliverability/reputation")
+  @UseGuards(SessionGuard)
+  reputation(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Query("days", new DefaultValuePipe(30), ParseIntPipe) days: number,
+  ) {
+    return this.svc.reputation(
+      orgId,
+      principal.userId,
+      Math.min(Math.max(days, 1), 90),
+    );
   }
 
   @Post("internal/dmarc/ingest")
