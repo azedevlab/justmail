@@ -15,6 +15,7 @@ import {
   PageBody,
   PageHeader,
   SkeletonRows,
+  Spinner,
   Table,
   TD,
   TH,
@@ -103,10 +104,11 @@ export default function AliasesPage() {
           </Card>
         )}
       </PageBody>
-      {showCreate && domains.data && (
+      {showCreate && (
         <CreateModal
           orgId={orgId}
-          domains={domains.data}
+          domains={domains.data ?? []}
+          loading={domains.isLoading}
           onClose={() => setShowCreate(false)}
         />
       )}
@@ -117,10 +119,12 @@ export default function AliasesPage() {
 function CreateModal({
   orgId,
   domains,
+  loading,
   onClose,
 }: {
   orgId: string;
   domains: Domain[];
+  loading: boolean;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -157,6 +161,34 @@ function CreateModal({
           : (e as Error).message,
       ),
   });
+
+  const hasDomains = domains.length > 0;
+
+  if (loading || !hasDomains) {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        title="Add alias"
+        footer={
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+        }
+      >
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <Spinner size={22} />
+          </div>
+        ) : (
+          <Empty
+            title="No domains yet"
+            description="Add and verify a domain before creating aliases."
+          />
+        )}
+      </Modal>
+    );
+  }
 
   return (
     <Modal
