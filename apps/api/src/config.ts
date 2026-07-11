@@ -126,6 +126,7 @@ const Env = z.object({
   WEBHOOK_DELIVERY_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(10),
   QUEUE_SNAPSHOT_POLL_SECONDS: z.coerce.number().int().positive().default(60),
   DNSBL_POLL_SECONDS: z.coerce.number().int().positive().default(1800),
+  DNS_RECHECK_POLL_SECONDS: z.coerce.number().int().positive().default(300),
   CRED_SWEEP_POLL_SECONDS: z.coerce.number().int().positive().default(600),
   LDAP_POLL_SECONDS: z.coerce.number().int().positive().default(60),
   RETENTION_POLL_SECONDS: z.coerce.number().int().positive().default(3600),

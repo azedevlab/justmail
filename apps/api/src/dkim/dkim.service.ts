@@ -131,6 +131,9 @@ export class DkimService {
         [domainId, keyId],
       );
     });
+    // selectors.map only lists *active* keys — rebuild it now or the newly
+    // activated key would not sign anything until the next process restart.
+    await this.syncKeysToDisk();
     this.audit.log({
       orgId,
       actorType: "user",

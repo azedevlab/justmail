@@ -317,11 +317,19 @@ async function seedDnsRecords(
   const subst = (s: string) =>
     s.replace(/\$\{DOMAIN\}/g, name).replace(/\$\{TOKEN\}/g, token).replace(/\$\{MAIL_ROOT\}/g, mailRoot);
   for (const r of SEED_RECORDS) {
+    // The platform root domain hosts the mail stack itself: an SPF include of
+    // ${MAIL_ROOT} would reference the very record being evaluated (a lookup
+    // loop), and autoconfig/autodiscover CNAMEs would point at themselves.
+    if (name === mailRoot && (r.purpose === "autoconfig" || r.purpose === "autodiscover")) {
+      continue;
+    }
+    const content =
+      r.purpose === "spf" && name === mailRoot ? "v=spf1 mx ~all" : subst(r.content);
     await tx.query(
       `INSERT INTO dns_records (domain_id, purpose, type, name, content, ttl, priority)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT DO NOTHING`,
-      [domainId, r.purpose, r.type, subst(r.name), subst(r.content), r.ttl, r.priority ?? null],
+      [domainId, r.purpose, r.type, subst(r.name), content, r.ttl, r.priority ?? null],
     );
   }
 }

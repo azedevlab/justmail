@@ -97,27 +97,7 @@ export class DnsService {
   /** Check DNS: resolve every expected record and update check_status. */
   async check(orgId: string, domainId: string, userId: string) {
     await this.orgs.requireRole(orgId, userId, "viewer");
-    const { rows } = await this.db.query<RecordRow>(
-      "SELECT * FROM dns_records WHERE domain_id = $1",
-      [domainId],
-    );
-    for (const r of rows) {
-      let observed: string | null = null;
-      let status: RecordRow extends { check_status: infer S } ? S : string;
-      try {
-        observed = await this.resolveOne(r.type, r.name);
-        const matches = observed !== null && observed.includes(strip(r.content));
-        status = matches ? "ok" : observed ? "drifted" : "missing";
-      } catch (err) {
-        observed = (err as Error).message;
-        status = "error";
-      }
-      await this.db.query(
-        `UPDATE dns_records SET observed_content = $2, check_status = $3,
-           last_checked_at = now() WHERE id = $1`,
-        [r.id, observed, status],
-      );
-    }
+    await this.checkRecords(domainId);
     const { rows: updated } = await this.db.query(
       `SELECT id, purpose, type, name, content, ttl, priority, observed_content,
               check_status, last_checked_at
@@ -150,6 +130,56 @@ export class DnsService {
       [domainId],
     );
     return { filename: `${dr[0].name}.zone`, zone: toZoneFile(dr[0].name, rows) };
+  }
+
+  /**
+   * Worker sweep: re-resolve unsettled records (propagating/missing/error)
+   * every tick and refresh settled ones every few hours, so statuses converge
+   * to reality — and drift gets noticed — without anyone clicking Recheck.
+   */
+  async recheckDue(): Promise<{ domains: number }> {
+    const { rows } = await this.db.query<{ domain_id: string }>(
+      `SELECT DISTINCT domain_id FROM dns_records
+        WHERE check_status IN ('propagating', 'missing', 'error')
+           OR last_checked_at IS NULL
+           OR last_checked_at < now() - interval '6 hours'`,
+    );
+    for (const r of rows) {
+      await this.checkRecords(r.domain_id).catch((err: Error) => {
+        this.logger.warn(`recheck ${r.domain_id}: ${err.message}`);
+      });
+    }
+    return { domains: rows.length };
+  }
+
+  private async checkRecords(domainId: string): Promise<void> {
+    const { rows } = await this.db.query<RecordRow>(
+      "SELECT * FROM dns_records WHERE domain_id = $1",
+      [domainId],
+    );
+    for (const r of rows) {
+      let observed: string | null = null;
+      let status: string;
+      try {
+        observed = await this.resolveOne(r.type, r.name);
+        const matches = observed !== null && observed.includes(strip(r.content));
+        status = matches ? "ok" : observed ? "drifted" : "missing";
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        // NXDOMAIN / no-data answers mean "not published", not a lookup fault.
+        if (code === "ENOTFOUND" || code === "ENODATA") {
+          status = "missing";
+        } else {
+          observed = (err as Error).message;
+          status = "error";
+        }
+      }
+      await this.db.query(
+        `UPDATE dns_records SET observed_content = $2, check_status = $3,
+           last_checked_at = now() WHERE id = $1`,
+        [r.id, observed, status],
+      );
+    }
   }
 
   private async resolveOne(type: string, name: string): Promise<string | null> {
