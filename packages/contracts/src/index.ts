@@ -35,3 +35,4 @@ export * from "./sso.js";
 export * from "./ldap.js";
 export * from "./scim.js";
 export * from "./retention.js";
+export * from "./audit.js";
