@@ -29,7 +29,15 @@ import {
   useConfirm,
   useToast,
 } from "@justmail/shared-ui";
-import { Check, Copy, Download, RefreshCw, Trash2, UploadCloud } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { api } from "@/lib/api";
 
 export default function DomainDetailPage() {
@@ -150,12 +158,42 @@ export default function DomainDetailPage() {
           res.status === "active"
             ? "Domain verified"
             : "Verification pending — DNS not yet visible",
+        description:
+          res.status === "active"
+            ? undefined
+            : "If you run private or self-hosted DNS that isn't publicly resolvable, use Activate to mark it verified.",
         tone: res.status === "active" ? "ok" : "warn",
       });
     },
     onError: (e) =>
       toast({
         title: "Verification failed",
+        description:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : String(e),
+        tone: "bad",
+      }),
+  });
+
+  // Manual activation for operators running private/self-hosted DNS that the
+  // public-resolver DNS check (Verify DNS) can't reach. Until a domain is
+  // active, its mailboxes fail Dovecot auth and IMAP throws — so folders 500.
+  const activate = useMutation({
+    mutationFn: () =>
+      api.patch<Domain>(`/v1/orgs/${orgId}/domains/${domainId}`, {
+        status: "active",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["domain", orgId, domainId] });
+      qc.invalidateQueries({ queryKey: ["domains", orgId] });
+      toast({
+        title: "Domain activated",
+        description: "Mailboxes on this domain can now sign in and send mail.",
+        tone: "ok",
+      });
+    },
+    onError: (e) =>
+      toast({
+        title: "Could not activate domain",
         description:
           e instanceof ApiError ? e.problem.detail ?? e.problem.title : String(e),
         tone: "bad",
@@ -195,6 +233,25 @@ export default function DomainDetailPage() {
           domain.data && (
             <div className="flex items-center gap-2">
               <StatusBadge status={domain.data.status} />
+              {domain.data.status !== "active" && (
+                <Button
+                  variant="primary"
+                  loading={activate.isPending}
+                  leadingIcon={<ShieldCheck size={14} />}
+                  onClick={async () => {
+                    if (
+                      await confirm({
+                        title: `Activate ${domain.data!.name}?`,
+                        body: "Marks the domain verified without the public DNS ownership check. Use this only for a domain you control — for example self-hosted or private DNS that isn't publicly resolvable. Until a domain is active, its mailboxes can't sign in to webmail or send mail.",
+                        confirmLabel: "Activate",
+                      })
+                    )
+                      activate.mutate();
+                  }}
+                >
+                  Activate
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 loading={verify.isPending}
