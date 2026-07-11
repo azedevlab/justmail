@@ -11,7 +11,7 @@
  * when online and the last-known copy when offline.
  */
 
-const CACHE = "justmail-v1";
+const CACHE = "justmail-v2";
 const OFFLINE_URL = "/";
 
 self.addEventListener("install", (event) => {

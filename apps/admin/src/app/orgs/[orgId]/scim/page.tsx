@@ -23,6 +23,7 @@ import {
   PageHeader,
   SkeletonRows,
   Textarea,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Copy, KeyRound } from "lucide-react";
@@ -87,6 +88,7 @@ export default function ScimPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [newToken, setNewToken] = useState<ScimTokenResult | null>(null);
 
   const cfg = useQuery({
@@ -189,8 +191,15 @@ export default function ScimPage() {
                         variant="ghost"
                         size="sm"
                         loading={revoke.isPending}
-                        onClick={() => {
-                          if (confirm("Revoke the SCIM token?")) revoke.mutate();
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: "Revoke the SCIM token?",
+                              tone: "danger",
+                              confirmLabel: "Revoke",
+                            })
+                          )
+                            revoke.mutate();
                         }}
                       >
                         Revoke

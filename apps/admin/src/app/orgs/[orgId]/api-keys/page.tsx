@@ -24,6 +24,7 @@ import {
   TH,
   THead,
   TR,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Plus } from "lucide-react";
@@ -33,6 +34,7 @@ export default function ApiKeysPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const list = useQuery({
     queryKey: ["api-keys", orgId],
@@ -101,8 +103,15 @@ export default function ApiKeysPage() {
                       {!k.revoked_at && (
                         <button
                           className="text-xs text-[var(--color-bad)] hover:underline"
-                          onClick={() => {
-                            if (confirm(`Revoke ${k.name}?`)) revoke.mutate(k.id);
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                title: `Revoke ${k.name}?`,
+                                tone: "danger",
+                                confirmLabel: "Revoke",
+                              })
+                            )
+                              revoke.mutate(k.id);
                           }}
                         >
                           Revoke

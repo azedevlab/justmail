@@ -29,14 +29,14 @@ describe("SettingsService.attachmentLimits", () => {
     expect(limits).toEqual({ maxTotalBytes: 5_000_000, maxCount: 3 });
   });
 
-  it("clamps overrides above the deployment ceiling", async () => {
+  it("honors admin overrides above the config default", async () => {
     const limits = await svcWith({
       max_total_bytes: config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES * 10,
       max_count: config.WEBMAIL_ATTACHMENT_MAX_COUNT + 100,
     }).attachmentLimits("org-1");
     expect(limits).toEqual({
-      maxTotalBytes: config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES,
-      maxCount: config.WEBMAIL_ATTACHMENT_MAX_COUNT,
+      maxTotalBytes: config.WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES * 10,
+      maxCount: config.WEBMAIL_ATTACHMENT_MAX_COUNT + 100,
     });
   });
 

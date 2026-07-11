@@ -1,3 +1,4 @@
+"use client";
 import {
   forwardRef,
   useState,
@@ -8,13 +9,13 @@ import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@justmail/shared-utils";
 
 const inputClass = cn(
-  "w-full rounded-lg bg-[var(--color-field)] text-[var(--color-neutral-1100)]",
+  "w-full rounded-md bg-[var(--color-field)] text-[var(--color-neutral-1100)]",
   "border border-[var(--color-border-strong)] px-3 py-2 text-sm",
   "shadow-[var(--shadow-inset-input)]",
   "placeholder:text-[var(--color-neutral-700)]",
   "transition-[border-color,box-shadow,background] duration-[var(--motion-base)]",
   "hover:border-[var(--color-border-strong)]",
-  "focus:outline-none focus:border-[var(--color-accent-ring)] focus:ring-[3px] focus:ring-[var(--color-accent-focus)]",
+  "focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-focus)]",
   "disabled:opacity-50 disabled:cursor-not-allowed",
   "font-[var(--font-sans)]",
 );
@@ -69,7 +70,6 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? "Hide password" : "Show password"}
           aria-pressed={visible}
-          tabIndex={-1}
           className={cn(
             "absolute right-1 top-1/2 -translate-y-1/2 inline-grid place-items-center",
             "w-8 h-8 rounded-md text-[var(--color-neutral-800)]",

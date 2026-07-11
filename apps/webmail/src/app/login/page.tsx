@@ -121,6 +121,10 @@ export default function LoginPage() {
           className="space-y-3"
           onSubmit={f.handleSubmit((v) => {
             setErr(null);
+            if (!v.email.trim() || !v.password) {
+              setErr("Enter your email and password.");
+              return;
+            }
             mut.mutate(v);
           })}
         >
@@ -129,13 +133,13 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               autoFocus
-              {...f.register("email", { required: true })}
+              {...f.register("email")}
             />
           </FormField>
           <FormField label="Password">
             <PasswordInput
               autoComplete="current-password"
-              {...f.register("password", { required: true })}
+              {...f.register("password")}
             />
           </FormField>
           {err && (
@@ -143,7 +147,12 @@ export default function LoginPage() {
               {err}
             </p>
           )}
-          <Button variant="primary" className="w-full" loading={mut.isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
+            loading={mut.isPending}
+          >
             Sign in
           </Button>
           <div className="flex items-center gap-2 py-0.5">

@@ -1,7 +1,7 @@
 "use client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { ToastProvider, TooltipProvider } from "@justmail/shared-ui";
+import { ConfirmProvider, ToastProvider, TooltipProvider } from "@justmail/shared-ui";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(
@@ -23,7 +23,9 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </ToastProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

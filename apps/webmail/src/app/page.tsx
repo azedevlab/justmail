@@ -5,22 +5,31 @@ import { useQuery } from "@tanstack/react-query";
 import type { Mailbox } from "@justmail/contracts";
 import {
   AuroraBackdrop,
+  Avatar,
+  Button,
   Card,
+  DropdownItem,
+  DropdownLabel,
+  DropdownMenu,
+  DropdownSeparator,
   Empty,
   Spinner,
   Wordmark,
 } from "@justmail/shared-ui";
-import { Mail } from "lucide-react";
+import { LogOut, Mail } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { useMe } from "@/lib/session";
+import { useLogout, useMe } from "@/lib/session";
 
 export default function WebmailIndex() {
   const router = useRouter();
   const me = useMe();
+  const logout = useLogout();
 
   useEffect(() => {
     if (me.data === null) router.replace("/login");
+    // Mailbox-first session: bound to a single inbox — skip the picker.
+    else if (me.data?.mailbox_id) router.replace(`/m/${me.data.mailbox_id}`);
   }, [me.data, router]);
 
   const orgId = me.data?.orgs[0]?.id;
@@ -29,6 +38,32 @@ export default function WebmailIndex() {
     enabled: !!orgId,
     queryFn: () => api.get<Mailbox[]>(`/v1/orgs/${orgId}/mailboxes`),
   });
+
+  if (me.isError)
+    return (
+      <main className="min-h-screen grid place-items-center p-6">
+        <div className="max-w-sm text-center space-y-3">
+          <p className="text-sm font-medium text-[var(--color-neutral-1100)]">
+            Couldn&apos;t reach JustMail
+          </p>
+          <p className="text-xs text-[var(--color-neutral-800)]">
+            Your session couldn&apos;t be verified. Check your connection and
+            retry, or sign in again.
+          </p>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <Button variant="primary" onClick={() => me.refetch()}>
+              Retry
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => router.replace("/login")}
+            >
+              Sign in
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
 
   if (!me.data)
     return (
@@ -40,6 +75,25 @@ export default function WebmailIndex() {
   return (
     <main className="relative min-h-screen bg-[var(--color-bg)]">
       <AuroraBackdrop />
+      <div className="absolute top-3 right-4 z-10">
+        <DropdownMenu
+          trigger={
+            <button
+              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              aria-label="Account"
+            >
+              <Avatar name={me.data.email} size={30} />
+            </button>
+          }
+        >
+          <DropdownLabel>{me.data.email}</DropdownLabel>
+          <DropdownSeparator />
+          <DropdownItem destructive onSelect={() => logout.mutate()}>
+            <LogOut size={14} />
+            Sign out
+          </DropdownItem>
+        </DropdownMenu>
+      </div>
       <div className="relative mx-auto max-w-3xl px-6 pt-[12vh] pb-16 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
         <div className="flex justify-center mb-2">
           <Wordmark size={36} sub="Webmail" />

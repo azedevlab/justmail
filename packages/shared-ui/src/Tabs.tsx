@@ -40,7 +40,7 @@ export function TabsTrigger({
       className={cn(
         "px-3 py-2 text-sm text-[var(--color-neutral-900)]",
         "data-[state=active]:text-[var(--color-neutral-1100)]",
-        "data-[state=active]:border-b-2 data-[state=active]:border-[var(--color-brand-500)]",
+        "data-[state=active]:border-b-2 data-[state=active]:border-[var(--color-accent)]",
         "-mb-px",
       )}
     >
