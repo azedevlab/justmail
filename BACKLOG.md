@@ -110,7 +110,7 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 | M10-5 | P1 | Dark-mode pass: premium neutral tones, correct contrast/elevation/shadows/borders/hover/text (designed, not inverted) | M | M10-1 | todo |
 | M10-6 | P2 | Motion pass: subtle/fast/natural transitions (hover/page/dialog/sidebar/toast); remove gratuitous animation | M | M10-2 | todo |
 | M10-7 | P1 | Accessibility pass: keyboard nav, focus order + rings, ARIA, screen-reader, contrast, accessible forms/dialogs (feeds M9-1) | L | M10-2 | todo |
-| M10-8 | P1 | Config sweep: grep whole codebase for hardcoded values (limits, timeouts, retries, ports, worker counts, storage paths, colors, fonts, spacing, animation durations) → config/tokens | M | M10-1 | todo |
+| M10-8 | P1 | Config sweep: grep whole codebase for hardcoded values (limits, timeouts, retries, ports, worker counts, storage paths, colors, fonts, spacing, animation durations) → config/tokens | M | M10-1 | done |
 | M10-9 | P2 | Enterprise feature-parity gap analysis vs Gmail/Outlook/Proton/Fastmail/Apple Mail/Mailcow/Exchange/Workspace → gap list → file + implement tasks | L | — | todo |
 | M10-10 | P1 | Self-review gate: score every page 1–10 in `RELEASE_READINESS.md` ("would Apple/Vercel/Linear/Stripe ship this?"); iterate until every surface ≥ 8/10 | M | M10-2..8 | todo |
 

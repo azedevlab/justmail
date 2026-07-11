@@ -199,6 +199,7 @@ export class SieveService {
       host: config.SIEVE_HOST,
       port: config.SIEVE_PORT,
       rejectUnauthorized: config.SIEVE_TLS_REJECT_UNAUTHORIZED,
+      connectTimeoutMs: config.SIEVE_CONNECT_TIMEOUT_SECONDS * 1_000,
     });
     try {
       await client.startTls(config.SIEVE_TLS_REJECT_UNAUTHORIZED);

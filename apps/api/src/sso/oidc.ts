@@ -6,6 +6,7 @@ import {
   type JsonWebKey,
   type KeyObject,
 } from "node:crypto";
+import { config } from "../config";
 
 // Minimal OpenID Connect authorization-code (+ PKCE) client. Discovery documents
 // and JWKS are fetched over TLS and cached briefly. id_token signatures are
@@ -32,9 +33,9 @@ interface CacheEntry<T> {
   expires: number;
 }
 
-const DISCOVERY_TTL_MS = 3600_000;
-const JWKS_TTL_MS = 3600_000;
-const HTTP_TIMEOUT_MS = 8000;
+const DISCOVERY_TTL_MS = config.OIDC_METADATA_CACHE_TTL_SECONDS * 1_000;
+const JWKS_TTL_MS = config.OIDC_METADATA_CACHE_TTL_SECONDS * 1_000;
+const HTTP_TIMEOUT_MS = config.OIDC_HTTP_TIMEOUT_SECONDS * 1_000;
 
 const discoveryCache = new Map<string, CacheEntry<OidcDiscovery>>();
 const jwksCache = new Map<string, CacheEntry<JsonWebKey[]>>();
