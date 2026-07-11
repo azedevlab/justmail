@@ -38,8 +38,13 @@ a {
   color: var(--color-on-accent);
 }
 
+/* Softer than a solid near-black accent so keyboard focus reads as a ring, not
+   a heavy box. Rounded controls inherit their border-radius for the outline, so
+   the indicator hugs the field. Borderless inputs nested in a styled wrapper
+   (search bar, compose recipients) opt out via focus:outline-none and let the
+   wrapper show a rounded focus-within ring instead. */
 *:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-ring);
   outline-offset: 2px;
 }
 

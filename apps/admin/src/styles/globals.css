@@ -38,8 +38,10 @@ a {
   color: var(--color-on-accent);
 }
 
+/* Softer than a solid near-black accent so keyboard focus reads as a ring, not
+   a heavy box; rounded controls inherit their radius for the outline. */
 *:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-ring);
   outline-offset: 2px;
 }
 

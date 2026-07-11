@@ -755,14 +755,14 @@ export default function MailboxView() {
           style={{ width: listW }}
           aria-label="Messages"
         >
-          <div className="shrink-0 z-10 px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2">
+          <div className="shrink-0 z-10 px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2 rounded-md transition-[box-shadow] duration-[var(--motion-base)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]">
             <Search size={13} className="text-[var(--color-neutral-700)] shrink-0" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search — try from: subject: has:attachment"
               aria-label="Search messages"
-              className="flex-1 min-w-0 bg-transparent outline-none text-[13px] placeholder:text-[var(--color-neutral-700)]"
+              className="flex-1 min-w-0 bg-transparent focus:outline-none text-[13px] placeholder:text-[var(--color-neutral-700)]"
             />
             {searching && list.isFetching && <Spinner size={12} />}
             <span className="text-[11px] tabular-nums text-[var(--color-neutral-800)] shrink-0">
@@ -2500,7 +2500,7 @@ function RecipientField({
         className={
           unstyled
             ? "flex flex-wrap items-center gap-1.5"
-            : "flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-border-strong)] focus-within:ring-2 focus-within:ring-[var(--color-accent-focus)]"
+            : "flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]"
         }
       >
         {emails.map((addr, i) => (
@@ -2519,7 +2519,7 @@ function RecipientField({
           </span>
         ))}
         <input
-          className="flex-1 min-w-[8rem] bg-transparent outline-none text-[13px] py-0.5"
+          className="flex-1 min-w-[8rem] bg-transparent focus:outline-none text-[13px] py-0.5"
           aria-label={ariaLabel}
           autoFocus={autoFocus}
           placeholder={emails.length === 0 ? placeholder : undefined}
