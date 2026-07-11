@@ -1,0 +1,273 @@
+name: Verify internal send
+
+# Proves the send path delivers end-to-end WITHOUT depending on outbound port 25
+# (which the host provider blocks for direct MX). It self-sends one real message
+# — with an attachment — from an unlocked mailbox to its OWN address, which is a
+# hosted (local) domain, so postfix delivers it locally via LMTP. It then polls
+# the recipient INBOX over IMAP until the message shows up and confirms the
+# attachment survived the round-trip.
+#
+# It also surfaces why external mail may not arrive: it prints the scheduled_sends
+# statuses, the postfix OUTBOUND_MODE, and the current mail queue (deferred mail
+# to external MXes piles up here when the box is in direct mode with 25 blocked).
+#
+# Requires a currently-unlocked mailbox (a live cached webmail credential). If
+# none is unlocked it reports NO_LIVE_SESSION and sends nothing. Manual dispatch
+# only. Reuses the deploy SSH credentials.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-internal-send-production
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Internal self-send + delivery verify + queue diagnostics
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
+          set -e
+          cd /opt/justmail/app
+          C="docker compose --env-file /opt/justmail/.env -f services/compose/docker-compose.yml --profile core --profile app --profile storage --profile mail"
+
+          # The probe runs inside the api container so it reuses the app's own
+          # StorageService/AttachmentsService/WebmailService with the configured
+          # adapter, credential store and DB. Placed under the app dir so
+          # node_modules resolves @nestjs. Force-exits (Nest keeps PG/Redis pool
+          # handles open, which otherwise hang node).
+          cat > /tmp/verify-internal-send.cjs <<'JS'
+          require("reflect-metadata");
+          const crypto = require("node:crypto");
+          const { NestFactory } = require("@nestjs/core");
+          const { AppModule } = require("./dist/app.module");
+          const { Db } = require("./dist/db/db.service");
+          const { AttachmentsService } = require("./dist/attachments/attachments.service");
+          const { WebmailService } = require("./dist/webmail/webmail.service");
+          const { REDIS } = require("./dist/common/redis.module");
+
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          const backstop = setTimeout(() => {
+            console.log("RESULT TIMEOUT");
+            process.exit(1);
+          }, 240000);
+
+          (async () => {
+            const app = await NestFactory.createApplicationContext(AppModule, {
+              logger: ["error"],
+            });
+            let code = 0;
+            try {
+              const db = app.get(Db);
+              const attachments = app.get(AttachmentsService);
+              const webmail = app.get(WebmailService);
+              let redis = null;
+              try {
+                redis = app.get(REDIS);
+              } catch (e) {
+                redis = null;
+              }
+
+              // 1) Locate a live unlocked mailbox credential.
+              let live = null; // { sessionId, mailboxId }
+              if (redis) {
+                let cursor = "0";
+                do {
+                  const [next, keys] = await redis.scan(
+                    cursor, "MATCH", "webmail:cred:*", "COUNT", 200,
+                  );
+                  cursor = next;
+                  for (const k of keys) {
+                    const p = k.split(":"); // webmail:cred:<sid>:<mid> | webmail:cred:idx:<sid>
+                    if (p.length === 4 && p[2] !== "idx") {
+                      live = { sessionId: p[2], mailboxId: p[3] };
+                      break;
+                    }
+                  }
+                } while (cursor !== "0" && !live);
+              }
+              if (!live) {
+                const fb = await db.query(
+                  `SELECT key FROM settings
+                    WHERE key LIKE 'webmail.session:%'
+                      AND (value->>'expiresAt')::bigint > $1
+                    LIMIT 1`,
+                  [Math.floor(Date.now() / 1000)],
+                );
+                if (fb.rows[0]) {
+                  const rest = fb.rows[0].key.slice("webmail.session:".length);
+                  const dot = rest.indexOf(".");
+                  if (dot > 0)
+                    live = {
+                      sessionId: rest.slice(0, dot),
+                      mailboxId: rest.slice(dot + 1),
+                    };
+                }
+              }
+              if (!live) {
+                console.log("RESULT NO_LIVE_SESSION unlock a mailbox in webmail, then re-run");
+                return;
+              }
+
+              // 2) Reconstruct the principal + the mailbox's own address.
+              const s = await db.query(
+                "SELECT user_id FROM sessions WHERE id = $1 AND expires_at > now()",
+                [live.sessionId],
+              );
+              const mb = await db.query(
+                `SELECT m.id, (m.local_part || '@' || d.name) AS address, d.org_id
+                   FROM mailboxes m JOIN domains d ON d.id = m.domain_id
+                  WHERE m.id = $1`,
+                [live.mailboxId],
+              );
+              if (!s.rows[0] || !mb.rows[0]) {
+                console.log("RESULT STALE_SESSION cached credential no longer maps to a session/mailbox");
+                return;
+              }
+              const u = await db.query(
+                "SELECT email, name FROM users WHERE id = $1",
+                [s.rows[0].user_id],
+              );
+              const orgId = mb.rows[0].org_id;
+              const mailboxId = mb.rows[0].id;
+              const selfAddress = mb.rows[0].address;
+              const principal = {
+                userId: s.rows[0].user_id,
+                email: (u.rows[0] && u.rows[0].email) || selfAddress,
+                name: (u.rows[0] && u.rows[0].name) || "",
+                sessionId: live.sessionId,
+                mailboxId,
+                orgId,
+              };
+
+              // 3) Drive the real attachment pipeline (the fixed finaliseUpload).
+              const marker = crypto.randomUUID();
+              const body = Buffer.from("JustMail internal-send probe " + marker);
+              const upload = await attachments.createUpload(principal, orgId, {
+                filename: "justmail-internal-test.txt",
+                mime: "text/plain",
+                size_bytes: body.length,
+              });
+              await attachments.appendChunk(principal, orgId, upload.id, 0, body);
+              const att = await attachments.finaliseUpload(principal, orgId, upload.id);
+              const stream = await attachments.openStream(orgId, att.content_hash);
+              const chunks = [];
+              for await (const c of stream) chunks.push(c);
+              const pipelineOk = Buffer.concat(chunks).equals(body);
+
+              // 4) Self-send WITH the attachment to a local (hosted) address —
+              //    postfix delivers this locally, no outbound port 25 involved.
+              const subject = "JustMail internal delivery probe " + marker;
+              const res = await webmail.send(principal, orgId, mailboxId, {
+                to: [selfAddress],
+                subject,
+                text: "Internal self-send proving delivery works locally. marker=" + marker,
+                attachment_ids: [att.id],
+              });
+              console.log(
+                "RESULT ENQUEUED",
+                "pipeline", pipelineOk ? "PASS" : "FAIL",
+                "scheduledId", res.id,
+                "sendAt", res.send_at,
+                "from", selfAddress,
+                "to", selfAddress,
+              );
+
+              // 5) Poll the INBOX over IMAP until the message lands (undo window
+              //    + worker tick + local delivery is normally < 25s).
+              const deadline = Date.now() + 150000;
+              let found = null;
+              while (Date.now() < deadline) {
+                await sleep(5000);
+                try {
+                  const r = await webmail.search(principal, orgId, mailboxId, "INBOX", {
+                    q: 'subject:"' + subject + '"',
+                  });
+                  const hit = (r.messages || []).find(
+                    (m) => (m.envelope && m.envelope.subject) === subject,
+                  );
+                  if (hit) {
+                    found = hit;
+                    break;
+                  }
+                } catch (e) {
+                  // transient IMAP hiccup; keep polling
+                }
+              }
+
+              // Terminal status of the row we just enqueued.
+              const st = await db.query(
+                "SELECT status, attempts, left(last_error,200) AS last_error FROM scheduled_sends WHERE id = $1",
+                [res.id],
+              );
+              const row = st.rows[0] || {};
+              if (found) {
+                console.log(
+                  "RESULT DELIVERED",
+                  "uid", found.uid,
+                  "has_attachments", found.has_attachments === true,
+                  "row_status", row.status,
+                  "attempts", row.attempts,
+                );
+              } else {
+                console.log(
+                  "RESULT NOT_DELIVERED",
+                  "row_status", row.status,
+                  "attempts", row.attempts,
+                  "last_error", JSON.stringify(row.last_error || null),
+                );
+                code = 1;
+              }
+
+              // 6) Recent scheduled_sends across ALL statuses (context for the
+              //    earlier external attempts, which the failures-only view hid).
+              const recent = await db.query(
+                `SELECT id, status, attempts, left(last_error,120) AS last_error,
+                        to_char(send_at, 'HH24:MI:SS') AS send_at
+                   FROM scheduled_sends
+                  ORDER BY created_at DESC
+                  LIMIT 10`,
+              );
+              console.log("===== scheduled_sends (last 10, all statuses) =====");
+              for (const r of recent.rows) {
+                console.log(
+                  r.id, "|", r.status, "| attempts", r.attempts,
+                  "| send_at", r.send_at, "| err", r.last_error || "-",
+                );
+              }
+            } catch (e) {
+              code = 1;
+              console.log("RESULT ERROR", (e && e.message) || String(e));
+            } finally {
+              clearTimeout(backstop);
+              try {
+                await app.close();
+              } catch (e) {
+                /* ignore */
+              }
+              process.exit(code);
+            }
+          })();
+          JS
+
+          $C cp /tmp/verify-internal-send.cjs api:/repo/apps/api/verify-internal-send.cjs
+          echo "===== internal self-send + delivery verify (inside api container) ====="
+          $C exec -T -w /repo/apps/api api node verify-internal-send.cjs </dev/null 2>&1 || true
+          $C exec -T api rm -f /repo/apps/api/verify-internal-send.cjs </dev/null 2>&1 || true
+          rm -f /tmp/verify-internal-send.cjs
+
+          echo
+          echo "===== outbound mode + mail queue (why external mail may defer) ====="
+          $C exec -T postfix sh -c 'echo "OUTBOUND_MODE=${OUTBOUND_MODE:-direct} RELAYHOST=${RELAYHOST:-<unset>}"; echo "--- postqueue -p ---"; postqueue -p 2>&1 | head -40' </dev/null 2>&1 || true
+          REMOTE
