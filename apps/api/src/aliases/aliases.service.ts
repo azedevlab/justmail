@@ -35,7 +35,8 @@ export class AliasesService {
   async list(orgId: string, domainId: string, userId: string): Promise<Alias[]> {
     await this.assertDomain(orgId, domainId, userId);
     const { rows } = await this.db.query<AliasRow>(
-      `SELECT a.*, d.name AS domain_name, d.org_id
+      `SELECT a.id, a.domain_id, a.source, a.destinations::text[] AS destinations,
+              a.enabled, a.created_at, d.name AS domain_name, d.org_id
        FROM aliases a JOIN domains d ON d.id = a.domain_id
        WHERE a.domain_id = $1 ORDER BY a.source`,
       [domainId],
@@ -46,7 +47,8 @@ export class AliasesService {
   async listOrg(orgId: string, userId: string): Promise<Alias[]> {
     await this.orgs.requireRole(orgId, userId, "viewer");
     const { rows } = await this.db.query<AliasRow>(
-      `SELECT a.*, d.name AS domain_name, d.org_id
+      `SELECT a.id, a.domain_id, a.source, a.destinations::text[] AS destinations,
+              a.enabled, a.created_at, d.name AS domain_name, d.org_id
        FROM aliases a JOIN domains d ON d.id = a.domain_id
        WHERE d.org_id = $1 ORDER BY d.name, a.source`,
       [orgId],
@@ -57,7 +59,8 @@ export class AliasesService {
   async get(orgId: string, id: string, userId: string): Promise<Alias> {
     await this.orgs.requireRole(orgId, userId, "viewer");
     const { rows } = await this.db.query<AliasRow>(
-      `SELECT a.*, d.name AS domain_name, d.org_id
+      `SELECT a.id, a.domain_id, a.source, a.destinations::text[] AS destinations,
+              a.enabled, a.created_at, d.name AS domain_name, d.org_id
        FROM aliases a JOIN domains d ON d.id = a.domain_id
        WHERE a.id = $1 AND d.org_id = $2`,
       [id, orgId],

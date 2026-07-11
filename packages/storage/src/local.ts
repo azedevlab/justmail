@@ -5,7 +5,6 @@ import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve, sep } from "node:path";
-import { tmpdir } from "node:os";
 import type {
   Etag,
   HeadResult,
@@ -43,28 +42,38 @@ export class LocalAdapter implements StorageAdapter {
     _meta?: PutMeta,
   ): Promise<Etag> {
     const target = this.path(key);
-    await mkdir(dirname(target), { recursive: true });
-    const tmp = join(tmpdir(), `jm-${Date.now()}-${Math.random()}`);
+    const dir = dirname(target);
+    await mkdir(dir, { recursive: true });
+    // Stage the write in the SAME directory as the target so the finishing
+    // rename() is atomic and never crosses a filesystem boundary. os.tmpdir()
+    // is frequently on a different mount from the data root (e.g. the container
+    // overlay vs. a bind-mounted volume), which makes rename() fail with EXDEV.
+    const tmp = join(dir, `.jm-tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const hash = createHash("sha256");
     let size = 0;
 
-    if (Buffer.isBuffer(body)) {
-      hash.update(body);
-      size = body.length;
-      const write = createWriteStream(tmp);
-      await pipeline(Readable.from(body), write);
-    } else {
-      const write = createWriteStream(tmp);
-      const measured = new Transform({
-        transform(chunk: Buffer, _enc: BufferEncoding, cb: (err?: Error | null, data?: Buffer) => void) {
-          hash.update(chunk);
-          size += chunk.length;
-          cb(null, chunk);
-        },
-      });
-      await pipeline(body, measured, write);
+    try {
+      if (Buffer.isBuffer(body)) {
+        hash.update(body);
+        size = body.length;
+        const write = createWriteStream(tmp);
+        await pipeline(Readable.from(body), write);
+      } else {
+        const write = createWriteStream(tmp);
+        const measured = new Transform({
+          transform(chunk: Buffer, _enc: BufferEncoding, cb: (err?: Error | null, data?: Buffer) => void) {
+            hash.update(chunk);
+            size += chunk.length;
+            cb(null, chunk);
+          },
+        });
+        await pipeline(body, measured, write);
+      }
+      await rename(tmp, target);
+    } catch (err) {
+      await unlink(tmp).catch(() => undefined);
+      throw err;
     }
-    await rename(tmp, target);
     return { etag: hash.digest("hex"), key, size };
   }
 

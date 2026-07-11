@@ -215,12 +215,15 @@ export class AuthService {
     // and audit plumbing (which keys off users.id) is unchanged. This row is
     // never used for password auth — the mailbox hash above is authoritative —
     // so it carries an unusable hash and no org membership.
+    // Bind email and name to separate placeholders: reusing one placeholder for
+    // both would make Postgres deduce conflicting types for it (email is citext,
+    // name is text) and fail with "inconsistent types deduced for parameter $1".
     const shadow = await this.db.query<{ id: string }>(
       `INSERT INTO users (email, name, password_hash, status)
-       VALUES ($1, $1, $2, 'active')
+       VALUES ($1, $2, $3, 'active')
        ON CONFLICT (email) DO UPDATE SET updated_at = now()
        RETURNING id`,
-      [mb.address, DUMMY_HASH],
+      [mb.address, mb.address, DUMMY_HASH],
     );
     const userId = shadow.rows[0]!.id;
     const session = await this.createSession(userId, ip, userAgent, mb.id);

@@ -69,6 +69,7 @@ const darkAccentHex = t.neutralDark[11]; // #EDEFF2 near-white
 
 const light = `
 :root, .theme-light {
+  color-scheme: light;
 ${rampCss("color-neutral", t.neutralLight)}
 ${rampCss("color-brand", t.brand)}
   --color-ok: ${t.semanticLight.ok};
@@ -110,6 +111,7 @@ ${Object.entries(t.zIndex).map(([k, v]) => `  --z-${k}: ${v};`).join("\n")}
 
 const dark = `
 .theme-dark {
+  color-scheme: dark;
 ${rampCss("color-neutral", t.neutralDark)}
   --color-ok: ${t.semantic.ok};
   --color-warn: ${t.semantic.warn};

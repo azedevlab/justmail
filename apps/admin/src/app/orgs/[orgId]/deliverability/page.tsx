@@ -2,7 +2,11 @@
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import type { DmarcReport, DmarcReportDetail } from "@justmail/contracts";
+import type {
+  DmarcReport,
+  DmarcReportDetail,
+  ReputationDay,
+} from "@justmail/contracts";
 import {
   Badge,
   Card,
@@ -37,6 +41,7 @@ export default function DeliverabilityPage() {
         description="DMARC aggregate reports, DNSBL health, sender reputation."
       />
       <PageBody>
+        <ReputationTrend orgId={orgId} />
         <Card>
           <CardHeader>
             <CardTitle>DMARC aggregate reports</CardTitle>
@@ -72,6 +77,166 @@ export default function DeliverabilityPage() {
         </Card>
       </PageBody>
     </>
+  );
+}
+
+const SERIES = [
+  { key: "sent", label: "Sent", color: "var(--color-ok)" },
+  { key: "deferred", label: "Deferred", color: "var(--color-warn)" },
+  { key: "bounced", label: "Bounced", color: "var(--color-bad)" },
+  { key: "complained", label: "Complaints", color: "var(--color-accent)" },
+] as const;
+
+function ReputationTrend({ orgId }: { orgId: string }) {
+  const rep = useQuery({
+    queryKey: ["reputation", orgId],
+    queryFn: () =>
+      api.get<ReputationDay[]>(`/v1/orgs/${orgId}/deliverability/reputation`),
+  });
+  const days = rep.data ?? [];
+  const totals = days.reduce(
+    (a, d) => ({
+      sent: a.sent + d.sent,
+      deferred: a.deferred + d.deferred,
+      bounced: a.bounced + d.bounced,
+      complained: a.complained + d.complained,
+    }),
+    { sent: 0, deferred: 0, bounced: 0, complained: 0 },
+  );
+  const max = Math.max(
+    1,
+    ...days.map((d) => d.sent + d.deferred + d.bounced + d.complained),
+  );
+  const attempted = totals.sent + totals.bounced;
+  const bounceRate = attempted ? (totals.bounced / attempted) * 100 : 0;
+  const complaintRate = totals.sent
+    ? (totals.complained / totals.sent) * 100
+    : 0;
+  const hasActivity = days.some(
+    (d) => d.sent + d.deferred + d.bounced + d.complained > 0,
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sender reputation (30 days)</CardTitle>
+      </CardHeader>
+      <CardBody>
+        {rep.isLoading && <SkeletonRows count={3} />}
+        {rep.data && !hasActivity && (
+          <Empty
+            title="No outbound activity yet"
+            description="Once mailboxes start sending, delivery outcomes are charted here daily."
+          />
+        )}
+        {rep.data && hasActivity && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <RepStat label="Sent" value={totals.sent.toLocaleString()} />
+              <RepStat
+                label="Bounce rate"
+                value={`${bounceRate.toFixed(1)}%`}
+                tone={bounceRate >= 5 ? "bad" : bounceRate >= 2 ? "warn" : "ok"}
+              />
+              <RepStat
+                label="Complaint rate"
+                value={`${complaintRate.toFixed(2)}%`}
+                tone={
+                  complaintRate >= 0.3
+                    ? "bad"
+                    : complaintRate >= 0.1
+                      ? "warn"
+                      : "ok"
+                }
+              />
+              <RepStat
+                label="Deferred"
+                value={totals.deferred.toLocaleString()}
+              />
+            </div>
+
+            <div
+              className="flex items-end gap-[2px] h-32"
+              role="img"
+              aria-label="Daily delivery outcomes"
+            >
+              {days.map((d) => {
+                const total = d.sent + d.deferred + d.bounced + d.complained;
+                return (
+                  <div
+                    key={d.day}
+                    className="flex-1 flex flex-col-reverse min-w-[3px] rounded-sm overflow-hidden bg-[var(--color-surface-2)]"
+                    style={{ height: "100%" }}
+                    title={`${d.day} · ${d.sent} sent · ${d.deferred} deferred · ${d.bounced} bounced · ${d.complained} complaints`}
+                  >
+                    {SERIES.map((s) => {
+                      const v = d[s.key];
+                      if (!v) return null;
+                      return (
+                        <div
+                          key={s.key}
+                          style={{
+                            height: `${(v / max) * 100}%`,
+                            backgroundColor: s.color,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {SERIES.map((s) => (
+                <span
+                  key={s.key}
+                  className="flex items-center gap-1.5 text-xs text-[var(--color-neutral-900)]"
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-[3px]"
+                    style={{ backgroundColor: s.color }}
+                  />
+                  {s.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function RepStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "ok" | "warn" | "bad";
+}) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-800)]">
+        {label}
+      </div>
+      <div
+        className={
+          "mt-1.5 text-xl font-semibold tracking-[-0.02em] tabular-nums leading-none " +
+          (tone === "bad"
+            ? "text-[var(--color-bad)]"
+            : tone === "warn"
+              ? "text-[var(--color-warn)]"
+              : tone === "ok"
+                ? "text-[var(--color-ok)]"
+                : "")
+        }
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
