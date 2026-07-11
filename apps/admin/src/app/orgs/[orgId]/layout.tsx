@@ -43,6 +43,7 @@ import {
   IconButton,
   OfflineBanner,
   Spinner,
+  ThemeToggle,
   Tooltip,
   Wordmark,
 } from "@justmail/shared-ui";
@@ -372,6 +373,12 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
           >
             <Search size={15} />
           </IconButton>
+
+          <Tooltip content="Appearance">
+            <span>
+              <ThemeToggle />
+            </span>
+          </Tooltip>
 
           <Tooltip content="Recent activity">
             <span>

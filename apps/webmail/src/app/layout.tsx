@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { surfaceLight, surfaceDark } from "@justmail/design-tokens";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@justmail/shared-ui";
 import { Providers } from "@/lib/query";
 import "@/styles/globals.css";
 
@@ -30,9 +31,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="theme-light">
+    <html lang="en" className="theme-light" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
-        <Providers>{children}</Providers>
+        <ThemeProvider>
+          <Providers>{children}</Providers>
+        </ThemeProvider>
       </body>
     </html>
   );
