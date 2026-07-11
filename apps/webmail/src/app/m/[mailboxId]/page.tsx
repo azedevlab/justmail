@@ -1,5 +1,5 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -66,6 +66,7 @@ import {
   TabsTrigger,
   ThemeToggle,
   Tooltip,
+  useConfirm,
   usePrompt,
   useToast,
   Wordmark,
@@ -100,6 +101,7 @@ import {
   List,
   ListOrdered,
   MailOpen,
+  MailWarning,
   Minus,
   Paperclip,
   PenLine,
@@ -213,8 +215,14 @@ type Row =
 
 export default function MailboxView() {
   const { mailboxId } = useParams<{ mailboxId: string }>();
+  const router = useRouter();
   const me = useMe();
   const logout = useLogout();
+  // Guard the route: once the session query resolves to no user, bounce to login
+  // instead of leaving the shell mounted against 401s.
+  useEffect(() => {
+    if (me.isSuccess && me.data === null) router.replace("/login");
+  }, [me.isSuccess, me.data, router]);
   const qc = useQueryClient();
   const { toast } = useToast();
   const [folder, setFolder] = useState("INBOX");
@@ -445,6 +453,10 @@ export default function MailboxView() {
   const draftsPath = folders.data?.find(
     (f) => (f.special_use ?? "").toLowerCase() === "\\drafts",
   )?.path;
+  const trashPath = folders.data?.find(
+    (f) => (f.special_use ?? "").toLowerCase() === "\\trash",
+  )?.path;
+  const inTrash = folder === trashPath;
 
   // Opening a message in Drafts resumes it in the composer instead of the read
   // pane; everything else opens normally and clears its unread flag.
@@ -516,33 +528,25 @@ export default function MailboxView() {
 
   useHotkey("c", () => setCompose({}));
   useHotkey("#", () => openUid && setConfirmDelete(true), { deps: [openUid] });
-  useHotkey("s", () =>
-    openUid && flag.mutate({ uid: openUid, action: "star" }),
-    { deps: [openUid] },
-  );
-  // `?` carries an implicit Shift, which useHotkey's modifier match rejects, so
-  // bind it directly. Skip while typing in a field.
-  useEffect(() => {
-    const listener = (e: KeyboardEvent) => {
-      if (e.key !== "?") return;
-      const t = e.target;
-      if (
-        t instanceof HTMLElement &&
-        (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable)
-      )
-        return;
-      e.preventDefault();
-      setShortcutsOpen((v) => !v);
-    };
-    window.addEventListener("keydown", listener);
-    return () => window.removeEventListener("keydown", listener);
-  }, []);
+  useHotkey("?", () => setShortcutsOpen((v) => !v));
 
   // While searching, the server returns the matched set; otherwise the loaded
   // folder listing drives the list. Threading and virtualization run over
   // whichever set is active.
   const list = searching ? searchResults : messages;
   const listItems = list.data?.messages ?? [];
+
+  // Star state for the currently open message is read from the folder listing
+  // (which carries IMAP flags); toggling sends star/unstar so an already-starred
+  // message can be unstarred instead of being stuck flagged.
+  const openStarred =
+    listItems.find((m) => m.uid === openUid)?.flags.includes("\\Flagged") ??
+    false;
+  const toggleStar = (uid: number, starred: boolean) =>
+    flag.mutate({ uid, action: starred ? "unstar" : "star" });
+  useHotkey("s", () => openUid && toggleStar(openUid, openStarred), {
+    deps: [openUid, openStarred],
+  });
 
   const threads = useMemo(() => groupThreads(listItems), [listItems]);
   // Flatten threads into render rows: each head, plus its older messages when
@@ -778,6 +782,27 @@ export default function MailboxView() {
                   </li>
                 ))}
               </ul>
+            ) : list.isError ? (
+              <div className="p-6">
+                <Empty
+                  title={searching ? "Search failed" : "Couldn’t load this folder"}
+                  description={
+                    (list.error as ApiError | undefined)?.problem?.detail ??
+                    "Check your connection and try again."
+                  }
+                  icon={<MailWarning size={20} />}
+                  action={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => list.refetch()}
+                      loading={list.isFetching}
+                    >
+                      Retry
+                    </Button>
+                  }
+                />
+              </div>
             ) : list.data && listItems.length === 0 ? (
               <div className="p-6">
                 <Empty
@@ -874,13 +899,21 @@ export default function MailboxView() {
                   />
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Tooltip content="Star (s)">
+                  <Tooltip content={openStarred ? "Unstar (s)" : "Star (s)"}>
                     <button
-                      onClick={() => flag.mutate({ uid: openUid, action: "star" })}
-                      className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-warn)] transition-colors"
-                      aria-label="Star"
+                      onClick={() => toggleStar(openUid, openStarred)}
+                      className={`p-2 rounded-lg transition-colors hover:bg-[var(--hover-overlay)] ${
+                        openStarred
+                          ? "text-[var(--color-warn)]"
+                          : "text-[var(--color-neutral-900)] hover:text-[var(--color-warn)]"
+                      }`}
+                      aria-label={openStarred ? "Unstar" : "Star"}
+                      aria-pressed={openStarred}
                     >
-                      <Star size={15} />
+                      <Star
+                        size={15}
+                        fill={openStarred ? "currentColor" : "none"}
+                      />
                     </button>
                   </Tooltip>
                   <Tooltip content="Reply">
@@ -914,11 +947,11 @@ export default function MailboxView() {
                       </button>
                     </Tooltip>
                   )}
-                  <Tooltip content="Delete (#)">
+                  <Tooltip content={inTrash ? "Delete forever (#)" : "Delete (#)"}>
                     <button
                       onClick={() => setConfirmDelete(true)}
                       className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--color-bad-surface)] hover:text-[var(--color-bad)] transition-colors"
-                      aria-label="Delete"
+                      aria-label={inTrash ? "Delete forever" : "Delete"}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -994,9 +1027,13 @@ export default function MailboxView() {
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Delete message?"
-        description="This moves the message to Trash."
-        confirmLabel="Delete"
+        title={inTrash ? "Delete permanently?" : "Delete message?"}
+        description={
+          inTrash
+            ? "This permanently removes the message. It cannot be undone."
+            : "This moves the message to Trash."
+        }
+        confirmLabel={inTrash ? "Delete forever" : "Delete"}
         loading={remove.isPending}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
@@ -1438,6 +1475,10 @@ function UnlockScreen({
         <form
           onSubmit={f.handleSubmit((v) => {
             setErr(null);
+            if (!v.password) {
+              setErr("Enter your password.");
+              return;
+            }
             mut.mutate(v);
           })}
           className="space-y-3"
@@ -1446,7 +1487,7 @@ function UnlockScreen({
             <Input
               type="password"
               autoFocus
-              {...f.register("password", { required: true })}
+              {...f.register("password")}
             />
           </FormField>
           {err && (
@@ -1454,7 +1495,12 @@ function UnlockScreen({
               {err}
             </p>
           )}
-          <Button variant="primary" className="w-full" loading={mut.isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
+            loading={mut.isPending}
+          >
             Unlock
           </Button>
         </form>
@@ -1715,6 +1761,7 @@ function SignatureManager({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/signatures`;
   const key = ["signatures", orgId, mailboxId];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<Signature[]>(base) });
@@ -1833,7 +1880,17 @@ function SignatureManager({
           <IconButton
             size="sm"
             aria-label="Delete signature"
-            onClick={() => remove.mutate(s.id)}
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: "Delete signature?",
+                  body: `"${s.name}" will be permanently removed.`,
+                  tone: "danger",
+                  confirmLabel: "Delete",
+                })
+              )
+                remove.mutate(s.id);
+            }}
           >
             <Trash2 size={14} />
           </IconButton>
@@ -1860,6 +1917,7 @@ function TemplateManager({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/templates`;
   const key = ["templates", orgId, mailboxId];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<Template[]>(base) });
@@ -1970,7 +2028,17 @@ function TemplateManager({
           <IconButton
             size="sm"
             aria-label="Delete template"
-            onClick={() => remove.mutate(t.id)}
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: "Delete template?",
+                  body: `"${t.name}" will be permanently removed.`,
+                  tone: "danger",
+                  confirmLabel: "Delete",
+                })
+              )
+                remove.mutate(t.id);
+            }}
           >
             <Trash2 size={14} />
           </IconButton>
@@ -2028,6 +2096,7 @@ function FilterManager({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/filters`;
   const key = ["filters", orgId, mailboxId];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<SieveRule[]>(base) });
@@ -2291,7 +2360,17 @@ function FilterManager({
           <IconButton
             size="sm"
             aria-label="Delete filter"
-            onClick={() => remove.mutate(r.id)}
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: "Delete filter?",
+                  body: `"${r.name}" will be permanently removed.`,
+                  tone: "danger",
+                  confirmLabel: "Delete",
+                })
+              )
+                remove.mutate(r.id);
+            }}
           >
             <Trash2 size={14} />
           </IconButton>
@@ -2500,6 +2579,7 @@ function ContactsModal({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/contacts`;
   const key = ["contacts", orgId, mailboxId];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<Contact[]>(base) });
@@ -2609,7 +2689,17 @@ function ContactsModal({
                     <IconButton
                       size="sm"
                       aria-label={`Delete ${c.full_name}`}
-                      onClick={() => remove.mutate(c.id)}
+                      onClick={async () => {
+                        if (
+                          await confirm({
+                            title: "Delete contact?",
+                            body: `${c.full_name} will be permanently removed.`,
+                            tone: "danger",
+                            confirmLabel: "Delete",
+                          })
+                        )
+                          remove.mutate(c.id);
+                      }}
                     >
                       <Trash2 size={13} />
                     </IconButton>
@@ -2850,6 +2940,7 @@ function CalendarModal({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/calendar/events`;
   const key = ["calendar", orgId, mailboxId];
   const list = useQuery({
@@ -2944,7 +3035,17 @@ function CalendarModal({
                     <IconButton
                       size="sm"
                       aria-label={`Delete ${ev.summary}`}
-                      onClick={() => remove.mutate(ev.id)}
+                      onClick={async () => {
+                        if (
+                          await confirm({
+                            title: "Delete event?",
+                            body: `"${ev.summary || "(no title)"}" will be permanently removed.`,
+                            tone: "danger",
+                            confirmLabel: "Delete",
+                          })
+                        )
+                          remove.mutate(ev.id);
+                      }}
                     >
                       <Trash2 size={13} />
                     </IconButton>
@@ -3430,6 +3531,7 @@ function ComposePanel({
   const subject = f.watch("subject");
   const toVal = f.watch("to");
   const ccVal = f.watch("cc");
+  const bccVal = f.watch("bcc");
 
   // Drop a default signature into a fresh compose once signatures load.
   const signatureSeeded = useRef(false);
@@ -3445,7 +3547,7 @@ function ComposePanel({
   // the folder keeps a single live draft per compose session.
   useEffect(() => {
     const hasContent =
-      [toVal, ccVal, subject].some((v) => (v ?? "").trim()) ||
+      [toVal, ccVal, bccVal, subject].some((v) => (v ?? "").trim()) ||
       bodyText().trim().length > 0;
     if (!hasContent) return;
     const timer = setTimeout(async () => {
@@ -3457,6 +3559,7 @@ function ComposePanel({
           {
             to: splitAddresses(toVal),
             cc: splitAddresses(ccVal),
+            bcc: splitAddresses(bccVal),
             subject,
             text: bodyText(),
             html: bodyHtml() || undefined,
@@ -3476,7 +3579,7 @@ function ComposePanel({
       }
     }, DRAFT_AUTOSAVE_MS);
     return () => clearTimeout(timer);
-  }, [toVal, ccVal, subject, bodyRev, orgId, mailboxId, initial]);
+  }, [toVal, ccVal, bccVal, subject, bodyRev, orgId, mailboxId, initial]);
 
   const submit = (sendAt?: string) =>
     f.handleSubmit(async (v) => {
@@ -3576,7 +3679,10 @@ function ComposePanel({
           <X size={14} />
         </IconButton>
       </header>
-      <form className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+      <form
+        className="flex-1 min-h-0 overflow-y-auto flex flex-col"
+        onSubmit={(e) => e.preventDefault()}
+      >
         {/* Recipient + subject rows: clearly bordered, labelled fields so the
             inputs are visible against the panel surface. */}
         <div className="px-4 pt-3 space-y-3">
@@ -3598,7 +3704,6 @@ function ComposePanel({
             <Controller
               control={f.control}
               name="to"
-              rules={{ required: true }}
               render={({ field }) => (
                 <RecipientField
                   ariaLabel="To"

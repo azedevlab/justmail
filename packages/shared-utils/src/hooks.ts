@@ -20,6 +20,10 @@ export function useHotkey(
     const ctrl = parts.includes("ctrl") || parts.includes("control");
     const shift = parts.includes("shift");
     const alt = parts.includes("alt") || parts.includes("option");
+    // Shifted punctuation (e.g. "#", "?", "/") is produced by holding Shift on
+    // most layouts, so a bare "#" bind must not require shift to be absent —
+    // enforce the shift state only for letters/digits or explicit shift combos.
+    const punctuation = key.length === 1 && !/[a-z0-9]/.test(key);
     const listener = (e: KeyboardEvent) => {
       if (
         !options.allowInInput &&
@@ -31,7 +35,7 @@ export function useHotkey(
       if (e.key.toLowerCase() !== key) return;
       if (meta !== e.metaKey) return;
       if (ctrl !== e.ctrlKey) return;
-      if (shift !== e.shiftKey) return;
+      if (!(punctuation && !shift) && shift !== e.shiftKey) return;
       if (alt !== e.altKey) return;
       e.preventDefault();
       cb.current(e);
