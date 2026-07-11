@@ -97,6 +97,24 @@ export class AttachmentsService {
     return toUpload(rows[0]!);
   }
 
+  // tus-style status probe: lets a client resync to the authoritative offset
+  // after a dropped connection so it can resume rather than restart.
+  async getUpload(
+    principal: SessionPrincipal,
+    orgId: string,
+    uploadId: string,
+  ): Promise<Upload> {
+    await this.orgs.requireRole(orgId, principal.userId, "member");
+    const { rows } = await this.db.query<UploadRow>(
+      `SELECT id, org_id, filename, mime, size_bytes, uploaded_bytes,
+              offset_bytes, storage_kind, storage_key, expires_at, created_at
+       FROM uploads WHERE id = $1 AND org_id = $2`,
+      [uploadId, orgId],
+    );
+    if (!rows[0]) throw new NotFoundException({ title: "Upload not found" });
+    return toUpload(rows[0]);
+  }
+
   async appendChunk(
     principal: SessionPrincipal,
     orgId: string,

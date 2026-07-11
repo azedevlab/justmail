@@ -38,6 +38,15 @@ export class AttachmentsController {
     return this.svc.createUpload(principal, orgId, body, req.ip);
   }
 
+  @Get("uploads/:id")
+  uploadStatus(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.getUpload(principal, orgId, id);
+  }
+
   @Post("uploads/:id/chunks")
   async appendChunk(
     @Principal() principal: SessionPrincipal,
