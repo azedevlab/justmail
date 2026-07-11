@@ -1,5 +1,4 @@
-import { type ZodTypeAny } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { z, type ZodTypeAny } from "zod";
 
 /**
  * OpenAPI 3.1 builder. Consumers register routes at boot; the builder
@@ -44,7 +43,7 @@ export class OpenApiBuilder {
   }
 
   addSchema(name: string, schema: ZodTypeAny): this {
-    this.schemas.set(name, zodToJsonSchema(schema, { name, $refStrategy: "none" }));
+    this.schemas.set(name, z.toJSONSchema(schema, { unrepresentable: "any" }));
     return this;
   }
 
@@ -101,7 +100,7 @@ export class OpenApiBuilder {
               required: p.required ?? p.in === "path",
               description: p.description,
               schema: p.schema
-                ? zodToJsonSchema(p.schema, { $refStrategy: "none" })
+                ? z.toJSONSchema(p.schema, { unrepresentable: "any" })
                 : { type: "string" },
             })),
           }
@@ -112,7 +111,7 @@ export class OpenApiBuilder {
               required: true,
               content: {
                 "application/json": {
-                  schema: zodToJsonSchema(r.requestBody, { $refStrategy: "none" }),
+                  schema: z.toJSONSchema(r.requestBody, { unrepresentable: "any" }),
                 },
               },
             },
@@ -126,7 +125,7 @@ export class OpenApiBuilder {
             content: resp.schema
               ? {
                   "application/json": {
-                    schema: zodToJsonSchema(resp.schema, { $refStrategy: "none" }),
+                    schema: z.toJSONSchema(resp.schema, { unrepresentable: "any" }),
                   },
                 }
               : undefined,

@@ -18,8 +18,7 @@
   },
   "dependencies": {
     "@justmail/contracts": "workspace:*",
-    "zod": "^4.4.3",
-    "zod-to-json-schema": "^3.24.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.8.0"
