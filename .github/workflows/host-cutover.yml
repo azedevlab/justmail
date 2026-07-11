@@ -1,0 +1,166 @@
+name: Host cutover
+
+# Repoints the platform's public hostnames: updates JM_*_HOST in the server
+# .env, ensures matching Cloudflare A records (optionally proxied so traffic
+# rides Cloudflare's backbone past bad direct-path peering), redeploys via the
+# standard deploy script, and health-checks the result. Rolls the .env back
+# and redeploys if any endpoint stays unhealthy.
+#
+# The Cloudflare token never leaves the VM. TLS stays on Traefik via the
+# DNS-01 resolver, which keeps issuing/renewing certs behind the proxy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_host:
+        description: "New API hostname"
+        required: true
+      webmail_host:
+        description: "New webmail hostname (also becomes JM_WEB_HOST, the cookie parent)"
+        required: true
+      admin_host:
+        description: "New admin hostname"
+        required: true
+      proxied:
+        description: "Route the hosts through Cloudflare's proxy"
+        required: true
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Cut over hostnames
+        run: |
+          ssh -i ~/.ssh/deploy_key root@${{ secrets.DEPLOY_HOST }} \
+            API_HOST='${{ inputs.api_host }}' \
+            WEBMAIL_HOST='${{ inputs.webmail_host }}' \
+            ADMIN_HOST='${{ inputs.admin_host }}' \
+            PROXIED='${{ inputs.proxied }}' \
+            'bash -s' <<'REMOTE'
+          set -e
+          cd /opt/justmail/app
+          ENV=/opt/justmail/.env
+          BAK=/opt/justmail/.env.bak.$(date +%s)
+          cp "$ENV" "$BAK"
+          echo "env backup: $BAK"
+
+          set_kv() { if grep -qE "^$1=" "$ENV"; then sed -i "s|^$1=.*|$1=$2|" "$ENV"; else echo "$1=$2" >> "$ENV"; fi; }
+          echo "-- hosts before --"; grep -E '^JM_(API|WEBMAIL|ADMIN|WEB)_HOST=' "$ENV" || true
+          set_kv JM_API_HOST "$API_HOST"
+          set_kv JM_WEBMAIL_HOST "$WEBMAIL_HOST"
+          set_kv JM_ADMIN_HOST "$ADMIN_HOST"
+          set_kv JM_WEB_HOST "$WEBMAIL_HOST"
+          echo "-- hosts after --"; grep -E '^JM_(API|WEBMAIL|ADMIN|WEB)_HOST=' "$ENV"
+
+          CF_TOKEN=$(grep -E '^CLOUDFLARE_API_TOKEN=' "$ENV" | cut -d= -f2-)
+          [ -n "$CF_TOKEN" ] || { echo "CLOUDFLARE_API_TOKEN missing in .env"; exit 1; }
+          MYIP=$(curl -s -4 --max-time 10 https://ifconfig.me)
+          [ -n "$MYIP" ] || { echo "cannot determine public IPv4"; exit 1; }
+          export CF_TOKEN MYIP PROXIED
+
+          ensure_record() {
+          python3 - "$1" <<'PY'
+          import json, os, sys, urllib.error, urllib.request
+
+          host = sys.argv[1]
+          tok, ip = os.environ["CF_TOKEN"], os.environ["MYIP"]
+          want = os.environ["PROXIED"] == "true"
+
+          def cf(method, path, body=None):
+              req = urllib.request.Request(
+                  "https://api.cloudflare.com/client/v4" + path,
+                  data=json.dumps(body).encode() if body is not None else None,
+                  method=method,
+                  headers={"Authorization": "Bearer " + tok,
+                           "Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as r:
+                  return json.load(r)
+
+          parts = host.split(".")
+          zid = zone = None
+          for i in range(len(parts) - 1):
+              cand = ".".join(parts[i:])
+              res = cf("GET", "/zones?name=" + cand)["result"]
+              if res:
+                  zone, zid = cand, res[0]["id"]
+                  break
+          if not zid:
+              sys.exit("no Cloudflare zone found for " + host)
+
+          if want:
+              try:
+                  ssl = cf("GET", "/zones/" + zid + "/settings/ssl")["result"]["value"]
+                  print("zone " + zone + " ssl mode: " + ssl)
+                  if ssl == "flexible":
+                      sys.exit("zone SSL mode 'flexible' would redirect-loop an https "
+                               "origin; set it to Full (strict) first")
+              except urllib.error.HTTPError as e:
+                  print("cannot read zone ssl mode (token scope, HTTP %d); assuming "
+                        "Full — verify in the dashboard" % e.code)
+
+          recs = [r for r in cf("GET", "/zones/" + zid + "/dns_records?name=" + host)["result"]
+                  if r["type"] in ("A", "CNAME")]
+          if recs:
+              r = recs[0]
+              print("%s: existing %s -> %s proxied=%s" % (host, r["type"], r["content"], r["proxied"]))
+              patch = {}
+              if r["type"] == "A" and r["content"] != ip:
+                  patch["content"] = ip
+              if r["proxied"] != want:
+                  patch["proxied"] = want
+              if patch:
+                  cf("PATCH", "/zones/%s/dns_records/%s" % (zid, r["id"]), patch)
+                  print("%s: patched %s" % (host, patch))
+          else:
+              cf("POST", "/zones/" + zid + "/dns_records",
+                 {"type": "A", "name": host, "content": ip, "ttl": 1, "proxied": want})
+              print("%s: created A -> %s proxied=%s" % (host, ip, want))
+          PY
+          }
+          ensure_record "$API_HOST"
+          ensure_record "$WEBMAIL_HOST"
+          ensure_record "$ADMIN_HOST"
+
+          echo "-- redeploy with new hosts --"
+          bash scripts/deploy.sh
+
+          probe() {
+            CODE=000
+            for i in $(seq 1 24); do
+              CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$1$2" || true)
+              case "$CODE" in 200|301|302|307|308) echo "https://$1$2 -> $CODE"; return 0;; esac
+              sleep 10
+            done
+            echo "https://$1$2 -> $CODE (gave up)"
+            return 1
+          }
+          FAIL=0
+          probe "$API_HOST" /healthz || FAIL=1
+          probe "$WEBMAIL_HOST" / || FAIL=1
+          probe "$ADMIN_HOST" / || FAIL=1
+          if [ "$FAIL" = "1" ]; then
+            echo "!! health checks failed — restoring previous .env and redeploying"
+            cp "$BAK" "$ENV"
+            bash scripts/deploy.sh
+            exit 1
+          fi
+          echo "-- proxy check --"
+          curl -s -o /dev/null -D- --max-time 15 "https://$API_HOST/healthz" | grep -i '^cf-ray' \
+            || echo "(no cf-ray header — record not proxied)"
+          echo "cutover OK"
+          REMOTE
