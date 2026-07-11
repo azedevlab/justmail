@@ -29,6 +29,7 @@
     "argon2": "^0.43.0",
     "cookie-parser": "^1.4.7",
     "express": "^5.1.0",
+    "fast-xml-parser": "^4.5.1",
     "imapflow": "^1.0.180",
     "ioredis": "^5.4.1",
     "ldapts": "^8.1.8",

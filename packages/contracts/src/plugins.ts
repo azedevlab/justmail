@@ -62,7 +62,7 @@ export type Plugin = z.infer<typeof Plugin>;
 export const PluginInstall = z.object({
   id: Uuid,
   plugin_id: Uuid,
-  config: z.record(z.unknown()),
+  config: z.record(z.string(), z.unknown()),
   enabled: z.boolean(),
   updated_at: IsoDate,
 });

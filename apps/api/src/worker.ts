@@ -12,6 +12,7 @@ import { WebmailService } from "./webmail/webmail.service";
 import { LdapService } from "./ldap/ldap.service";
 import { RetentionService } from "./retention/retention.service";
 import { BackupEngine } from "./backups/backup-engine.service";
+import { DkimService } from "./dkim/dkim.service";
 import { config } from "./config";
 
 // Ticks: each background loop no-ops when nothing is due, so its cadence bounds
@@ -24,6 +25,7 @@ const CRED_SWEEP_MS = config.CRED_SWEEP_POLL_SECONDS * 1_000;
 const LDAP_MS = config.LDAP_POLL_SECONDS * 1_000;
 const RETENTION_MS = config.RETENTION_POLL_SECONDS * 1_000;
 const BACKUP_MS = config.BACKUP_POLL_SECONDS * 1_000;
+const DKIM_ROTATE_MS = config.DKIM_ROTATION_POLL_SECONDS * 1_000;
 const SEND_MS = config.WEBMAIL_SEND_POLL_SECONDS * 1_000;
 
 async function main(): Promise<void> {
@@ -40,6 +42,7 @@ async function main(): Promise<void> {
   const ldap = app.get(LdapService);
   const retention = app.get(RetentionService);
   const backups = app.get(BackupEngine);
+  const dkim = app.get(DkimService);
   logger.log("justmail worker up");
 
   const runners: Array<{ label: string; ms: number; fn: () => Promise<unknown> }> = [
@@ -51,6 +54,7 @@ async function main(): Promise<void> {
     { label: "ldap", ms: LDAP_MS, fn: () => ldap.runDueSyncs() },
     { label: "retention", ms: RETENTION_MS, fn: () => retention.runDuePruning() },
     { label: "backups", ms: BACKUP_MS, fn: () => backups.runDue() },
+    { label: "dkim-rotate", ms: DKIM_ROTATE_MS, fn: () => dkim.rotateDue() },
   ];
 
   const timers = runners.map((r) =>

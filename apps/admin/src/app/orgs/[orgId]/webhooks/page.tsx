@@ -25,6 +25,7 @@ import {
   TH,
   THead,
   TR,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Plus } from "lucide-react";
@@ -47,6 +48,7 @@ export default function WebhooksPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const list = useQuery({
     queryKey: ["webhooks", orgId],
@@ -118,8 +120,15 @@ export default function WebhooksPage() {
                     <TD className="text-right">
                       <button
                         className="text-xs text-[var(--color-bad)] hover:underline"
-                        onClick={() => {
-                          if (confirm("Delete this endpoint?")) remove.mutate(w.id);
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: "Delete this endpoint?",
+                              tone: "danger",
+                              confirmLabel: "Delete",
+                            })
+                          )
+                            remove.mutate(w.id);
                         }}
                       >
                         Delete

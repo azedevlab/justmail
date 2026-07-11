@@ -163,14 +163,18 @@ function LoginForm({ onDone }: { onDone: () => void }) {
       className="space-y-3"
       onSubmit={f.handleSubmit((v) => {
         setErr(null);
+        if (!v.email.trim() || !v.password) {
+          setErr("Enter your email and password.");
+          return;
+        }
         mut.mutate(v);
       })}
     >
       <FormField label="Email">
-        <Input type="email" autoComplete="email" {...f.register("email", { required: true })} />
+        <Input type="email" autoComplete="email" {...f.register("email")} />
       </FormField>
       <FormField label="Password">
-        <PasswordInput autoComplete="current-password" {...f.register("password", { required: true })} />
+        <PasswordInput autoComplete="current-password" {...f.register("password")} />
       </FormField>
       {needsTotp && (
         <FormField label="2FA code">
@@ -182,7 +186,7 @@ function LoginForm({ onDone }: { onDone: () => void }) {
           {err}
         </p>
       )}
-      <Button variant="primary" className="w-full" loading={mut.isPending}>
+      <Button type="submit" variant="primary" className="w-full" loading={mut.isPending}>
         Sign in
       </Button>
       <div className="flex items-center gap-2 py-0.5">
@@ -230,6 +234,14 @@ function BootstrapForm({ onDone }: { onDone: () => void }) {
       className="space-y-3"
       onSubmit={f.handleSubmit((v) => {
         setErr(null);
+        if (!v.name.trim() || !v.email.trim() || !v.org_name.trim()) {
+          setErr("Fill in your name, email, and organization name.");
+          return;
+        }
+        if (v.password.length < 12) {
+          setErr("Password must be at least 12 characters.");
+          return;
+        }
         mut.mutate(v);
       })}
     >
@@ -237,23 +249,23 @@ function BootstrapForm({ onDone }: { onDone: () => void }) {
         No accounts exist yet. Create the first owner — teammates can be invited later.
       </p>
       <FormField label="Your name">
-        <Input {...f.register("name", { required: true })} />
+        <Input {...f.register("name")} />
       </FormField>
       <FormField label="Email">
-        <Input type="email" autoComplete="email" {...f.register("email", { required: true })} />
+        <Input type="email" autoComplete="email" {...f.register("email")} />
       </FormField>
       <FormField label="Password (min 12)">
-        <PasswordInput autoComplete="new-password" {...f.register("password", { required: true, minLength: 12 })} />
+        <PasswordInput autoComplete="new-password" {...f.register("password")} />
       </FormField>
       <FormField label="Organization name">
-        <Input {...f.register("org_name", { required: true })} />
+        <Input {...f.register("org_name")} />
       </FormField>
       {err && (
         <p className="text-xs text-[var(--color-bad)]" role="alert">
           {err}
         </p>
       )}
-      <Button variant="primary" className="w-full" loading={mut.isPending}>
+      <Button type="submit" variant="primary" className="w-full" loading={mut.isPending}>
         Create admin account
       </Button>
     </form>

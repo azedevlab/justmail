@@ -60,12 +60,20 @@ export default function InviteAcceptPage() {
           className="space-y-3"
           onSubmit={f.handleSubmit((v) => {
             setErr(null);
+            if (preview.data.needs_signup && !v.name.trim()) {
+              setErr("Enter your name.");
+              return;
+            }
+            if (v.password.length < 12) {
+              setErr("Password must be at least 12 characters.");
+              return;
+            }
             mut.mutate(v);
           })}
         >
           {preview.data.needs_signup && (
             <FormField label="Your name">
-              <Input autoFocus {...f.register("name", { required: true })} />
+              <Input autoFocus {...f.register("name")} />
             </FormField>
           )}
           <FormField
@@ -74,7 +82,7 @@ export default function InviteAcceptPage() {
             }
           >
             <PasswordInput
-              {...f.register("password", { required: true, minLength: 12 })}
+              {...f.register("password")}
             />
           </FormField>
           {err && (
@@ -83,6 +91,7 @@ export default function InviteAcceptPage() {
             </p>
           )}
           <Button
+            type="submit"
             variant="primary"
             className="w-full"
             loading={mut.isPending}

@@ -59,6 +59,10 @@ export interface SessionPrincipal {
   email: string;
   name: string;
   sessionId: string;
+  // Set for mailbox-first webmail sessions: the session is bound to this one
+  // mailbox (and its org), which the webmail read path uses for isolation.
+  mailboxId?: string | null;
+  orgId?: string | null;
 }
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -140,10 +144,11 @@ export class AuthService {
       user?.password_hash ?? DUMMY_HASH,
       req.password,
     );
+    // No matching console user: fall back to mailbox-first login so an account
+    // created in the admin console (a mailbox) can sign into webmail directly
+    // with its own address + password.
     if (!user || !ok) {
-      throw new UnauthorizedException({
-        title: "Invalid credentials",
-      });
+      return this.mailboxLogin(req, ip, userAgent);
     }
     if (user.status !== "active") {
       throw new ForbiddenException({ title: "Account suspended" });
@@ -174,17 +179,90 @@ export class AuthService {
     return this.createSession(user.id, ip, userAgent);
   }
 
-  async createSession(userId: string, ip?: string, userAgent?: string) {
+  /** Mailbox-first login: authenticate against a mailbox's own credentials and
+   *  return a session bound to that mailbox, with its IMAP password sealed to
+   *  the session so the inbox opens without a second unlock step. */
+  private async mailboxLogin(
+    req: LoginRequest,
+    ip?: string,
+    userAgent?: string,
+  ) {
+    const at = req.email.lastIndexOf("@");
+    const localPart = at > 0 ? req.email.slice(0, at).toLowerCase() : "";
+    const domain = at > 0 ? req.email.slice(at + 1).toLowerCase() : "";
+    const { rows } = await this.db.query<{
+      id: string;
+      password_hash: string;
+      status: string;
+      org_id: string;
+      address: string;
+    }>(
+      `SELECT m.id, m.password_hash, m.status, d.org_id,
+              (m.local_part || '@' || d.name) AS address
+       FROM mailboxes m JOIN domains d ON d.id = m.domain_id
+       WHERE m.local_part = $1 AND lower(d.name) = $2`,
+      [localPart, domain],
+    );
+    const mb = rows[0];
+    const ok = await argon2.verify(mb?.password_hash ?? DUMMY_HASH, req.password);
+    if (!mb || !ok) {
+      throw new UnauthorizedException({ title: "Invalid credentials" });
+    }
+    if (mb.status !== "active") {
+      throw new ForbiddenException({ title: "Mailbox suspended" });
+    }
+    // Anchor the session to a per-mailbox identity row so the existing session
+    // and audit plumbing (which keys off users.id) is unchanged. This row is
+    // never used for password auth — the mailbox hash above is authoritative —
+    // so it carries an unusable hash and no org membership.
+    // Bind email and name to separate placeholders: reusing one placeholder for
+    // both would make Postgres deduce conflicting types for it (email is citext,
+    // name is text) and fail with "inconsistent types deduced for parameter $1".
+    const shadow = await this.db.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash, status)
+       VALUES ($1, $2, $3, 'active')
+       ON CONFLICT (email) DO UPDATE SET updated_at = now()
+       RETURNING id`,
+      [mb.address, mb.address, DUMMY_HASH],
+    );
+    const userId = shadow.rows[0]!.id;
+    const session = await this.createSession(userId, ip, userAgent, mb.id);
+    await this.credStore.store(session.sessionId, mb.id, mb.address, req.password);
+    this.audit.log({
+      orgId: mb.org_id,
+      actorType: "user",
+      actorId: userId,
+      action: "auth.login",
+      targetType: "mailbox",
+      targetId: mb.id,
+      ip,
+    });
+    return { token: session.token, expiresAt: session.expiresAt };
+  }
+
+  async createSession(
+    userId: string,
+    ip?: string,
+    userAgent?: string,
+    mailboxId?: string | null,
+  ) {
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(
       Date.now() + config.SESSION_TTL_DAYS * 24 * 3600 * 1000,
     );
-    await this.db.query(
-      `INSERT INTO sessions (user_id, token_hash, ip, user_agent, expires_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [userId, sha256(token), ip ?? null, userAgent ?? null, expiresAt],
+    const { rows } = await this.db.query<{ id: string }>(
+      `INSERT INTO sessions (user_id, token_hash, ip, user_agent, expires_at, mailbox_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [
+        userId,
+        sha256(token),
+        ip ?? null,
+        userAgent ?? null,
+        expiresAt,
+        mailboxId ?? null,
+      ],
     );
-    return { token, expiresAt };
+    return { token, expiresAt, sessionId: rows[0]!.id };
   }
 
   async resolveSession(token: string): Promise<SessionPrincipal | null> {
@@ -193,9 +271,18 @@ export class AuthService {
       user_id: string;
       email: string;
       name: string;
+      mailbox_id: string | null;
+      mailbox_address: string | null;
+      mailbox_org_id: string | null;
     }>(
-      `SELECT s.id AS session_id, u.id AS user_id, u.email, u.name
-       FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT s.id AS session_id, u.id AS user_id, u.email, u.name,
+              s.mailbox_id,
+              (mb.local_part || '@' || d.name) AS mailbox_address,
+              d.org_id AS mailbox_org_id
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN mailboxes mb ON mb.id = s.mailbox_id
+       LEFT JOIN domains d ON d.id = mb.domain_id
        WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'active'`,
       [sha256(token)],
     );
@@ -203,13 +290,42 @@ export class AuthService {
     if (!row) return null;
     return {
       userId: row.user_id,
-      email: row.email,
+      email: row.mailbox_address ?? row.email,
       name: row.name,
       sessionId: row.session_id,
+      mailboxId: row.mailbox_id,
+      orgId: row.mailbox_org_id,
     };
   }
 
   async me(principal: SessionPrincipal): Promise<Me> {
+    // Mailbox-bound session: identity is the mailbox itself, scoped to its one
+    // org. It has no console credentials (2FA/passkeys), and the client uses
+    // mailbox_id to open the inbox directly.
+    if (principal.mailboxId) {
+      const org = await this.db.query<{
+        id: string;
+        name: string;
+        slug: string;
+      }>(
+        `SELECT o.id, o.name, o.slug FROM organizations o WHERE o.id = $1`,
+        [principal.orgId],
+      );
+      return {
+        id: principal.mailboxId,
+        email: principal.email,
+        name: principal.name,
+        totp_enabled: false,
+        passkey_enabled: false,
+        orgs: org.rows.map((o) => ({
+          id: o.id,
+          name: o.name,
+          slug: o.slug,
+          role: "member",
+        })) as Me["orgs"],
+        mailbox_id: principal.mailboxId,
+      };
+    }
     const [user, orgs, passkeys] = await Promise.all([
       this.db.query<{ totp_enabled: boolean }>(
         "SELECT totp_enabled FROM users WHERE id = $1",
@@ -233,6 +349,7 @@ export class AuthService {
       totp_enabled: user.rows[0]?.totp_enabled ?? false,
       passkey_enabled: Number(passkeys.rows[0]?.n ?? 0) > 0,
       orgs: orgs.rows as Me["orgs"],
+      mailbox_id: null,
     };
   }
 

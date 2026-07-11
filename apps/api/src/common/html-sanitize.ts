@@ -18,6 +18,12 @@ const OPTIONS: sanitizeHtml.IOptions = {
     img: ["src", "alt", "title", "width", "height"],
     td: ["colspan", "rowspan", "align", "valign"],
     th: ["colspan", "rowspan", "align", "valign"],
+    "*": ["style"],
+  },
+  // Only text-alignment survives from style attributes — it can't reference URLs
+  // or positioning, so it carries no exfiltration/layout-attack risk.
+  allowedStyles: {
+    "*": { "text-align": [/^(left|right|center|justify)$/] },
   },
   // Only http(s), mailto, and inline data-image URLs; blocks javascript:/vbscript:.
   allowedSchemes: ["http", "https", "mailto"],
