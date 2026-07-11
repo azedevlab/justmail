@@ -4,11 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { startRegistration } from "@simplewebauthn/browser";
 import QRCode from "qrcode";
-import type {
-  PasskeyInfo,
-  SessionInfo,
-  TwoFaSetupResponse,
-} from "@justmail/contracts";
+import type { PasskeyInfo, TwoFaSetupResponse } from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
 import {
   Badge,
@@ -32,7 +28,7 @@ import {
   TR,
   useToast,
 } from "@justmail/shared-ui";
-import { KeyRound, Monitor, Plus, ShieldCheck } from "lucide-react";
+import { KeyRound, Plus, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/session";
 
@@ -48,12 +44,11 @@ export default function AccountPage() {
     <>
       <PageHeader
         title="Account & security"
-        description="Two-factor authentication, passkeys, and active sessions."
+        description="Two-factor authentication and passkeys."
       />
       <PageBody>
         <TwoFactorCard enabled={me.data?.totp_enabled ?? false} onChange={() => me.refetch()} />
         <PasskeysCard />
-        <SessionsCard />
       </PageBody>
     </>
   );
@@ -428,76 +423,5 @@ function NamePasskeyModal({
         />
       </FormField>
     </Modal>
-  );
-}
-
-function SessionsCard() {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const sessions = useQuery({
-    queryKey: ["sessions"],
-    queryFn: () => api.get<SessionInfo[]>("/v1/auth/sessions"),
-  });
-  const revoke = useMutation({
-    mutationFn: (id: string) => api.del(`/v1/auth/sessions/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sessions"] });
-      toast({ title: "Session revoked", tone: "ok" });
-    },
-    onError: (e) => toast({ title: errMsg(e), tone: "bad" }),
-  });
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <span className="inline-flex items-center gap-2">
-            <Monitor size={16} /> Active sessions
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardBody>
-        {sessions.isLoading && <SkeletonRows count={3} />}
-        {sessions.data && sessions.data.length > 0 && (
-          <Table>
-            <THead>
-              <TR>
-                <TH>Device</TH>
-                <TH>IP</TH>
-                <TH>Signed in</TH>
-                <TH></TH>
-              </TR>
-            </THead>
-            <tbody>
-              {sessions.data.map((s) => (
-                <TR key={s.id}>
-                  <TD className="max-w-[280px] truncate text-xs">
-                    {s.user_agent ?? "Unknown device"}
-                  </TD>
-                  <TD>
-                    <span className="mono text-xs">{s.ip ?? "—"}</span>
-                  </TD>
-                  <TD className="text-xs">
-                    {new Date(s.created_at).toLocaleString()}
-                  </TD>
-                  <TD className="text-right">
-                    {s.current ? (
-                      <Badge tone="ok">This device</Badge>
-                    ) : (
-                      <button
-                        className="text-xs text-[var(--color-bad)] hover:underline"
-                        onClick={() => revoke.mutate(s.id)}
-                      >
-                        Revoke
-                      </button>
-                    )}
-                  </TD>
-                </TR>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </CardBody>
-    </Card>
   );
 }

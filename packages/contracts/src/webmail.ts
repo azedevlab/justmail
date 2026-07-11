@@ -80,7 +80,7 @@ export const Message = z.object({
       inline: z.boolean(),
     }),
   ),
-  headers: z.record(z.string()),
+  headers: z.record(z.string(), z.string()),
 });
 export type Message = z.infer<typeof Message>;
 

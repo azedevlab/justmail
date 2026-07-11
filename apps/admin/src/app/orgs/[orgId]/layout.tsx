@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import {
   Avatar,
+  Button,
   CommandPalette,
   DropdownItem,
   DropdownLabel,
@@ -72,6 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/domains", label: "Domains", icon: <Globe2 size={15} />, shortcut: "g d" },
       { href: "/mailboxes", label: "Mailboxes", icon: <Mail size={15} />, shortcut: "g m" },
       { href: "/aliases", label: "Aliases", icon: <Link2 size={15} /> },
+      { href: "/groups", label: "Groups", icon: <Users size={15} /> },
       { href: "/queue", label: "Queue", icon: <Inbox size={15} /> },
       { href: "/deliverability", label: "Deliverability", icon: <CircleDot size={15} /> },
     ],
@@ -188,6 +190,30 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
       router.replace("/login");
     },
   });
+
+  if (me.isError) {
+    return (
+      <main className="min-h-screen grid place-items-center p-6">
+        <div className="max-w-sm text-center space-y-3">
+          <p className="text-sm font-medium text-[var(--color-neutral-1100)]">
+            Couldn&apos;t reach JustMail
+          </p>
+          <p className="text-xs text-[var(--color-neutral-800)]">
+            Your session couldn&apos;t be verified. Check your connection and
+            retry, or sign in again.
+          </p>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <Button variant="primary" onClick={() => me.refetch()}>
+              Retry
+            </Button>
+            <Button variant="secondary" onClick={() => router.replace("/login")}>
+              Sign in
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (!me.data) {
     return (

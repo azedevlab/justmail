@@ -14,17 +14,15 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: cn(
-    "text-white border border-[var(--color-accent-ring)]",
-    "bg-[linear-gradient(180deg,var(--color-brand-400),var(--color-brand-600))]",
+    "text-[var(--color-on-accent)] bg-[var(--color-accent)] border border-transparent",
     "shadow-[var(--shadow-btn-primary)]",
-    "hover:bg-[linear-gradient(180deg,var(--color-brand-300),var(--color-brand-500))]",
+    "hover:bg-[var(--color-accent-hover-solid)]",
     "active:translate-y-px active:shadow-[var(--shadow-btn-active)]",
   ),
   secondary: cn(
-    "text-[var(--color-neutral-1100)] bg-[var(--color-surface-3)]",
+    "text-[var(--color-neutral-1100)] bg-transparent",
     "border border-[var(--color-border-strong)]",
-    "shadow-[var(--shadow-1)]",
-    "hover:bg-[var(--color-surface-2)]",
+    "hover:bg-[var(--hover-overlay)]",
     "active:translate-y-px",
   ),
   ghost: cn(
@@ -56,6 +54,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     disabled,
     className,
     children,
+    type = "button",
     ...rest
   },
   ref,
@@ -63,6 +62,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <button
       ref={ref}
+      type={type}
       disabled={disabled || loading}
       className={cn(
         "inline-flex items-center justify-center font-medium select-none whitespace-nowrap",

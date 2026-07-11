@@ -17,7 +17,7 @@ export function Progress({
       ? "bg-[var(--color-bad)]"
       : tone === "warn"
         ? "bg-[var(--color-warn)]"
-        : "bg-[var(--color-brand-500)]";
+        : "bg-[var(--color-accent)]";
   return (
     <div
       role="progressbar"

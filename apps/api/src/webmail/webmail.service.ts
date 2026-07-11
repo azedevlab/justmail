@@ -26,6 +26,7 @@ import MailComposer from "nodemailer/lib/mail-composer";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
+import { WebhooksService } from "../webhooks/webhooks.service";
 import { config } from "../config";
 import { open, seal } from "../common/secretbox";
 import { sanitizeMailHtml } from "../common/html-sanitize";
@@ -102,6 +103,7 @@ export class WebmailService {
     private readonly db: Db,
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
+    private readonly webhooks: WebhooksService,
     private readonly credStore: WebmailCredentialStore,
     private readonly sessions: ImapSessionManager,
     private readonly idle: ImapIdleWatcher,
@@ -137,7 +139,7 @@ export class WebmailService {
     mailboxId: string,
     password: string,
   ): Promise<void> {
-    const mb = await this.mailboxFor(orgId, mailboxId, principal.userId);
+    const mb = await this.mailboxFor(orgId, mailboxId, principal);
     // Try a lightweight IMAP login to confirm the password works.
     const client = this.imap(mb.address, password);
     try {
@@ -723,7 +725,7 @@ export class WebmailService {
     mailboxId: string,
     id: string,
   ): Promise<void> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const { rowCount } = await this.db.query(
       `UPDATE scheduled_sends
          SET status = 'cancelled', updated_at = now()
@@ -753,7 +755,7 @@ export class WebmailService {
     orgId: string,
     mailboxId: string,
   ): Promise<ScheduledSend[]> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const { rows } = await this.db.query<{
       id: string;
       payload: ComposeRequest;
@@ -782,7 +784,7 @@ export class WebmailService {
     mailboxId: string,
     id: string,
   ): Promise<SendStatus> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const { rows } = await this.db.query<{
       id: string;
       status: SendStatus["status"];
@@ -851,6 +853,15 @@ export class WebmailService {
           targetId: row.mailbox_id,
           meta: { subject: row.payload.subject, to: row.payload.to?.length ?? 0 },
         });
+        void this.webhooks.emit(row.org_id, "mail.sent", {
+          send_id: row.id,
+          mailbox_id: row.mailbox_id,
+          from: row.from_address,
+          to: row.payload.to,
+          cc: row.payload.cc,
+          subject: row.payload.subject,
+          sent_at: new Date().toISOString(),
+        });
       } catch (err) {
         const message = (err as Error).message;
         const exhausted = row.attempts >= config.WEBMAIL_SEND_MAX_ATTEMPTS;
@@ -864,6 +875,15 @@ export class WebmailService {
              WHERE id = $1`,
             [row.id, message],
           );
+          void this.webhooks.emit(row.org_id, "mail.bounced", {
+            send_id: row.id,
+            mailbox_id: row.mailbox_id,
+            from: row.from_address,
+            to: row.payload.to,
+            subject: row.payload.subject,
+            attempts: row.attempts,
+            error: message,
+          });
         } else {
           await this.db.query(
             `UPDATE scheduled_sends
@@ -872,6 +892,15 @@ export class WebmailService {
              WHERE id = $1`,
             [row.id, message, String(config.WEBMAIL_SEND_RETRY_SECONDS)],
           );
+          void this.webhooks.emit(row.org_id, "mail.deferred", {
+            send_id: row.id,
+            mailbox_id: row.mailbox_id,
+            from: row.from_address,
+            to: row.payload.to,
+            subject: row.payload.subject,
+            attempts: row.attempts,
+            error: message,
+          });
         }
       }
     }
@@ -1083,7 +1112,7 @@ export class WebmailService {
     orgId: string,
     mailboxId: string,
   ): Promise<CachedCreds> {
-    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    await this.mailboxFor(orgId, mailboxId, principal);
     const creds = await this.credStore.get(principal.sessionId, mailboxId);
     if (!creds) {
       throw new ForbiddenException({
@@ -1097,9 +1126,19 @@ export class WebmailService {
   private async mailboxFor(
     orgId: string,
     mailboxId: string,
-    userId: string,
+    principal: SessionPrincipal,
   ): Promise<MailboxAccess> {
-    await this.orgs.requireRole(orgId, userId, "member");
+    if (principal.mailboxId) {
+      // Mailbox-bound session: authorized for exactly its own mailbox/org.
+      if (
+        principal.mailboxId !== mailboxId ||
+        (principal.orgId != null && principal.orgId !== orgId)
+      ) {
+        throw new ForbiddenException({ title: "Mailbox not accessible" });
+      }
+    } else {
+      await this.orgs.requireRole(orgId, principal.userId, "member");
+    }
     const { rows } = await this.db.query<{
       id: string;
       address: string;

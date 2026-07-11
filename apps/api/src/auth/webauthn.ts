@@ -12,10 +12,31 @@ function sw(): ReturnType<typeof loadSw> {
   return mod;
 }
 
-// RP ID must be a registrable suffix shared by every browser origin (admin +
-// webmail live on sibling subdomains, so this is the parent cookie domain).
+// The RP ID must be a registrable domain suffix shared by *every* browser
+// origin that authenticates with passkeys. Admin and webmail live on sibling
+// subdomains (e.g. app.example.com + webmail.example.com), so a single host is
+// wrong — the shared parent (example.com) is required. Derive it from the
+// configured hosts' longest common label-suffix unless pinned explicitly.
+export function commonDomainSuffix(hosts: string[]): string | undefined {
+  const labels = hosts.map((h) => h.split(".").reverse());
+  if (labels.length === 0) return undefined;
+  if (labels.length === 1) return hosts[0];
+  const common: string[] = [];
+  for (let i = 0; labels[0]![i] !== undefined; i++) {
+    const label = labels[0]![i]!;
+    if (!labels.every((l) => l[i] === label)) break;
+    common.push(label);
+  }
+  // Two labels minimum so we never return a bare public suffix (e.g. "com").
+  return common.length >= 2 ? common.reverse().join(".") : undefined;
+}
+
 export function rpId(): string {
-  return config.WEBAUTHN_RP_ID ?? config.JM_WEB_HOST ?? "localhost";
+  if (config.WEBAUTHN_RP_ID) return config.WEBAUTHN_RP_ID;
+  const hosts = [config.JM_ADMIN_HOST, config.JM_WEBMAIL_HOST].filter(
+    (h): h is string => !!h,
+  );
+  return commonDomainSuffix(hosts) ?? config.JM_WEB_HOST ?? "localhost";
 }
 
 export function expectedOrigins(): string[] {

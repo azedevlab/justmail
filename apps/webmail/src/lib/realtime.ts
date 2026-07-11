@@ -73,9 +73,12 @@ export function useMailboxRealtime(opts: {
         }
       };
       socket.onclose = () => {
+        if (pingTimer) clearInterval(pingTimer);
+        pingTimer = undefined;
         if (!closed) reconnectTimer = setTimeout(connect, 3000);
       };
       socket.onerror = () => socket.close();
+      if (pingTimer) clearInterval(pingTimer);
       pingTimer = setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ op: "ping" }));

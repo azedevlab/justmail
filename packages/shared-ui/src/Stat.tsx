@@ -9,7 +9,7 @@ const toneText: Record<StatTone, string> = {
   ok: "text-[var(--color-ok)]",
   warn: "text-[var(--color-warn)]",
   bad: "text-[var(--color-bad)]",
-  brand: "text-[var(--color-brand-400)]",
+  brand: "text-[var(--color-accent)]",
 };
 
 export interface StatProps {

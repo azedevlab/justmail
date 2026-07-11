@@ -92,7 +92,23 @@ async function bootstrap(): Promise<void> {
     .filter((h): h is string => !!h)
     .map((h) => `https://${h}`);
   if (corsOrigins.length > 0) {
-    app.enableCors({ origin: corsOrigins, credentials: true });
+    app.enableCors({
+      origin: corsOrigins,
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+      // Explicitly allow the tus/chunked-upload headers so the attachment
+      // upload preflight succeeds under credentialed CORS.
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Upload-Offset",
+        "Upload-Length",
+        "Tus-Resumable",
+        "X-Requested-With",
+      ],
+      exposedHeaders: ["Upload-Offset", "Location"],
+      maxAge: 86400,
+    });
   }
   app.enableShutdownHooks();
 
