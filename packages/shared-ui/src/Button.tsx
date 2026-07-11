@@ -14,11 +14,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: cn(
-    "text-white border border-[color:rgb(0_113_227/0.6)]",
+    "text-white border border-[var(--color-accent-ring)]",
     "bg-[linear-gradient(180deg,var(--color-brand-400),var(--color-brand-600))]",
-    "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(16,24,40,0.24)]",
+    "shadow-[var(--shadow-btn-primary)]",
     "hover:bg-[linear-gradient(180deg,var(--color-brand-300),var(--color-brand-500))]",
-    "active:translate-y-px active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]",
+    "active:translate-y-px active:shadow-[var(--shadow-btn-active)]",
   ),
   secondary: cn(
     "text-[var(--color-neutral-1100)] bg-[var(--color-surface-3)]",
@@ -32,8 +32,8 @@ const variantClasses: Record<ButtonVariant, string> = {
     "hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)]",
   ),
   danger: cn(
-    "bg-transparent text-[var(--color-bad)] border border-[color:rgb(239_68_68/0.3)]",
-    "hover:bg-[color:rgb(239_68_68/0.1)] hover:border-[color:rgb(239_68_68/0.45)]",
+    "bg-transparent text-[var(--color-bad)] border border-[var(--color-bad-border)]",
+    "hover:bg-[var(--color-bad-hover)] hover:border-[var(--color-bad-border)]",
     "active:translate-y-px",
   ),
   link: "bg-transparent text-[var(--color-accent)] border-none underline-offset-2 hover:underline p-0",
@@ -68,7 +68,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         "inline-flex items-center justify-center font-medium select-none whitespace-nowrap",
         "tracking-[-0.006em]",
         "transition-[background,border-color,box-shadow,transform,color] duration-[var(--motion-base)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:rgb(10_132_255/0.55)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         variantClasses[variant],
         sizeClasses[size],

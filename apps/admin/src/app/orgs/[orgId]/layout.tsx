@@ -356,7 +356,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
 
           <button
             onClick={() => setCmdOpen(true)}
-            className="hidden md:flex items-center gap-2 w-56 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-[13px] text-[var(--color-neutral-800)] hover:border-[color:rgb(10_132_255/0.4)] transition-colors shadow-[var(--shadow-inset-input)]"
+            className="hidden md:flex items-center gap-2 w-56 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-[13px] text-[var(--color-neutral-800)] hover:border-[var(--color-accent-hover)] transition-colors shadow-[var(--shadow-inset-input)]"
             aria-label="Open command palette"
           >
             <Search size={13} />
@@ -381,7 +381,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
 
           <DropdownMenu
             trigger={
-              <button className="rounded-full ring-1 ring-[var(--color-border-strong)] hover:ring-[color:rgb(10_132_255/0.5)] transition-shadow" aria-label="Account menu">
+              <button className="rounded-full ring-1 ring-[var(--color-border-strong)] hover:ring-[var(--color-accent-ring)] transition-shadow" aria-label="Account menu">
                 <Avatar name={me.data.name || me.data.email} size={28} />
               </button>
             }

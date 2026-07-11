@@ -61,8 +61,8 @@ export default function WebmailIndex() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {mailboxes.data.map((m) => (
               <Link key={m.id} href={`/m/${m.id}`}>
-                <Card className="p-4 flex items-center gap-3 hover:border-[color:rgb(10_132_255/0.45)] hover:shadow-[var(--shadow-2)] transition-all">
-                  <span className="w-9 h-9 shrink-0 grid place-items-center rounded-lg bg-[color:rgb(10_132_255/0.12)] text-[var(--color-accent)]">
+                <Card className="p-4 flex items-center gap-3 hover:border-[var(--color-accent-hover)] hover:shadow-[var(--shadow-2)] transition-all">
+                  <span className="w-9 h-9 shrink-0 grid place-items-center rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
                     <Mail size={16} />
                   </span>
                   <span className="min-w-0">

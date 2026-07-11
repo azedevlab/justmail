@@ -547,8 +547,8 @@ function ManageModal({
           <div
             className={`rounded-lg border p-3 text-xs ${
               test.ok
-                ? "border-[var(--color-ok)] bg-[color:rgb(52_199_89/0.08)]"
-                : "border-[var(--color-bad)] bg-[color:rgb(255_59_48/0.08)]"
+                ? "border-[var(--color-ok)] bg-[var(--color-ok-surface)]"
+                : "border-[var(--color-bad)] bg-[var(--color-bad-surface)]"
             }`}
           >
             <p className="font-medium">{test.message}</p>

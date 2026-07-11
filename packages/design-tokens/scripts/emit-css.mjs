@@ -18,6 +18,52 @@ const flat = (ns, obj) =>
     .map(([k, v]) => `  --${ns}-${k}: ${v};`)
     .join("\n");
 
+// Hex → rgba() so we can emit alpha tints of solid token colours. Every
+// translucent surface/ring/border in the apps resolves to one of these, so no
+// component hand-writes an rgb()/rgba() literal.
+const hexToRgb = (hex) => {
+  const h = hex.replace("#", "");
+  const n =
+    h.length === 3
+      ? h.split("").map((c) => c + c).join("")
+      : h;
+  const int = parseInt(n, 16);
+  return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+};
+const alpha = (hex, a) => {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+};
+
+// Semantic alpha tints. `accent` differs per theme; ok/warn/bad/info fills use
+// the bright semantic set in both themes (subtle wash behind coloured text).
+const tintTokens = (accent) => `  --color-accent-subtle: ${alpha(accent, 0.1)};
+  --color-accent-muted: ${alpha(accent, 0.14)};
+  --color-accent-strong: ${alpha(accent, 0.16)};
+  --color-accent-border: ${alpha(accent, 0.25)};
+  --color-accent-hover: ${alpha(accent, 0.45)};
+  --color-accent-ring: ${alpha(accent, 0.55)};
+  --color-accent-focus: ${alpha(accent, 0.18)};
+  --color-ok-surface: ${alpha(t.semantic.ok, 0.12)};
+  --color-ok-border: ${alpha(t.semantic.ok, 0.25)};
+  --color-warn-surface: ${alpha(t.semantic.warn, 0.12)};
+  --color-warn-border: ${alpha(t.semantic.warn, 0.25)};
+  --color-bad-surface: ${alpha(t.semantic.bad, 0.12)};
+  --color-bad-border: ${alpha(t.semantic.bad, 0.25)};
+  --color-bad-hover: ${alpha(t.semantic.bad, 0.1)};
+  --color-info-surface: ${alpha(t.semantic.info, 0.12)};
+  --color-info-border: ${alpha(t.semantic.info, 0.25)};
+  --gradient-brand: linear-gradient(135deg, var(--color-brand-400), var(--color-ok));
+  --gradient-brand-mark: linear-gradient(135deg, var(--color-brand-400) 0%, var(--color-brand-600) 100%);
+  --shadow-brand-mark: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px ${alpha(t.brand[5], 0.35)};
+  --gradient-aurora-a: radial-gradient(circle, ${alpha(t.brand[5], 0.1)} 0%, transparent 65%);
+  --gradient-aurora-b: radial-gradient(circle, ${alpha(t.semantic.info, 0.1)} 0%, transparent 65%);
+  --shadow-btn-primary: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(16, 24, 40, 0.24);
+  --shadow-btn-active: inset 0 1px 2px rgba(0, 0, 0, 0.25);`;
+
+const lightAccentHex = t.brand[6];
+const darkAccentHex = t.brand[4];
+
 const light = `
 :root, .theme-light {
 ${rampCss("color-neutral", t.neutralLight)}
@@ -45,6 +91,7 @@ ${rampCss("color-brand", t.brand)}
   --scrollbar-thumb-hover: rgba(16,24,40,0.30);
   --shadow-inset-input: inset 0 1px 2px rgba(16,24,40,0.04);
   --dot-grid: rgba(16,24,40,0.07);
+${tintTokens(lightAccentHex)}
 ${flat("space", t.spacing)}
 ${flat("radius", t.radius)}
 ${flat("fontSize", t.fontSize)}
@@ -82,6 +129,7 @@ ${rampCss("color-neutral", t.neutralDark)}
   --scrollbar-thumb-hover: rgba(255,255,255,0.16);
   --shadow-inset-input: inset 0 1px 2px rgba(0,0,0,0.25);
   --dot-grid: rgba(255,255,255,0.05);
+${tintTokens(darkAccentHex)}
 ${flat("shadow", t.elevation)}
 }
 `;

@@ -103,7 +103,7 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 
 | ID | P | Task | Effort | Deps | Status |
 |---|---|---|---|---|---|
-| M10-1 | P1 | Design tokens: full semantic color palette (light + OLED dark), type scale, spacing, radius, shadow, motion durations; zero hardcoded colors/values in both apps | L | — | todo |
+| M10-1 | P1 | Design tokens: full semantic color palette (light + OLED dark), type scale, spacing, radius, shadow, motion durations; zero hardcoded colors/values in both apps | L | — | done |
 | M10-2 | P1 | Component redesign pass: buttons (all states), inputs (validation/focus/password/autocomplete), tables (virtualized/sortable/sticky/bulk/expandable), cards, dropdowns, dialogs/drawers/modals, tooltips, toasts, context menus | XL | M10-1 | todo |
 | M10-3 | P1 | Functionality audit per surface (webmail + admin): every page/button/icon/dropdown/dialog/form/search/filter/pagination/upload/download/shortcut/context-menu + empty/loading/error/success states; fix every dead/placeholder/TODO action | XL | — | todo |
 | M10-4 | P1 | Responsive pass: desktop/laptop/tablet/phone/ultra-wide; no overflow or breakage | L | M10-2 | todo |

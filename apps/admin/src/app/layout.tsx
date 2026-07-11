@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { surfaceLight, surfaceDark } from "@justmail/design-tokens";
 import { Providers } from "@/lib/query";
 import "@/styles/globals.css";
 
@@ -13,7 +14,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F7F8FA",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: surfaceLight.bg },
+    { media: "(prefers-color-scheme: dark)", color: surfaceDark.bg },
+  ],
   width: "device-width",
   initialScale: 1,
 };

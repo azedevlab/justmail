@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Github } from "lucide-react";
+import { surfaceDark } from "@justmail/design-tokens";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B0D10",
+  themeColor: surfaceDark.bg,
   width: "device-width",
   initialScale: 1,
 };
