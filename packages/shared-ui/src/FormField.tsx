@@ -23,7 +23,7 @@ export function FormField({
   return (
     <label htmlFor={htmlFor} className={cn("block", className)}>
       {label && (
-        <span className="block text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)] mb-1">
+        <span className="block text-[13px] font-medium text-[var(--color-neutral-1000)] mb-1.5">
           {label}
           {required && (
             <span aria-hidden className="text-[var(--color-bad)] ml-0.5">

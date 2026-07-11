@@ -54,20 +54,21 @@ export const neutralLight = [
   "#0B0D10",
 ] as const;
 
-// 12-step brand ramp (Apple-style blue)
+// 12-step brand ramp (indigo). Step 6 is the primary action colour; the wash
+// steps (100/200) back active-nav and subtle accent fills.
 export const brand = [
-  "#F2F8FF",
-  "#E3F0FF",
-  "#BFDFFF",
-  "#7ABBFF",
-  "#3D9BFF",
-  "#0A84FF",
-  "#0071E3",
-  "#005CBC",
-  "#004A99",
-  "#003876",
-  "#082B56",
-  "#051E3C",
+  "#F3F4FF",
+  "#E6E8FF",
+  "#CED2FF",
+  "#ABB1FB",
+  "#828AF6",
+  "#6366F1",
+  "#4F46E5",
+  "#4338CA",
+  "#3730A3",
+  "#2C2782",
+  "#211D63",
+  "#161340",
 ] as const;
 
 export const semantic = {
@@ -139,9 +140,9 @@ export const fontSize = {
 } as const;
 
 export const fontFamily = {
-  sans: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, ui-sans-serif, sans-serif',
-  mono: 'ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Monaco, "Cascadia Mono", "Roboto Mono", monospace',
-  serif: '"New York", ui-serif, Georgia, serif',
+  sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
+  mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+  serif: 'ui-serif, Georgia, "Times New Roman", serif',
 } as const;
 
 // SF Pro ships with optical tracking baked in — no negative body tracking.

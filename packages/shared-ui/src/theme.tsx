@@ -26,7 +26,7 @@ const STORAGE_KEY = "jm-theme";
  * class is applied on first paint — avoids a light→dark flash. Kept dependency
  * free (runs as raw text) and mirrors the resolution logic in ThemeProvider.
  */
-export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem("${STORAGE_KEY}")||"system";var d=p==="dark"||(p==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var c=document.documentElement.classList;c.remove("theme-light","theme-dark");c.add(d?"theme-dark":"theme-light");}catch(e){document.documentElement.classList.add("theme-light");}})();`;
+export const THEME_INIT_SCRIPT = `(function(){try{var p=localStorage.getItem("${STORAGE_KEY}")||"light";var d=p==="dark"||(p==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var c=document.documentElement.classList;c.remove("theme-light","theme-dark");c.add(d?"theme-dark":"theme-light");}catch(e){document.documentElement.classList.add("theme-light");}})();`;
 
 function systemPrefersDark(): boolean {
   return (
@@ -55,13 +55,13 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPref] = useState<ThemePreference>("system");
+  const [preference, setPref] = useState<ThemePreference>("light");
   const [resolved, setResolved] = useState<ResolvedTheme>("light");
 
   // Adopt the persisted preference after mount (init script already painted it).
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as ThemePreference | null;
-    const p = stored ?? "system";
+    const p = stored ?? "light";
     setPref(p);
     setResolved(resolve(p));
   }, []);
