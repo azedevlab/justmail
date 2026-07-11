@@ -72,6 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/domains", label: "Domains", icon: <Globe2 size={15} />, shortcut: "g d" },
       { href: "/mailboxes", label: "Mailboxes", icon: <Mail size={15} />, shortcut: "g m" },
       { href: "/aliases", label: "Aliases", icon: <Link2 size={15} /> },
+      { href: "/groups", label: "Groups", icon: <Users size={15} /> },
       { href: "/queue", label: "Queue", icon: <Inbox size={15} /> },
       { href: "/deliverability", label: "Deliverability", icon: <CircleDot size={15} /> },
     ],
