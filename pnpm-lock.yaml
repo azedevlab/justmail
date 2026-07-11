@@ -157,8 +157,8 @@ importers:
         specifier: ^5.4.1
         version: 5.11.1
       ldapts:
-        specifier: ^8.1.8
-        version: 8.1.8
+        specifier: ^9.0.0
+        version: 9.0.0
       nodemailer:
         specifier: ^9.0.3
         version: 9.0.3
@@ -3175,9 +3175,9 @@ packages:
   launder@1.7.1:
     resolution: {integrity: sha512-mU6WRz5EusL9ZZuiZ5SO4Y6C0P9PAUR9iwdb6bzj4KDihm28DiHFw+/yk9DBH4f+Pv1wuzQ4e2jV3oQ7mkIqvw==}
 
-  ldapts@8.1.8:
-    resolution: {integrity: sha512-Wpdvo+/0DREIynYf2he2efHtjptr5zD7dpesSkZWJqfQdMEgSTytEIsSZVuoDSiiE1+SpXf3emZ7ewxGBTo7Pw==}
-    engines: {node: '>=20'}
+  ldapts@9.0.0:
+    resolution: {integrity: sha512-OaaoYBSuan7g0Nm2e1wsRl+9xol41zY+pDlRRSsBq36iKCd2tG/K8WifevNRDjyEfhz4bvkxKdDvJ6xHXwj7+Q==}
+    engines: {node: '>=22'}
 
   leac@0.7.0:
     resolution: {integrity: sha512-qMrZeyEekgdRQ9o6a4NAB2EQZrv827GJdn1vnapwSJ90hWRB4TzUSunvacPkxQ2TnNqHNI1/zSt0hlo0crG8Jw==}
@@ -7153,7 +7153,7 @@ snapshots:
     dependencies:
       dayjs: 1.11.21
 
-  ldapts@8.1.8:
+  ldapts@9.0.0:
     dependencies:
       strict-event-emitter-types: 2.0.0
 
