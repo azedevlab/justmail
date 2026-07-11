@@ -26,6 +26,7 @@ import MailComposer from "nodemailer/lib/mail-composer";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
+import { WebhooksService } from "../webhooks/webhooks.service";
 import { config } from "../config";
 import { open, seal } from "../common/secretbox";
 import { sanitizeMailHtml } from "../common/html-sanitize";
@@ -102,6 +103,7 @@ export class WebmailService {
     private readonly db: Db,
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
+    private readonly webhooks: WebhooksService,
     private readonly credStore: WebmailCredentialStore,
     private readonly sessions: ImapSessionManager,
     private readonly idle: ImapIdleWatcher,
@@ -851,6 +853,15 @@ export class WebmailService {
           targetId: row.mailbox_id,
           meta: { subject: row.payload.subject, to: row.payload.to?.length ?? 0 },
         });
+        void this.webhooks.emit(row.org_id, "mail.sent", {
+          send_id: row.id,
+          mailbox_id: row.mailbox_id,
+          from: row.from_address,
+          to: row.payload.to,
+          cc: row.payload.cc,
+          subject: row.payload.subject,
+          sent_at: new Date().toISOString(),
+        });
       } catch (err) {
         const message = (err as Error).message;
         const exhausted = row.attempts >= config.WEBMAIL_SEND_MAX_ATTEMPTS;
@@ -864,6 +875,15 @@ export class WebmailService {
              WHERE id = $1`,
             [row.id, message],
           );
+          void this.webhooks.emit(row.org_id, "mail.bounced", {
+            send_id: row.id,
+            mailbox_id: row.mailbox_id,
+            from: row.from_address,
+            to: row.payload.to,
+            subject: row.payload.subject,
+            attempts: row.attempts,
+            error: message,
+          });
         } else {
           await this.db.query(
             `UPDATE scheduled_sends
@@ -872,6 +892,15 @@ export class WebmailService {
              WHERE id = $1`,
             [row.id, message, String(config.WEBMAIL_SEND_RETRY_SECONDS)],
           );
+          void this.webhooks.emit(row.org_id, "mail.deferred", {
+            send_id: row.id,
+            mailbox_id: row.mailbox_id,
+            from: row.from_address,
+            to: row.payload.to,
+            subject: row.payload.subject,
+            attempts: row.attempts,
+            error: message,
+          });
         }
       }
     }
