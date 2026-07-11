@@ -65,7 +65,7 @@ jobs:
             $C logs minio-init --no-color 2>&1
             echo "-- bucket listing (objects) --"
             docker run --rm --network justmail_data --env-file /opt/justmail/.env \
-              minio/mc:RELEASE.2025-04-16T18-13-26Z /bin/sh -c \
+              --entrypoint /bin/sh minio/mc:RELEASE.2025-04-16T18-13-26Z -c \
               'mc alias set jm http://minio:9000 "$STORAGE_ACCESS_KEY" "$STORAGE_SECRET_KEY" >/dev/null 2>&1 && mc ls --recursive jm/"$STORAGE_BUCKET" 2>&1 | head -50 || echo "(mc could not reach minio / bucket)"'
           fi
           REMOTE
