@@ -10,8 +10,8 @@ function startFakeClamd(): Promise<Server> {
   const server = createServer((socket) => {
     const chunks: Buffer[] = [];
     let replied = false;
-    socket.on("data", (d) => {
-      chunks.push(d);
+    socket.on("data", (d: Buffer | string) => {
+      chunks.push(typeof d === "string" ? Buffer.from(d) : d);
       const buf = Buffer.concat(chunks);
       // Strip the leading "zINSTREAM\0" command, then walk length-prefixed
       // frames until the zero-length terminator arrives.
