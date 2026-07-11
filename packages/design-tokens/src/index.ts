@@ -30,45 +30,50 @@ export const surfaceDark = {
   "3": "#1A1E26",
 } as const;
 
-// Light theme: soft gray canvas, white raised surfaces (cards/sidebar),
-// gray recessed surface for hovers/wells, white popovers.
+// Light theme: soft slate canvas, white raised surfaces (cards/sidebar),
+// slate-tinted recessed surface for hovers/wells, white popovers. Values track
+// nube.sh's real palette (slate-50 canvas, white cards).
 export const surfaceLight = {
-  bg: "#F7F8FA",
+  bg: "#F8FAFC",
   "1": "#FFFFFF",
-  "2": "#F2F3F6",
+  "2": "#F1F5F9",
   "3": "#FFFFFF",
 } as const;
 
+// Warm-slate neutral ramp (light) mirroring nube.sh: Tailwind-slate steps with
+// a #1A202C ink at the dark end (their dominant heading colour).
 export const neutralLight = [
   "#FFFFFF",
-  "#F7F8FA",
-  "#EEF0F3",
-  "#E3E7EC",
-  "#CFD4DC",
-  "#A4ACB8",
-  "#8B93A1",
-  "#6B7280",
-  "#4E5867",
-  "#3A414C",
-  "#1B1F26",
-  "#0B0D10",
+  "#F8FAFC",
+  "#EEF1F6",
+  "#E2E8F0",
+  "#CBD5E1",
+  "#94A3B8",
+  "#64748B",
+  "#52607A",
+  "#475569",
+  "#334155",
+  "#1E293B",
+  "#1A202C",
 ] as const;
 
-// 12-step brand ramp (indigo). Step 6 is the primary action colour; the wash
-// steps (100/200) back active-nav and subtle accent fills.
+// 12-step brand ramp (electric blue) mirroring nube.sh: step 6 (#0052FF) is
+// their primary action colour, step 5 (#194BFB) their dominant working blue
+// (used for the dark-theme accent and brand gradients). The wash steps
+// (100/200) back active-nav and subtle accent fills.
 export const brand = [
-  "#F3F4FF",
-  "#E6E8FF",
-  "#CED2FF",
-  "#ABB1FB",
-  "#828AF6",
-  "#6366F1",
-  "#4F46E5",
-  "#4338CA",
-  "#3730A3",
-  "#2C2782",
-  "#211D63",
-  "#161340",
+  "#EEF3FF",
+  "#D9E2FF",
+  "#B8CCFF",
+  "#8AA8FF",
+  "#5E83FB",
+  "#194BFB",
+  "#0052FF",
+  "#0042D1",
+  "#0035A8",
+  "#0A2A7A",
+  "#0C1F57",
+  "#0A1740",
 ] as const;
 
 export const semantic = {
@@ -140,7 +145,7 @@ export const fontSize = {
 } as const;
 
 export const fontFamily = {
-  sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
+  sans: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"',
   mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
   serif: 'ui-serif, Georgia, "Times New Roman", serif',
 } as const;
@@ -180,14 +185,16 @@ export const zIndex = {
   cmdk: 80,
 } as const;
 
-// Soft diffuse shadows for the light theme.
+// Soft layered shadows for the light theme, tinted with nube.sh's slate ink
+// (rgba(42,49,60) / rgba(26,32,44)) and the Stripe-style long-throw pair
+// (rgba(50,50,93) + rgba(26,32,44)) used on their raised cards and modals.
 export const elevationLight = {
   "0": "none",
-  "1": "0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.04)",
-  "2": "0 2px 4px rgba(16,24,40,0.06), 0 2px 8px rgba(16,24,40,0.06)",
-  "3": "0 4px 12px rgba(16,24,40,0.08), 0 1px 3px rgba(16,24,40,0.05)",
-  "4": "0 12px 24px rgba(16,24,40,0.10), 0 2px 6px rgba(16,24,40,0.06)",
-  "5": "0 24px 48px rgba(16,24,40,0.16), 0 4px 10px rgba(16,24,40,0.06)",
+  "1": "0 1px 2px rgba(42,49,60,0.06), 0 1px 3px rgba(42,49,60,0.05)",
+  "2": "0 2px 6px rgba(42,49,60,0.06), 0 0 1px rgba(42,49,60,0.08)",
+  "3": "0 12px 28px rgba(42,49,60,0.08), 0 0 1px rgba(42,49,60,0.08)",
+  "4": "0 18px 36px -18px rgba(26,32,44,0.12), 0 30px 45px -30px rgba(50,50,93,0.20)",
+  "5": "0 30px 45px -30px rgba(50,50,93,0.24), 0 18px 36px -18px rgba(26,32,44,0.14)",
 } as const;
 
 export type Tokens = {
