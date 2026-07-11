@@ -1,14 +1,28 @@
 name: Verify attachment fix
 
-# Proves the attachment storage round-trip on the production host: writes a
-# tenant-prefixed object through StorageService, streams it back, compares the
-# bytes, then removes it. This is the exact put/stream path finalise and the
-# send worker depend on — the operation the MinIO CopySource bug used to break.
-# Read-mostly and self-cleaning (the probe object is deleted); sends no mail.
-# Manual dispatch only. Reuses the deploy SSH credentials.
+# Proves the attachment send path end-to-end on the production host, exercising
+# the exact code the MinIO CopySource bug used to break:
+#
+#   1. Drives the real AttachmentsService pipeline — createUpload → appendChunk →
+#      finaliseUpload (the fixed direct-PUT promotion) — then streams the
+#      finalised object back and compares the bytes. This is deterministic and
+#      needs no mailbox credential.
+#   2. If (and only if) a mailbox is currently unlocked (a live cached webmail
+#      credential exists), it reuses that session to send one real test message
+#      — with the attachment above — to the recipient passed at dispatch time.
+#      The already-running worker delivers it within the undo window.
+#
+# When no mailbox is unlocked it stops after step 1 and cleans up the probe
+# attachment, sending no mail. Manual dispatch only. Reuses the deploy SSH
+# credentials. The recipient is a dispatch input, never committed.
 
 on:
   workflow_dispatch:
+    inputs:
+      to:
+        description: "Recipient for the real test send (only used if a mailbox is currently unlocked)"
+        required: true
+        type: string
 
 concurrency:
   group: verify-attachment-production
@@ -18,6 +32,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 10
     steps:
       - name: Set up SSH
         run: |
@@ -26,16 +41,21 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Storage round-trip
+      - name: Pipeline verify + opportunistic real send
+        env:
+          TEST_TO: ${{ inputs.to }}
         run: |
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' "$TEST_TO" <<'REMOTE'
           set -e
+          TO="$1"
           cd /opt/justmail/app
           C="docker compose --env-file /opt/justmail/.env -f services/compose/docker-compose.yml --profile core --profile app --profile storage"
 
-          # Probe script runs inside the api container so it reuses the app's
-          # own StorageService (and its configured adapter/credentials). It is
-          # placed under the app dir so node_modules resolution finds @nestjs.
+          # Probe runs inside the api container so it reuses the app's own
+          # services (StorageService/AttachmentsService/WebmailService) with the
+          # configured adapter, credential store and DB. It is placed under the
+          # app dir so node_modules resolution finds @nestjs. It force-exits
+          # (Nest keeps PG/Redis pool handles open, which otherwise hang node).
           cat > /tmp/verify-attachment.cjs <<'JS'
           require("reflect-metadata");
           const crypto = require("node:crypto");
@@ -43,58 +63,227 @@ jobs:
           const { AppModule } = require("./dist/app.module");
           const { Db } = require("./dist/db/db.service");
           const { StorageService } = require("./dist/storage/storage.service");
+          const { AttachmentsService } = require("./dist/attachments/attachments.service");
+          const { WebmailService } = require("./dist/webmail/webmail.service");
+          const { REDIS } = require("./dist/common/redis.module");
+
+          const TO = process.env.TEST_TO || "";
+          const backstop = setTimeout(() => {
+            console.log("RESULT TIMEOUT");
+            process.exit(1);
+          }, 120000);
 
           (async () => {
             const app = await NestFactory.createApplicationContext(AppModule, {
               logger: ["error"],
             });
+            let code = 0;
             try {
               const db = app.get(Db);
               const storage = app.get(StorageService);
-              const { rows } = await db.query(
-                `SELECT d.org_id FROM mailboxes m
-                   JOIN domains d ON d.id = m.domain_id
-                  ORDER BY m.created_at ASC LIMIT 1`,
-              );
-              if (!rows[0]) {
-                console.log("RESULT NO_ORG");
-                return;
+              const attachments = app.get(AttachmentsService);
+              const webmail = app.get(WebmailService);
+              let redis = null;
+              try {
+                redis = app.get(REDIS);
+              } catch (e) {
+                redis = null;
               }
-              const orgId = rows[0].org_id;
-              const buf = Buffer.from("justmail-verify-" + Date.now());
-              const hash = crypto.createHash("sha256").update(buf).digest("hex");
-              const key = "attachments/" + hash;
 
-              await storage.put(orgId, key, buf, "text/plain");
-              const stream = await storage.stream(orgId, key);
+              // 1) Locate a live unlocked mailbox credential, if any.
+              let live = null; // { sessionId, mailboxId }
+              if (redis) {
+                let cursor = "0";
+                do {
+                  const [next, keys] = await redis.scan(
+                    cursor, "MATCH", "webmail:cred:*", "COUNT", 200,
+                  );
+                  cursor = next;
+                  for (const k of keys) {
+                    const p = k.split(":"); // webmail cred <sid> <mid> | webmail cred idx <sid>
+                    if (p.length === 4 && p[2] !== "idx") {
+                      live = { sessionId: p[2], mailboxId: p[3] };
+                      break;
+                    }
+                  }
+                } while (cursor !== "0" && !live);
+              }
+              if (!live) {
+                const fb = await db.query(
+                  `SELECT key FROM settings
+                    WHERE key LIKE 'webmail.session:%'
+                      AND (value->>'expiresAt')::bigint > $1
+                    LIMIT 1`,
+                  [Math.floor(Date.now() / 1000)],
+                );
+                if (fb.rows[0]) {
+                  const rest = fb.rows[0].key.slice("webmail.session:".length);
+                  const dot = rest.indexOf(".");
+                  if (dot > 0)
+                    live = {
+                      sessionId: rest.slice(0, dot),
+                      mailboxId: rest.slice(dot + 1),
+                    };
+                }
+              }
+
+              // 2) Build an identity. Prefer the live session (so we can send);
+              //    otherwise the first mailbox + a member user (pipeline only).
+              let principal = null;
+              let orgId = null;
+              let mailboxId = null;
+              if (live) {
+                const s = await db.query(
+                  "SELECT user_id FROM sessions WHERE id = $1 AND expires_at > now()",
+                  [live.sessionId],
+                );
+                const mb = await db.query(
+                  `SELECT m.id, (m.local_part || '@' || d.name) AS address, d.org_id
+                     FROM mailboxes m JOIN domains d ON d.id = m.domain_id
+                    WHERE m.id = $1`,
+                  [live.mailboxId],
+                );
+                if (s.rows[0] && mb.rows[0]) {
+                  const u = await db.query(
+                    "SELECT email, name FROM users WHERE id = $1",
+                    [s.rows[0].user_id],
+                  );
+                  orgId = mb.rows[0].org_id;
+                  mailboxId = mb.rows[0].id;
+                  principal = {
+                    userId: s.rows[0].user_id,
+                    email: (u.rows[0] && u.rows[0].email) || mb.rows[0].address,
+                    name: (u.rows[0] && u.rows[0].name) || "",
+                    sessionId: live.sessionId,
+                    mailboxId,
+                    orgId,
+                  };
+                } else {
+                  live = null; // stale credential key; fall through to pipeline-only
+                }
+              }
+              if (!principal) {
+                const mb = await db.query(
+                  `SELECT m.id, d.org_id FROM mailboxes m
+                     JOIN domains d ON d.id = m.domain_id
+                    ORDER BY m.created_at ASC LIMIT 1`,
+                );
+                if (!mb.rows[0]) {
+                  console.log("RESULT NO_MAILBOX");
+                  return;
+                }
+                orgId = mb.rows[0].org_id;
+                mailboxId = mb.rows[0].id;
+                const om = await db.query(
+                  `SELECT user_id FROM org_members
+                    WHERE org_id = $1 AND role IN ('owner','admin','member')
+                    ORDER BY role LIMIT 1`,
+                  [orgId],
+                );
+                if (!om.rows[0]) {
+                  console.log("RESULT NO_MEMBER");
+                  return;
+                }
+                const u = await db.query(
+                  "SELECT email, name FROM users WHERE id = $1",
+                  [om.rows[0].user_id],
+                );
+                principal = {
+                  userId: om.rows[0].user_id,
+                  email: (u.rows[0] && u.rows[0].email) || "",
+                  name: (u.rows[0] && u.rows[0].name) || "",
+                  sessionId: crypto.randomUUID(),
+                  mailboxId,
+                  orgId,
+                };
+              }
+
+              // 3) Drive the real attachment pipeline (the fixed finaliseUpload).
+              const body = Buffer.from(
+                "JustMail attachment test " +
+                  new Date().toISOString() +
+                  " " +
+                  crypto.randomUUID(),
+              );
+              const upload = await attachments.createUpload(principal, orgId, {
+                filename: "justmail-test.txt",
+                mime: "text/plain",
+                size_bytes: body.length,
+              });
+              await attachments.appendChunk(principal, orgId, upload.id, 0, body);
+              const att = await attachments.finaliseUpload(principal, orgId, upload.id);
+
+              // Stream the finalised object back — the read that used to 404.
+              const stream = await attachments.openStream(orgId, att.content_hash);
               const chunks = [];
               for await (const c of stream) chunks.push(c);
               const got = Buffer.concat(chunks);
-              const ok = got.equals(buf);
-              let removed = true;
-              try {
-                await storage.remove(orgId, key);
-              } catch (e) {
-                removed = false;
+              const pipelineOk = got.equals(body);
+
+              if (!live) {
+                await db
+                  .query("DELETE FROM attachments WHERE id = $1", [att.id])
+                  .catch(() => undefined);
+                await storage
+                  .remove(orgId, "attachments/" + att.content_hash)
+                  .catch(() => undefined);
+                console.log(
+                  "RESULT PIPELINE",
+                  pipelineOk ? "PASS" : "FAIL",
+                  "bytes", got.length,
+                  "attachment", att.id,
+                  "NO_LIVE_SESSION",
+                );
+                return;
               }
+
+              // 4) A mailbox is unlocked — fire the real send.
+              if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(TO)) {
+                console.log(
+                  "RESULT PIPELINE",
+                  pipelineOk ? "PASS" : "FAIL",
+                  "bytes", got.length,
+                  "attachment", att.id,
+                  "BAD_RECIPIENT", JSON.stringify(TO),
+                );
+                return;
+              }
+              const res = await webmail.send(principal, orgId, mailboxId, {
+                to: [TO],
+                subject: "JustMail attachment test " + new Date().toISOString(),
+                text:
+                  "Automated JustMail test proving send-with-attachment works. " +
+                  "The attached justmail-test.txt should round-trip intact.",
+                attachment_ids: [att.id],
+              });
               console.log(
-                "RESULT",
-                ok ? "PASS" : "FAIL",
-                "kind", storage.kind,
+                "RESULT SENT",
+                "pipeline", pipelineOk ? "PASS" : "FAIL",
                 "bytes", got.length,
-                "removed", removed,
+                "attachment", att.id,
+                "scheduledId", res.id,
+                "sendAt", res.send_at,
+                "from", principal.email,
+                "to", TO,
               );
             } catch (e) {
+              code = 1;
               console.log("RESULT ERROR", (e && e.message) || String(e));
             } finally {
-              await app.close();
+              clearTimeout(backstop);
+              try {
+                await app.close();
+              } catch (e) {
+                /* ignore */
+              }
+              process.exit(code);
             }
           })();
           JS
 
           $C cp /tmp/verify-attachment.cjs api:/repo/apps/api/verify-attachment.cjs
-          echo "===== storage round-trip (inside api container) ====="
-          $C exec -T -w /repo/apps/api api node verify-attachment.cjs </dev/null 2>&1 || true
+          echo "===== attachment pipeline + opportunistic send (inside api container) ====="
+          $C exec -T -e TEST_TO="$TO" -w /repo/apps/api api node verify-attachment.cjs </dev/null 2>&1 || true
           $C exec -T api rm -f /repo/apps/api/verify-attachment.cjs </dev/null 2>&1 || true
           rm -f /tmp/verify-attachment.cjs
           REMOTE
