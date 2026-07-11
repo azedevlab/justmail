@@ -11,18 +11,21 @@ import { WebmailCredentialStore } from "./webmail/credential.store";
 import { WebmailService } from "./webmail/webmail.service";
 import { LdapService } from "./ldap/ldap.service";
 import { RetentionService } from "./retention/retention.service";
+import { BackupEngine } from "./backups/backup-engine.service";
 import { config } from "./config";
 
 // Ticks: webhook deliveries every 5s, queue snapshot every 60s, DNSBL check
 // every 30 minutes, expired-credential sweep every 10 minutes, LDAP directory
 // sync every minute (each directory honours its own interval), retention
-// pruning hourly. Scheduled/undo send dispatch polls on its own cadence.
+// pruning hourly, backup due-check on its own cadence. Scheduled/undo send
+// dispatch polls on its own cadence.
 const WEBHOOK_MS = 5_000;
 const QUEUE_MS = 60_000;
 const DNSBL_MS = 30 * 60_000;
 const CRED_SWEEP_MS = 10 * 60_000;
 const LDAP_MS = 60_000;
 const RETENTION_MS = 60 * 60_000;
+const BACKUP_MS = config.BACKUP_POLL_SECONDS * 1_000;
 const SEND_MS = config.WEBMAIL_SEND_POLL_SECONDS * 1_000;
 
 async function main(): Promise<void> {
@@ -38,6 +41,7 @@ async function main(): Promise<void> {
   const webmail = app.get(WebmailService);
   const ldap = app.get(LdapService);
   const retention = app.get(RetentionService);
+  const backups = app.get(BackupEngine);
   logger.log("justmail worker up");
 
   const runners: Array<{ label: string; ms: number; fn: () => Promise<unknown> }> = [
@@ -48,6 +52,7 @@ async function main(): Promise<void> {
     { label: "send", ms: SEND_MS, fn: () => webmail.processDueSends() },
     { label: "ldap", ms: LDAP_MS, fn: () => ldap.runDueSyncs() },
     { label: "retention", ms: RETENTION_MS, fn: () => retention.runDuePruning() },
+    { label: "backups", ms: BACKUP_MS, fn: () => backups.runDue() },
   ];
 
   const timers = runners.map((r) =>

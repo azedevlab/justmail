@@ -100,6 +100,13 @@ const Env = z.object({
   SSO_DEFAULT_RELAY_URL: z.string().url().optional(),
   SSO_FLOW_TTL_SECONDS: z.coerce.number().int().positive().default(600),
 
+  // Backups. The worker shells out to these client binaries against
+  // DATABASE_URL; override the paths if they are not on $PATH. The due-check
+  // loop interval bounds how promptly a scheduled backup fires.
+  PG_DUMP_BIN: z.string().default("pg_dump"),
+  PG_RESTORE_BIN: z.string().default("pg_restore"),
+  BACKUP_POLL_SECONDS: z.coerce.number().int().positive().default(300),
+
   // Rate limiting (window seconds / max hits). Generous defaults; tune per deploy.
   RATE_LIMIT_GLOBAL_TTL: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().positive().default(300),

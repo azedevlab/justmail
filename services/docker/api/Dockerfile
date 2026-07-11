@@ -41,6 +41,20 @@ RUN pnpm install --frozen-lockfile --prod --filter @justmail/api...
 
 FROM node:22-bookworm-slim
 ENV NODE_ENV=production
+# postgresql-client-17 (matching the server major) provides pg_dump/pg_restore
+# for the worker's backup engine. Pulled from the PGDG apt repository.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+  && install -d /usr/share/postgresql-common/pgdg \
+  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+  && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends postgresql-client-17 \
+  && apt-get purge -y curl gnupg \
+  && apt-get autoremove -y \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY --from=prod-deps /repo/node_modules node_modules
 COPY --from=prod-deps /repo/apps/api/node_modules apps/api/node_modules
