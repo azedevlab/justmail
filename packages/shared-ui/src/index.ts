@@ -25,3 +25,4 @@ export * from "./IconButton.js";
 export * from "./Progress.js";
 export * from "./AuroraBackdrop.js";
 export * from "./Wordmark.js";
+export * from "./theme.js";

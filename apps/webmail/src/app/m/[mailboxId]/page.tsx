@@ -59,6 +59,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  ThemeToggle,
   Tooltip,
   useToast,
   Wordmark,
@@ -569,6 +570,7 @@ export default function MailboxView() {
             </button>
           </Tooltip>
         )}
+        <ThemeToggle />
         <Tooltip content="Calendar">
           <button
             onClick={() => setCalendarOpen(true)}
