@@ -23,6 +23,7 @@ import {
   PageBody,
   PageHeader,
   Progress,
+  Select,
   SkeletonRows,
   StatusBadge,
   Table,
@@ -299,8 +300,8 @@ function CreateModal({
               monospace
               {...f.register("local_part", { required: true })}
             />
-            <select
-              className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm"
+            <Select
+              className="!w-auto"
               {...f.register("domain_id", { required: true })}
             >
               {domains.map((d) => (
@@ -308,7 +309,7 @@ function CreateModal({
                   @{d.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </FormField>
         <FormField label="Display name">

@@ -14,6 +14,7 @@ import {
   Modal,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   Spinner,
   Table,
@@ -253,8 +254,8 @@ function CreateAliasForm({
               monospace
               {...f.register("source", { required: true })}
             />
-            <select
-              className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm"
+            <Select
+              className="!w-auto"
               {...f.register("domain_id", { required: true })}
             >
               {domains.map((d) => (
@@ -262,7 +263,7 @@ function CreateAliasForm({
                   @{d.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </FormField>
         <FormField

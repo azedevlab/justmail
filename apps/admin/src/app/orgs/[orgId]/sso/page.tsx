@@ -9,12 +9,14 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Empty,
   FormField,
   Input,
   Modal,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   StatusBadge,
   Table,
@@ -418,16 +420,13 @@ function ProviderModal({
             </div>
             <div className="grid grid-cols-2 gap-3 items-end">
               <FormField label="Signature algorithm">
-                <select
-                  className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
-                  {...f.register("signature_algorithm")}
-                >
+                <Select {...f.register("signature_algorithm")}>
                   <option value="sha256">SHA-256</option>
                   <option value="sha512">SHA-512</option>
-                </select>
+                </Select>
               </FormField>
               <label className="flex items-center gap-2 text-sm py-2">
-                <input type="checkbox" {...f.register("want_assertions_signed")} />
+                <Checkbox {...f.register("want_assertions_signed")} />
                 Require signed assertions
               </label>
             </div>
@@ -437,22 +436,19 @@ function ProviderModal({
         <div className="border-t border-[var(--color-border)] pt-4 space-y-3">
           <div className="grid grid-cols-2 gap-3 items-end">
             <FormField label="Default role for new members">
-              <select
-                className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
-                {...f.register("default_role")}
-              >
+              <Select {...f.register("default_role")}>
                 <option value="viewer">Viewer</option>
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
-              </select>
+              </Select>
             </FormField>
             <label className="flex items-center gap-2 text-sm py-2">
-              <input type="checkbox" {...f.register("auto_provision")} />
+              <Checkbox {...f.register("auto_provision")} />
               Auto-provision accounts
             </label>
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...f.register("enabled")} />
+            <Checkbox {...f.register("enabled")} />
             Enabled
           </label>
         </div>

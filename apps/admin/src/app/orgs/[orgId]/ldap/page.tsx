@@ -14,12 +14,14 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Empty,
   FormField,
   Input,
   Modal,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   StatusBadge,
   Table,
@@ -354,17 +356,14 @@ function DirectoryModal({
 
         <div className="grid grid-cols-2 gap-3 items-end">
           <FormField label="Encryption">
-            <select
-              className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
-              {...f.register("encryption")}
-            >
+            <Select {...f.register("encryption")}>
               <option value="starttls">STARTTLS</option>
               <option value="ldaps">LDAPS</option>
               <option value="none">None (plaintext)</option>
-            </select>
+            </Select>
           </FormField>
           <label className="flex items-center gap-2 text-sm py-2">
-            <input type="checkbox" {...f.register("verify_tls")} />
+            <Checkbox {...f.register("verify_tls")} />
             Verify TLS certificate
           </label>
         </div>
@@ -436,14 +435,11 @@ function DirectoryModal({
           </FormField>
           <div className="grid grid-cols-2 gap-3 items-end">
             <FormField label="Default role">
-              <select
-                className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
-                {...f.register("default_role")}
-              >
+              <Select {...f.register("default_role")}>
                 <option value="viewer">Viewer</option>
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
-              </select>
+              </Select>
             </FormField>
             <FormField label="Sync interval (minutes)">
               <Input
@@ -454,11 +450,11 @@ function DirectoryModal({
             </FormField>
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...f.register("deactivate_missing")} />
+            <Checkbox {...f.register("deactivate_missing")} />
             Suspend accounts removed from the directory
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...f.register("enabled")} />
+            <Checkbox {...f.register("enabled")} />
             Enabled
           </label>
         </div>

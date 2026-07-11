@@ -16,11 +16,13 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Checkbox,
   FormField,
   Input,
   Modal,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   StatusBadge,
   Table,
@@ -140,14 +142,11 @@ export default function BackupsPage() {
                 />
               </FormField>
               <FormField label="Frequency">
-                <select
-                  className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
-                  {...f.register("frequency")}
-                >
+                <Select {...f.register("frequency")}>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
-                </select>
+                </Select>
               </FormField>
               <FormField label="Retention days">
                 <Input
@@ -161,7 +160,7 @@ export default function BackupsPage() {
                 />
               </FormField>
               <label className="flex items-center gap-2 text-sm self-end">
-                <input type="checkbox" {...f.register("enabled")} /> Enabled
+                <Checkbox {...f.register("enabled")} /> Enabled
               </label>
               <div className="md:col-span-2 flex items-end text-xs text-[var(--color-neutral-900)]">
                 Last run {fmtDate(schedule.data?.last_run_at ?? null)} · Next run{" "}

@@ -49,6 +49,7 @@ import {
   Avatar,
   Button,
   Card,
+  Checkbox,
   DropdownItem,
   DropdownLabel,
   DropdownMenu,
@@ -59,12 +60,14 @@ import {
   Input,
   KeyHint,
   Modal,
+  Select,
   Skeleton,
   Spinner,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
+  Textarea,
   ThemeToggle,
   Tooltip,
   useConfirm,
@@ -1869,8 +1872,7 @@ function SignatureManager({
           />
         </FormField>
         <label className="flex items-center gap-2 text-[13px] text-[var(--color-neutral-1000)]">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={isDefault}
             onChange={(e) => setIsDefault(e.target.checked)}
           />
@@ -2114,9 +2116,6 @@ const ACTION_OPTIONS: { value: SieveActionType; label: string; arg?: string }[] 
   { value: "stop", label: "Stop processing" },
 ];
 
-const filterSelectClass =
-  "h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 text-[13px] text-[var(--color-neutral-1000)] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]";
-
 function actionNeedsArg(type: SieveActionType): string | null {
   return ACTION_OPTIONS.find((o) => o.value === type)?.arg ?? null;
 }
@@ -2214,19 +2213,19 @@ function FilterManager({
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-[13px]">
             <span className="text-[var(--color-neutral-700)]">Match</span>
-            <select
-              className={filterSelectClass}
+            <Select
+              className="!w-auto"
               value={match}
               onChange={(e) => setMatch(e.target.value as SieveMatch)}
             >
               <option value="all">all conditions</option>
               <option value="any">any condition</option>
-            </select>
+            </Select>
           </div>
           {conditions.map((c, i) => (
             <div key={i} className="flex items-center gap-2">
-              <select
-                className={filterSelectClass}
+              <Select
+                className="!w-auto"
                 value={c.field}
                 onChange={(e) =>
                   setConditions((cs) =>
@@ -2241,9 +2240,9 @@ function FilterManager({
                     {o.label}
                   </option>
                 ))}
-              </select>
-              <select
-                className={filterSelectClass}
+              </Select>
+              <Select
+                className="!w-auto"
                 value={c.op}
                 onChange={(e) =>
                   setConditions((cs) =>
@@ -2258,7 +2257,7 @@ function FilterManager({
                     {o.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               <Input
                 value={c.value}
                 onChange={(e) =>
@@ -2293,8 +2292,8 @@ function FilterManager({
           <div className="text-[13px] text-[var(--color-neutral-700)]">Then</div>
           {actions.map((a, i) => (
             <div key={i} className="flex items-center gap-2">
-              <select
-                className={filterSelectClass}
+              <Select
+                className="!w-auto"
                 value={a.type}
                 onChange={(e) =>
                   setActions((as) =>
@@ -2309,7 +2308,7 @@ function FilterManager({
                     {o.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               {actionNeedsArg(a.type) && (
                 <Input
                   value={a.arg ?? ""}
@@ -2341,8 +2340,7 @@ function FilterManager({
         </div>
 
         <label className="flex items-center gap-2 text-[13px] text-[var(--color-neutral-1000)]">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={enabled}
             onChange={(e) => setEnabled(e.target.checked)}
           />
@@ -2850,12 +2848,11 @@ function ContactForm({
         />
       </FormField>
       <FormField label="Note">
-        <textarea
+        <Textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={3}
           placeholder="(optional)"
-          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
         />
       </FormField>
       <div className="flex items-center justify-end gap-2 pt-1">
@@ -3172,17 +3169,15 @@ function EventForm({
         />
       </FormField>
       <label className="flex items-center gap-2 text-[13px] select-none cursor-pointer">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={allDay}
           onChange={(e) => setAllDay(e.target.checked)}
-          className="accent-[var(--color-accent)]"
         />
         All day
       </label>
       <div className="grid grid-cols-2 gap-3">
         <FormField label="Starts">
-          <input
+          <Input
             type={allDay ? "date" : "datetime-local"}
             value={allDay ? isoToUtcDate(startsAt) : isoToLocalDateTime(startsAt)}
             onChange={(e) =>
@@ -3190,11 +3185,10 @@ function EventForm({
                 allDay ? dateToIso(e.target.value) : localDateTimeToIso(e.target.value),
               )
             }
-            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]"
           />
         </FormField>
         <FormField label="Ends">
-          <input
+          <Input
             type={allDay ? "date" : "datetime-local"}
             value={allDay ? isoToUtcDate(endsAt) : isoToLocalDateTime(endsAt)}
             onChange={(e) =>
@@ -3202,7 +3196,6 @@ function EventForm({
                 allDay ? dateToIso(e.target.value) : localDateTimeToIso(e.target.value),
               )
             }
-            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]"
           />
         </FormField>
       </div>
@@ -3214,12 +3207,11 @@ function EventForm({
         />
       </FormField>
       <FormField label="Description">
-        <textarea
+        <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
           placeholder="(optional)"
-          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
         />
       </FormField>
       <div className="flex items-center justify-end gap-2 pt-1">
@@ -4049,11 +4041,10 @@ function ComposePanel({
                 <label className="block text-[11px] font-medium text-[var(--color-neutral-900)] mb-1">
                   Send later
                 </label>
-                <input
+                <Input
                   type="datetime-local"
                   value={scheduleAt}
                   onChange={(e) => setScheduleAt(e.target.value)}
-                  className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-1 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]"
                 />
                 <div className="mt-2 flex justify-end gap-2">
                   <Button

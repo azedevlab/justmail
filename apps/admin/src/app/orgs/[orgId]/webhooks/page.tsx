@@ -12,6 +12,7 @@ import { ApiError } from "@justmail/shared-utils";
 import {
   Button,
   Card,
+  Checkbox,
   Empty,
   FormField,
   Input,
@@ -244,7 +245,7 @@ function CreateModal({ orgId, onClose }: { orgId: string; onClose: () => void })
                 key={ev}
                 className="flex items-center gap-2 rounded p-1.5 hover:bg-[var(--hover-overlay)] text-sm cursor-pointer"
               >
-                <input type="checkbox" value={ev} {...f.register("events")} />
+                <Checkbox value={ev} {...f.register("events")} />
                 <span className="mono text-xs">{ev}</span>
               </label>
             ))}

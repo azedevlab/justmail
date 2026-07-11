@@ -24,6 +24,7 @@ import {
   Modal,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   StatusBadge,
   Table,
@@ -119,7 +120,8 @@ export default function TeamPage() {
                         </div>
                       </TD>
                       <TD>
-                        <select
+                        <Select
+                          className="!w-auto"
                           value={m.role}
                           onChange={(e) =>
                             updateRole.mutate({
@@ -127,7 +129,6 @@ export default function TeamPage() {
                               role: e.target.value as OrgRole,
                             })
                           }
-                          className="px-2 py-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] text-sm"
                         >
                           {(["owner", "admin", "member", "viewer"] as const).map(
                             (r) => (
@@ -136,7 +137,7 @@ export default function TeamPage() {
                               </option>
                             ),
                           )}
-                        </select>
+                        </Select>
                       </TD>
                       <TD className="text-xs">
                         {new Date(m.created_at).toLocaleDateString()}
@@ -316,16 +317,13 @@ function InviteModal({ orgId, onClose }: { orgId: string; onClose: () => void })
           />
         </FormField>
         <FormField label="Role">
-          <select
-            className="w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm"
-            {...f.register("role", { required: true })}
-          >
+          <Select {...f.register("role", { required: true })}>
             {(["owner", "admin", "member", "viewer"] as const).map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>
             ))}
-          </select>
+          </Select>
         </FormField>
         {err && (
           <p className="text-xs text-[var(--color-bad)]" role="alert">

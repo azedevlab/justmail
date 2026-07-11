@@ -14,11 +14,13 @@ import { ApiError } from "@justmail/shared-utils";
 import {
   Button,
   Card,
+  Checkbox,
   FormField,
   Input,
   PageBody,
   PageHeader,
   Section,
+  Select,
   SkeletonRows,
   StatusBadge,
   Table,
@@ -491,14 +493,11 @@ function SettingsForm({ domain, orgId }: { domain: Domain; orgId: string }) {
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField label="Outbound mode">
-              <select
-                className="h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
-                {...f.register("outbound_mode")}
-              >
+              <Select {...f.register("outbound_mode")}>
                 <option value="inherit">Inherit org default</option>
                 <option value="direct">Direct</option>
                 <option value="smarthost">Smarthost</option>
-              </select>
+              </Select>
             </FormField>
             <FormField
               label="Catch-all target"
@@ -536,7 +535,7 @@ function SettingsForm({ domain, orgId }: { domain: Domain; orgId: string }) {
             </FormField>
           </div>
           <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
-            <input type="checkbox" {...f.register("is_primary")} />
+            <Checkbox {...f.register("is_primary")} />
             Primary domain for outbound
           </label>
           {err && (

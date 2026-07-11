@@ -16,11 +16,13 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Checkbox,
   Empty,
   FormField,
   Input,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   Table,
   TD,
@@ -128,8 +130,7 @@ function PolicyCard({ orgId }: { orgId: string }) {
               </div>
             )}
             <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
               />
@@ -224,8 +225,7 @@ function HoldsCard({
       <CardBody className="space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <FormField label="Scope">
-            <select
-              className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
+            <Select
               value={scope}
               onChange={(e) => setScope(e.target.value)}
             >
@@ -235,7 +235,7 @@ function HoldsCard({
                   {m.address}
                 </option>
               ))}
-            </select>
+            </Select>
           </FormField>
           <FormField label="Reason (optional)">
             <Input
@@ -364,8 +364,7 @@ function ExportsCard({
       <CardBody className="space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <FormField label="Mailbox">
-            <select
-              className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
+            <Select
               value={mailboxId}
               onChange={(e) => setMailboxId(e.target.value)}
             >
@@ -375,7 +374,7 @@ function ExportsCard({
                   {m.address}
                 </option>
               ))}
-            </select>
+            </Select>
           </FormField>
           <Button
             variant="secondary"

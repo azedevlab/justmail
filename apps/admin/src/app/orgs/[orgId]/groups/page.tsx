@@ -13,12 +13,14 @@ import { ApiError } from "@justmail/shared-utils";
 import {
   Button,
   Card,
+  Checkbox,
   Empty,
   FormField,
   Input,
   Modal,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   Spinner,
   StatusBadge,
@@ -27,6 +29,7 @@ import {
   TH,
   THead,
   TR,
+  Textarea,
   useConfirm,
   useToast,
 } from "@justmail/shared-ui";
@@ -293,8 +296,8 @@ function CreateForm({
               monospace
               {...f.register("local_part", { required: true })}
             />
-            <select
-              className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm"
+            <Select
+              className="!w-auto"
               {...f.register("domain_id", { required: true })}
             >
               {domains.map((d) => (
@@ -302,7 +305,7 @@ function CreateForm({
                   @{d.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </FormField>
         <FormField label="Name">
@@ -315,14 +318,14 @@ function CreateForm({
           <Input placeholder="What this group is for" {...f.register("description")} />
         </FormField>
         <FormField label="Members" hint="Comma, space, or newline separated">
-          <textarea
-            className="w-full min-h-24 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] font-mono shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
+          <Textarea
+            className="font-mono !min-h-24"
             placeholder="alice@example.com bob@example.com"
             {...f.register("members")}
           />
         </FormField>
         <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
-          <input type="checkbox" {...f.register("allow_member_send")} />
+          <Checkbox {...f.register("allow_member_send")} />
           Let members send mail using the group address
         </label>
         {err && (
@@ -477,17 +480,17 @@ function ManageForm({
         label={`Members (${group.member_count})`}
         hint="Comma, space, or newline separated"
       >
-        <textarea
-          className="w-full min-h-32 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] font-mono shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
+        <Textarea
+          className="font-mono !min-h-32"
           {...f.register("members")}
         />
       </FormField>
       <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
-        <input type="checkbox" {...f.register("enabled")} />
+        <Checkbox {...f.register("enabled")} />
         Enabled
       </label>
       <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
-        <input type="checkbox" {...f.register("allow_member_send")} />
+        <Checkbox {...f.register("allow_member_send")} />
         Let members send mail using the group address
       </label>
       {err && (

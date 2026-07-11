@@ -9,6 +9,7 @@ import { ApiError } from "@justmail/shared-utils";
 import {
   Button,
   Card,
+  Checkbox,
   Empty,
   FormField,
   Input,
@@ -174,7 +175,7 @@ function CreateModal({ orgId, onClose }: { orgId: string; onClose: () => void })
           />
         </FormField>
         <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
-          <input type="checkbox" {...f.register("is_primary")} />
+          <Checkbox {...f.register("is_primary")} />
           Make this the primary domain for outbound
         </label>
         {err && (

@@ -16,11 +16,13 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Checkbox,
   FormField,
   Input,
   Modal,
   PageBody,
   PageHeader,
+  Select,
   SkeletonRows,
   Textarea,
   useConfirm,
@@ -234,18 +236,15 @@ export default function ScimPage() {
                   )}
                 >
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" {...f.register("enabled")} />
+                    <Checkbox {...f.register("enabled")} />
                     Enabled (accept SCIM requests)
                   </label>
                   <FormField label="Default role for new members">
-                    <select
-                      className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 text-sm"
-                      {...f.register("default_role")}
-                    >
+                    <Select {...f.register("default_role")}>
                       <option value="viewer">Viewer</option>
                       <option value="member">Member</option>
                       <option value="admin">Admin</option>
-                    </select>
+                    </Select>
                   </FormField>
                   <FormField label="Group → role map (one per line: group name = role)">
                     <Textarea
@@ -255,7 +254,7 @@ export default function ScimPage() {
                     />
                   </FormField>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" {...f.register("deactivate")} />
+                    <Checkbox {...f.register("deactivate")} />
                     Suspend accounts on deprovision (active=false / delete)
                   </label>
                   <div className="pt-2">
