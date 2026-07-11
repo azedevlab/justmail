@@ -10,7 +10,7 @@ import { config } from "../config";
       provide: STORAGE_ADAPTER,
       useFactory: () =>
         createStorageAdapter({
-          STORAGE_KIND: (config as unknown as { STORAGE_KIND?: "local" | "s3" | "r2" | "minio" | "b2" | "azure" | "gcs" }).STORAGE_KIND ?? "local",
+          STORAGE_KIND: (config as unknown as { STORAGE_KIND?: "local" | "nfs" | "smb" | "cephfs" | "zfs" | "s3" | "r2" | "minio" | "b2" | "wasabi" | "do" | "scaleway" | "ceph" | "azure" | "gcs" }).STORAGE_KIND ?? "local",
           STORAGE_LOCAL_PATH: (config as unknown as { STORAGE_LOCAL_PATH?: string }).STORAGE_LOCAL_PATH,
           STORAGE_BUCKET: (config as unknown as { STORAGE_BUCKET?: string }).STORAGE_BUCKET,
           STORAGE_ENDPOINT: (config as unknown as { STORAGE_ENDPOINT?: string }).STORAGE_ENDPOINT,

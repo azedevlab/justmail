@@ -2,6 +2,7 @@ import {
   CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -11,8 +12,10 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Readable } from "node:stream";
 import type {
+  Capabilities,
   Etag,
   HeadResult,
+  HealthResult,
   ListEntry,
   PutMeta,
   Range,
@@ -34,13 +37,50 @@ export class S3Adapter implements StorageAdapter {
   readonly kind: string;
   private readonly client: S3Client;
   private readonly bucket: string;
+  private readonly publicUrlPrefix?: string;
 
   constructor(options: S3AdapterOptions, kind = "s3") {
     const { bucket, publicUrlPrefix, ...clientOpts } = options;
-    void publicUrlPrefix;
     this.bucket = bucket;
+    this.publicUrlPrefix = publicUrlPrefix;
     this.client = new S3Client(clientOpts);
     this.kind = kind;
+  }
+
+  capabilities(): Capabilities {
+    return {
+      presignedUrls: true,
+      ranges: true,
+      serverSideCopy: true,
+      publicBaseUrl: this.publicUrlPrefix,
+    };
+  }
+
+  async healthCheck(): Promise<HealthResult> {
+    const started = Date.now();
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return { ok: true, kind: this.kind, latencyMs: Date.now() - started };
+    } catch {
+      // Some S3-compatible backends (or restrictive bucket policies) forbid
+      // HeadBucket but permit a scoped list; treat a 1-key list as healthy.
+      try {
+        await this.client.send(
+          new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: 1 }),
+        );
+        return { ok: true, kind: this.kind, latencyMs: Date.now() - started };
+      } catch (err) {
+        return {
+          ok: false,
+          kind: this.kind,
+          latencyMs: Date.now() - started,
+          detail:
+            (err as { name?: string }).name ??
+            (err as Error).message ??
+            "unreachable",
+        };
+      }
+    }
   }
 
   async putObject(

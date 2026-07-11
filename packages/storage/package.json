@@ -1,7 +1,7 @@
 {
   "name": "@justmail/storage",
   "version": "1.0.0-alpha.1",
-  "description": "Object storage adapters — Local, S3, R2, MinIO, Backblaze, Azure Blob, GCS.",
+  "description": "Storage adapters — Local/NFS/SMB/CephFS/ZFS, S3, R2, MinIO, Backblaze, Wasabi, DigitalOcean Spaces, Scaleway, Ceph, Azure Blob, GCS.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",

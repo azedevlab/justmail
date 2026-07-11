@@ -1,8 +1,10 @@
 import { BlobServiceClient } from "@azure/storage-blob";
 import type { Readable } from "node:stream";
 import type {
+  Capabilities,
   Etag,
   HeadResult,
+  HealthResult,
   ListEntry,
   PutMeta,
   Range,
@@ -27,6 +29,28 @@ export class AzureAdapter implements StorageAdapter {
       options.connectionString,
     );
     this.container = service.getContainerClient(options.container);
+  }
+
+  capabilities(): Capabilities {
+    return { presignedUrls: true, ranges: true, serverSideCopy: true };
+  }
+
+  async healthCheck(): Promise<HealthResult> {
+    const started = Date.now();
+    try {
+      await this.container.getProperties();
+      return { ok: true, kind: this.kind, latencyMs: Date.now() - started };
+    } catch (err) {
+      return {
+        ok: false,
+        kind: this.kind,
+        latencyMs: Date.now() - started,
+        detail:
+          (err as { code?: string }).code ??
+          (err as Error).message ??
+          "unreachable",
+      };
+    }
   }
 
   async putObject(

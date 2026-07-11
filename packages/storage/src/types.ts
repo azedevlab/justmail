@@ -45,6 +45,35 @@ export interface ListEntry {
   etag: string;
 }
 
+/**
+ * What an adapter can do, so callers can branch without hardcoding provider
+ * names. The API uses this to decide whether it can offload a download to a
+ * client-usable signed URL (`presignedUrls`) or must proxy the bytes itself.
+ */
+export interface Capabilities {
+  /**
+   * `signUrl()` yields a URL the client can hit directly against the backend,
+   * bypassing the API (true offload/CDN). The local adapter returns an
+   * API-fronted path, so it reports `false`.
+   */
+  presignedUrls: boolean;
+  /** `getStream()` honours byte-range requests. */
+  ranges: boolean;
+  /** `copyObject()` is a server-side copy — no data round-trip through us. */
+  serverSideCopy: boolean;
+  /** Stable public base URL for cacheable objects, when one is configured. */
+  publicBaseUrl?: string;
+}
+
+/** Connectivity probe result for the configured backend. */
+export interface HealthResult {
+  ok: boolean;
+  kind: string;
+  latencyMs: number;
+  /** Present when `ok` is false: a short, non-sensitive reason. */
+  detail?: string;
+}
+
 export interface StorageAdapter {
   readonly kind: string;
   putObject(
@@ -63,6 +92,10 @@ export interface StorageAdapter {
   ): Promise<string>;
   copyObject(from: string, to: string): Promise<void>;
   listPrefix(prefix: string, cursor?: string): AsyncIterable<ListEntry>;
+  /** Static description of what this backend supports. */
+  capabilities(): Capabilities;
+  /** Round-trip probe proving credentials + bucket/container reachability. */
+  healthCheck(): Promise<HealthResult>;
 }
 
 export class ObjectNotFound extends Error {

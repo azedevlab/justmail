@@ -1,8 +1,10 @@
 import { Storage } from "@google-cloud/storage";
 import type { Readable } from "node:stream";
 import type {
+  Capabilities,
   Etag,
   HeadResult,
+  HealthResult,
   ListEntry,
   PutMeta,
   Range,
@@ -29,6 +31,32 @@ export class GcsAdapter implements StorageAdapter {
       credentials: options.credentials as never,
     });
     this.bucket = storage.bucket(options.bucket);
+  }
+
+  capabilities(): Capabilities {
+    return { presignedUrls: true, ranges: true, serverSideCopy: true };
+  }
+
+  async healthCheck(): Promise<HealthResult> {
+    const started = Date.now();
+    try {
+      const [exists] = await this.bucket.exists();
+      return exists
+        ? { ok: true, kind: this.kind, latencyMs: Date.now() - started }
+        : {
+            ok: false,
+            kind: this.kind,
+            latencyMs: Date.now() - started,
+            detail: "bucket not found",
+          };
+    } catch (err) {
+      return {
+        ok: false,
+        kind: this.kind,
+        latencyMs: Date.now() - started,
+        detail: (err as Error).message,
+      };
+    }
   }
 
   async putObject(

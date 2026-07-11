@@ -21,6 +21,15 @@ export class StorageService {
     return this.adapter.kind;
   }
 
+  capabilities() {
+    return this.adapter.capabilities();
+  }
+
+  /** Round-trip probe of the configured backend (credentials + reachability). */
+  health() {
+    return this.adapter.healthCheck();
+  }
+
   key(orgId: string, ...parts: string[]): string {
     const clean = parts
       .flatMap((p) => p.split("/"))

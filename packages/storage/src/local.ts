@@ -1,13 +1,23 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, rename, stat, unlink, copyFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  copyFile,
+  writeFile,
+} from "node:fs/promises";
 import { readdir } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve, sep } from "node:path";
 import type {
+  Capabilities,
   Etag,
   HeadResult,
+  HealthResult,
   ListEntry,
   PutMeta,
   Range,
@@ -16,17 +26,50 @@ import type {
 import { ObjectNotFound } from "./types.js";
 
 /**
- * LocalAdapter — filesystem-backed storage. Suitable for single-node
- * deployments and dev. Signs URLs by embedding a HMAC token; the API server
- * verifies the token when it fronts downloads.
+ * LocalAdapter — filesystem-backed storage. Backs single-node deployments and
+ * dev, and equally any POSIX-mounted network/distributed filesystem (NFS, SMB,
+ * CephFS, ZFS) — the operator just points the root at the mount. The staged
+ * write + same-directory rename in `putObject` keeps writes atomic on those
+ * mounts too, since the temp file never crosses a filesystem boundary. Signs
+ * URLs by embedding a HMAC token; the API server verifies it when it fronts
+ * downloads. `kind` records the underlying mount type for health/telemetry.
  */
 export class LocalAdapter implements StorageAdapter {
-  readonly kind = "local";
+  readonly kind: string;
 
   constructor(
     private readonly root: string,
     private readonly signingSecret: string,
-  ) {}
+    kind = "local",
+  ) {
+    this.kind = kind;
+  }
+
+  capabilities(): Capabilities {
+    // signUrl() returns an API-fronted `/_storage` path, not a URL the client
+    // can hit directly against a backend — so no true offload.
+    return { presignedUrls: false, ranges: true, serverSideCopy: true };
+  }
+
+  async healthCheck(): Promise<HealthResult> {
+    const started = Date.now();
+    const probe = join(this.root, `.jm-health-${process.pid}-${Date.now()}`);
+    try {
+      await mkdir(this.root, { recursive: true });
+      await writeFile(probe, "ok");
+      await readFile(probe);
+      await unlink(probe);
+      return { ok: true, kind: this.kind, latencyMs: Date.now() - started };
+    } catch (err) {
+      await unlink(probe).catch(() => undefined);
+      return {
+        ok: false,
+        kind: this.kind,
+        latencyMs: Date.now() - started,
+        detail: (err as Error).message,
+      };
+    }
+  }
 
   private path(key: string): string {
     const normalised = key
