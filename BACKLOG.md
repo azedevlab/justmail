@@ -154,3 +154,16 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 |---|---|---|---|---|---|
 | X-1 | P1 | Full OSS docs suite (README, CONTRIBUTING, SECURITY, ARCHITECTURE, INSTALL, DEPLOYMENT, CONFIGURATION, MIGRATION, UPGRADE, BACKUP/RESTORE, HA, KUBERNETES, DOCKER, API, SDK, CLI, THEMES, PLUGINS, FAQ, TROUBLESHOOTING) | L | — | todo |
 | X-2 | P1 | REST API parity for every UI action + OpenAPI, SDK, CLI, webhooks, WS events, API versioning | XL | — | todo |
+
+## Ops — live production incidents
+
+Operational issues found on the reference deployment; fixed via CI/CD only.
+
+| ID | P | Task | Status |
+|---|---|---|---|
+| OPS-1 | P1 | Focus rings: unlayered `*:focus-visible` outline stacked on component rings ("triple box"); moved to `@layer base`, softened to 18%-alpha halo system + button press polish | done |
+| OPS-2 | P0 | Attachment chunk uploads severed at 60s: Traefik v3 changed entrypoint `readTimeout` default from unlimited to 60s; raised to 10m + Node `requestTimeout` 11m, uploader surfaces transport errors | done |
+| OPS-3 | P1 | Send pipeline verified healthy end-to-end: `scheduled_sends` clean, worker dispatches ~2s after `send_at`, Sent-copy APPEND confirmed | done |
+| OPS-4 | P0 | Outbound mail lands in Gmail spam: sending IP has no PTR/rDNS (must be set at the VM provider to the MX hostname); DKIM TXT published and verified; clean up SPF self-include when domain equals mail root | in-progress |
+| OPS-5 | P1 | Attachment upload throughput collapses to ~50–160 KB/s though client uplink measures ~424 KB/s: VM-path bottleneck; diagnose provider pipe/TCP config, consider proxying the API host through the CDN | in-progress |
+| OPS-6 | P3 | Webmail folders 500: resolved; temporary diagnostics repro scaffolding stripped from the Diagnostics workflow | done |

@@ -1,8 +1,9 @@
 name: Diagnostics
 
-# Read-only operational diagnostics: tails recent container logs and checks
-# storage/Radicale wiring on the production host. Manual dispatch only; never
-# mutates state. Reuses the deploy SSH credentials.
+# Read-only operational diagnostics: tails recent container logs, checks
+# storage wiring, mail deliverability state, and VM network health on the
+# production host. Manual dispatch only; never mutates persistent state.
+# Reuses the deploy SSH credentials.
 
 on:
   workflow_dispatch:
@@ -33,72 +34,6 @@ jobs:
           echo "===== compose ps ====="
           $C ps -a
 
-          echo; echo "===== webmail folders repro (LIST-STATUS) ====="
-          CRED_KEY=$($C exec -T redis redis-cli --scan --pattern 'webmail:cred:*' </dev/null 2>/dev/null | grep -v ':idx:' | head -1 | tr -d '[:space:]')
-          echo "cred key: ${CRED_KEY:-<none>}"
-          if [ -n "$CRED_KEY" ]; then
-            CRED_JSON=$($C exec -T redis redis-cli GET "$CRED_KEY" </dev/null 2>/dev/null)
-            JM_ADDR=$(printf '%s' "$CRED_JSON" | sed -n 's/.*"address":"\([^"]*\)".*/\1/p')
-            JM_SEALED=$(printf '%s' "$CRED_JSON" | sed -n 's/.*"sealed":"\([^"]*\)".*/\1/p')
-            echo "repro address: ${JM_ADDR:-<none>} sealed_present=$([ -n "$JM_SEALED" ] && echo yes || echo no)"
-            cat >/tmp/jm-folders-repro.cjs <<'JS'
-          const crypto = require("node:crypto");
-          const { ImapFlow } = require("imapflow");
-          function keyBuf(k) { return /^[0-9a-f]{64}$/i.test(k) ? Buffer.from(k, "hex") : crypto.createHash("sha256").update(k).digest(); }
-          function open(sealed, key) {
-            const [iv, ct, tag] = sealed.split(".").map((p) => Buffer.from(p, "base64url"));
-            const d = crypto.createDecipheriv("aes-256-gcm", key, iv);
-            d.setAuthTag(tag);
-            return Buffer.concat([d.update(ct), d.final()]).toString("utf8");
-          }
-          (async () => {
-            const addr = process.env.JM_ADDR, sealed = process.env.JM_SEALED, ek = process.env.ENCRYPTION_KEY;
-            if (!addr || !sealed) { console.log("no cred to repro"); process.exit(0); }
-            if (!ek) { console.log("ENCRYPTION_KEY unset in api"); process.exit(0); }
-            let pass;
-            try { pass = open(sealed, keyBuf(ek)); console.log("open() OK pwlen=" + pass.length); }
-            catch (e) { console.log("open() THREW: " + (e && e.stack ? e.stack : String(e))); process.exit(0); }
-            const host = process.env.IMAP_HOST || "dovecot", port = Number(process.env.IMAP_PORT || 993);
-            const client = new ImapFlow({ host, port, secure: true, auth: { user: addr, pass }, tls: { rejectUnauthorized: false }, logger: false });
-            client.on("error", (e) => console.log("CLIENT ERROR EVENT: " + (e && e.message)));
-            try {
-              await client.connect();
-              console.log("connected as " + addr);
-              try {
-                const boxes = await client.list({ statusQuery: { unseen: true, messages: true } });
-                console.log("LIST-STATUS OK folders=" + boxes.length);
-                for (const b of boxes.slice(0, 25)) console.log(" - " + b.path + " special=" + (b.specialUse || "") + " status=" + JSON.stringify(b.status || null));
-              } catch (e) {
-                console.log("LIST-STATUS THREW: " + (e && e.stack ? e.stack : String(e)));
-                try { const b2 = await client.list(); console.log("plain LIST OK folders=" + b2.length); }
-                catch (e2) { console.log("plain LIST THREW: " + (e2 && e2.stack ? e2.stack : String(e2))); }
-              }
-              await client.logout();
-            } catch (e) {
-              console.log("CONNECT THREW: " + (e && e.stack ? e.stack : String(e)));
-            }
-            process.exit(0);
-          })();
-          JS
-            $C exec -T -e JM_ADDR="$JM_ADDR" -e JM_SEALED="$JM_SEALED" api node < /tmp/jm-folders-repro.cjs 2>&1 | tail -60
-          fi
-
-          echo; echo "===== dovecot auth diagnosis ====="
-          PGUSER=$(grep -E '^POSTGRES_USER=' /opt/justmail/.env | cut -d= -f2-)
-          PGDB=$(grep -E '^POSTGRES_DB=' /opt/justmail/.env | cut -d= -f2-)
-          DA=$($C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -tA -c \
-            "SELECT m.local_part||'@'||d.name FROM mailboxes m JOIN domains d ON d.id=m.domain_id ORDER BY m.created_at LIMIT 1" \
-            </dev/null 2>/dev/null | tr -d '[:space:]')
-          echo "-- mail_auth view sample (hash scheme prefix) --"
-          $C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -P pager=off -c \
-            "SELECT \"user\", left(password, 14) AS pw_prefix, domain_name, local_part, quota_mb FROM mail_auth ORDER BY \"user\" LIMIT 5;" </dev/null 2>&1
-          echo "-- doveadm auth lookup ${DA:-<none>} (passdb resolution, no password) --"
-          $C exec -T dovecot doveadm auth lookup "$DA" </dev/null 2>&1 | head -30
-          echo "-- dovecot logs (auth/imap, last 6h) --"
-          $C logs dovecot --since 6h --no-color 2>&1 \
-            | grep -iE 'auth|argon|passdb|userdb|error|failed|unknown user|imap-login|Disconnected|Login' \
-            | tail -70
-
           echo; echo "===== api logs (error-ish, last 200) ====="
           $C logs api --since 6h --no-color 2>&1 \
             | grep -iE 'error|exception|throw|EXDEV|ECONNREFUSED|ETIMEDOUT|EACCES|ENOENT|radicale|storage|MKCOL|PROPFIND|status 4|status 5|Unhandled|at async|at /|at Object' \
@@ -123,6 +58,47 @@ jobs:
                FROM scheduled_sends
               WHERE last_error IS NOT NULL
               ORDER BY updated_at DESC LIMIT 20;" </dev/null 2>&1
+
+          echo; echo "===== deliverability: dkim keys + dns records (db) ====="
+          $C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -P pager=off -c \
+            "SELECT d.name AS domain, k.selector, k.algorithm, k.status
+               FROM dkim_keys k JOIN domains d ON d.id = k.domain_id
+              ORDER BY d.name, k.created_at;" </dev/null 2>&1
+          $C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -P pager=off -c \
+            "SELECT d.name AS domain, r.purpose, r.type, r.name, r.check_status,
+                    left(r.content, 60) AS content
+               FROM dns_records r JOIN domains d ON d.id = r.domain_id
+              ORDER BY d.name, r.purpose;" </dev/null 2>&1
+
+          echo; echo "===== deliverability: postfix identity + outbound (48h) ====="
+          $C exec -T postfix postconf myhostname smtp_helo_name inet_protocols smtp_address_preference </dev/null 2>&1
+          echo "-- egress IPs + PTR as seen from the VM --"
+          V4=$(curl -s -4 --max-time 10 https://ifconfig.me)
+          [ -n "$V4" ] && echo "ipv4: $V4 ptr: $(getent hosts "$V4" | awk '{print $2}')" || echo "ipv4: <none>"
+          V6=$(curl -s -6 --max-time 10 https://ifconfig.me)
+          [ -n "$V6" ] && echo "ipv6: $V6 ptr: $(getent hosts "$V6" | awk '{print $2}')" || echo "ipv6: <none>"
+          echo "-- postfix outbound delivery (48h) --"
+          $C logs postfix --since 48h --no-color 2>&1 \
+            | grep -iE 'relay=|status=(sent|bounced|deferred)|said:' | tail -40
+          echo "-- rspamd dkim signing (48h) --"
+          $C logs rspamd --since 48h --no-color 2>&1 | grep -i dkim | tail -20
+          echo "-- dkim key files + selector map (rspamd volume) --"
+          $C exec -T rspamd ls -l /var/lib/rspamd/dkim/ </dev/null 2>&1 | head -10
+          $C exec -T rspamd cat /var/lib/rspamd/dkim/selectors.map </dev/null 2>&1 | head -10
+
+          echo; echo "===== network: tcp config + provider throughput ====="
+          sysctl net.ipv4.tcp_congestion_control net.core.default_qdisc net.core.rmem_max net.ipv4.tcp_rmem net.ipv4.tcp_wmem 2>&1
+          tc qdisc show 2>/dev/null | head -6
+          echo "-- NIC stats (errors/drops) --"
+          ip -s link 2>/dev/null | grep -A5 -E '^[0-9]+: (eth|ens|enp)' | head -24
+          echo "-- VM ingress: download 25MB from Cloudflare --"
+          curl -s -o /dev/null -w "HTTP=%{http_code} SIZE=%{size_download} TIME=%{time_total}s SPEED_DOWN=%{speed_download}B/s\n" \
+            "https://speed.cloudflare.com/__down?bytes=26214400" --max-time 60
+          echo "-- VM egress: upload 8MB to Cloudflare --"
+          head -c 8388608 /dev/urandom > /tmp/jm-net-probe.bin
+          curl -s -o /dev/null -w "HTTP=%{http_code} SENT=%{size_upload} TIME=%{time_total}s SPEED_UP=%{speed_upload}B/s\n" \
+            -X POST "https://speed.cloudflare.com/__up" --data-binary @/tmp/jm-net-probe.bin --max-time 90
+          rm -f /tmp/jm-net-probe.bin
 
           echo; echo "===== clamav reachability (from worker) + logs ====="
           # nc/curl may be absent in the node image; use the bundled runtime.
