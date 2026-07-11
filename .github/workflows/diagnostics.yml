@@ -49,7 +49,9 @@ jobs:
           stat -c '%U:%G %a %n' /opt/justmail/attachments 2>&1
 
           echo; echo "===== cross-device / perms (inside api container) ====="
-          $C exec -T api sh -lc 'echo "-- ls target --"; ls -ld /opt/justmail/attachments 2>&1; echo "-- df target vs /tmp --"; df -P /opt/justmail/attachments /tmp 2>&1; echo "-- whoami --"; id 2>&1' 2>&1
+          # Redirect stdin from /dev/null: `docker compose exec` otherwise drains
+          # the SSH heredoc, swallowing every section below it.
+          $C exec -T api sh -lc 'echo "-- ls target --"; ls -ld /opt/justmail/attachments 2>&1; echo "-- df target vs /tmp --"; df -P /opt/justmail/attachments /tmp 2>&1; echo "-- whoami --"; id 2>&1' </dev/null 2>&1
 
           echo; echo "===== storage backend (.env, redacted) ====="
           grep -E '^STORAGE_(KIND|ENDPOINT|BUCKET|REGION)=' /opt/justmail/.env 2>&1
