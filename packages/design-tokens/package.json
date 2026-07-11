@@ -15,10 +15,12 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/emit-css.mjs",
-    "typecheck": "tsc --noEmit"
+    "build": "tsc -p tsconfig.build.json && node scripts/emit-css.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^2.1.0"
   }
 }

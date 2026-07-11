@@ -89,7 +89,7 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 
 | ID | P | Task | Effort | Deps | Status |
 |---|---|---|---|---|---|
-| M9-1 | P1 | axe in CI + contrast token pass + keyboard/VoiceOver fixes | M | — | todo |
+| M9-1 | P1 | Contrast token pass (WCAG AA audit test in CI). Keyboard/VoiceOver + live axe run fold into M10-7 (rebuilds the UI it would test) | M | — | done |
 | M9-2 | P1 | Real backup scheduler + restore flow + last-run status | L | — | todo |
 | M9-3 | P2 | Docs: quickstart, backup/restore, upgrade, troubleshooting, rendered OpenAPI, arch diagram | M | — | todo |
 | M9-4 | P2 | OSS hygiene: issue/PR templates, CODEOWNERS, dependabot, CodeQL, CoC, labels, release notes | M | — | todo |
