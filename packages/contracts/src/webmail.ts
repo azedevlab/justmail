@@ -108,6 +108,15 @@ export const ComposeRequest = z.object({
 });
 export type ComposeRequest = z.infer<typeof ComposeRequest>;
 
+// Effective per-org attachment ceilings, surfaced to the composer so the client
+// enforces the same limits the send path does (admin override or config default)
+// instead of a hardcoded value.
+export const AttachmentLimits = z.object({
+  max_total_bytes: z.number().int().positive(),
+  max_count: z.number().int().positive(),
+});
+export type AttachmentLimits = z.infer<typeof AttachmentLimits>;
+
 // Result of a send: the message is not dispatched immediately but held as a
 // scheduled_send row. `id` lets the client cancel it during the undo window;
 // `scheduled` is true when the user picked a future send_at (vs. the undo delay).

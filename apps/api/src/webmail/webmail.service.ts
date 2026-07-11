@@ -718,6 +718,23 @@ export class WebmailService {
     };
   }
 
+  /**
+   * Effective attachment ceilings for this mailbox's org, so the composer can
+   * enforce the same limits the send path does rather than a hardcoded value.
+   */
+  async attachmentLimits(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+  ): Promise<{ max_total_bytes: number; max_count: number }> {
+    await this.mailboxFor(orgId, mailboxId, principal);
+    const limits = await this.settings.attachmentLimits(orgId);
+    return {
+      max_total_bytes: limits.maxTotalBytes,
+      max_count: limits.maxCount,
+    };
+  }
+
   /** Cancel a still-pending scheduled send (undo window or future schedule). */
   async cancelScheduledSend(
     principal: SessionPrincipal,
