@@ -47,12 +47,12 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 
 | ID | P | Task | Effort | Deps | Status |
 |---|---|---|---|---|---|
-| M5-1 | P1 | Compose upload via tus → storage adapter (content-hash dedup) | L | M4-1 | todo |
-| M5-2 | P1 | Server-side streaming MIME assembly on send from `attachment_ids` | M | M5-1 | todo |
-| M5-3 | P1 | Streaming download + Range + ETag (no full buffer) | M | M4-5 | todo |
-| M5-4 | P0 | clamd INSTREAM scan on send; reject infected | M | M5-2 | todo |
-| M5-5 | P2 | Thumbnail service (sharp) + signed short-TTL URLs | M | M5-1 | todo |
-| M5-6 | P2 | Org-configurable attachment limits in admin Settings | S | M2-3 | todo |
+| M5-1 | P1 | Compose upload via tus → storage adapter (content-hash dedup) | L | M4-1 | done |
+| M5-2 | P1 | Server-side streaming MIME assembly on send from `attachment_ids` | M | M5-1 | done |
+| M5-3 | P1 | Streaming download + Range + ETag (no full buffer) | M | M4-5 | done |
+| M5-4 | P0 | clamd INSTREAM scan on send; reject infected | M | M5-2 | done |
+| M5-5 | P2 | Thumbnail service (sharp) + signed short-TTL URLs | M | M5-1 | done |
+| M5-6 | P2 | Org-configurable attachment limits in admin Settings | S | M2-3 | done |
 
 ## M6 — Webmail product parity
 
@@ -93,7 +93,7 @@ Priority: P0 (security/data-loss) · P1 (core) · P2 (product) · P3 (polish).
 | M9-2 | P1 | Real backup scheduler + restore flow + last-run status | L | — | done |
 | M9-3 | P2 | Docs: quickstart, backup/restore, upgrade, troubleshooting, rendered OpenAPI, arch diagram | M | — | done |
 | M9-4 | P2 | OSS hygiene: issue/PR templates, CODEOWNERS, dependabot, CodeQL, CoC, labels, release notes | M | — | done |
-| M9-5 | P1 | `RELEASE_READINESS.md` final audit; iterate until no Critical/High | M | all | todo |
+| M9-5 | P1 | `RELEASE_READINESS.md` final audit; iterate until no Critical/High | M | all | done |
 
 ## M10 — Final polish: UI/UX, functionality, design system, a11y (release-grade)
 
