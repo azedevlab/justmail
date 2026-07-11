@@ -48,6 +48,10 @@ import {
   Avatar,
   Button,
   Card,
+  DropdownItem,
+  DropdownLabel,
+  DropdownMenu,
+  DropdownSeparator,
   Empty,
   FormField,
   IconButton,
@@ -90,6 +94,7 @@ import {
   Paperclip,
   PenLine,
   Plus,
+  LogOut,
   RefreshCw,
   Reply,
   Search,
@@ -100,7 +105,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useMe } from "@/lib/session";
+import { useLogout, useMe } from "@/lib/session";
 import { api, API_BASE } from "@/lib/api";
 import { useMailboxRealtime } from "@/lib/realtime";
 import {
@@ -197,6 +202,7 @@ type Row =
 export default function MailboxView() {
   const { mailboxId } = useParams<{ mailboxId: string }>();
   const me = useMe();
+  const logout = useLogout();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [folder, setFolder] = useState("INBOX");
@@ -648,6 +654,23 @@ export default function MailboxView() {
         >
           Compose
         </Button>
+        <DropdownMenu
+          trigger={
+            <button
+              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              aria-label="Account"
+            >
+              <Avatar name={me.data?.email ?? "?"} size={28} />
+            </button>
+          }
+        >
+          {me.data && <DropdownLabel>{me.data.email}</DropdownLabel>}
+          <DropdownSeparator />
+          <DropdownItem destructive onSelect={() => logout.mutate()}>
+            <LogOut size={14} />
+            Sign out
+          </DropdownItem>
+        </DropdownMenu>
       </header>
 
       <div className="flex-1 min-h-0 flex">
