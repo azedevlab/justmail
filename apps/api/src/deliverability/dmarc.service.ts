@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
-import type { DmarcRecord, DmarcReport, DmarcReportDetail } from "@justmail/contracts";
+import type {
+  DmarcRecord,
+  DmarcReport,
+  DmarcReportDetail,
+  ReputationDay,
+} from "@justmail/contracts";
 import { parseDmarcArchive, type DmarcParsedRecord } from "./dmarc-parse";
 
 interface ReportRow {
@@ -82,6 +87,45 @@ export class DmarcService {
         }),
       ),
     };
+  }
+
+  /**
+   * Daily outbound sender-reputation series over the trailing window. Buckets
+   * mail_events by postfix delivery status (sent/bounced/deferred) and FBL
+   * complaints. Mirrors the dashboard's null-org inclusion: mail-plane component
+   * logs are frequently unattributed, so they count toward the platform trend.
+   */
+  async reputation(
+    orgId: string,
+    userId: string,
+    days = 30,
+  ): Promise<ReputationDay[]> {
+    await this.orgs.requireRole(orgId, userId, "viewer");
+    const { rows } = await this.db.query<{
+      day: Date;
+      sent: string;
+      bounced: string;
+      deferred: string;
+      complained: string;
+    }>(
+      `SELECT date_trunc('day', occurred_at) AS day,
+              count(*) FILTER (WHERE event LIKE '%.sent') AS sent,
+              count(*) FILTER (WHERE event LIKE '%.bounced') AS bounced,
+              count(*) FILTER (WHERE event LIKE '%.deferred') AS deferred,
+              count(*) FILTER (WHERE event LIKE '%.complain%') AS complained
+         FROM mail_events
+        WHERE occurred_at > now() - make_interval(days => $2)
+          AND (org_id = $1 OR org_id IS NULL)
+        GROUP BY 1 ORDER BY 1`,
+      [orgId, days],
+    );
+    return rows.map((r) => ({
+      day: r.day.toISOString().slice(0, 10),
+      sent: Number(r.sent),
+      bounced: Number(r.bounced),
+      complained: Number(r.complained),
+      deferred: Number(r.deferred),
+    }));
   }
 
   async ingest(payload: {
