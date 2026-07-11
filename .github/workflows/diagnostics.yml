@@ -33,6 +33,46 @@ jobs:
           echo "===== compose ps ====="
           $C ps -a
 
+          echo; echo "===== webmail folders repro (LIST-STATUS) ====="
+          PGUSER=$(grep -E '^POSTGRES_USER=' /opt/justmail/.env | cut -d= -f2-)
+          PGDB=$(grep -E '^POSTGRES_DB=' /opt/justmail/.env | cut -d= -f2-)
+          REPRO_ADDR=$($C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -tA -c \
+            "SELECT m.local_part||'@'||d.name FROM mailboxes m JOIN domains d ON d.id=m.domain_id ORDER BY m.created_at LIMIT 1" \
+            </dev/null 2>/dev/null | tr -d '[:space:]')
+          echo "repro address: ${REPRO_ADDR:-<none>}"
+          cat >/tmp/jm-folders-repro.cjs <<'JS'
+          const { ImapFlow } = require("imapflow");
+          (async () => {
+            const host = process.env.IMAP_HOST || "dovecot";
+            const port = Number(process.env.IMAP_PORT || 993);
+            const mu = process.env.DOVECOT_MASTER_USER;
+            const mp = process.env.DOVECOT_MASTER_PASSWORD;
+            const addr = process.env.REPRO_ADDR;
+            if (!mu || !mp) { console.log("MASTER creds unset user=" + !!mu + " pass=" + !!mp); process.exit(0); }
+            if (!addr) { console.log("no REPRO_ADDR"); process.exit(0); }
+            const client = new ImapFlow({ host, port, secure: true, auth: { user: addr + "*" + mu, pass: mp }, tls: { rejectUnauthorized: false }, logger: false });
+            client.on("error", (e) => console.log("CLIENT ERROR EVENT: " + (e && e.message)));
+            try {
+              await client.connect();
+              console.log("connected as " + addr);
+              try {
+                const boxes = await client.list({ statusQuery: { unseen: true, messages: true } });
+                console.log("LIST-STATUS OK folders=" + boxes.length);
+                for (const b of boxes.slice(0, 25)) console.log(" - " + b.path + " special=" + (b.specialUse || "") + " status=" + JSON.stringify(b.status || null));
+              } catch (e) {
+                console.log("LIST-STATUS THREW: " + (e && e.stack ? e.stack : String(e)));
+                try { const b2 = await client.list(); console.log("plain LIST OK folders=" + b2.length); }
+                catch (e2) { console.log("plain LIST THREW: " + (e2 && e2.stack ? e2.stack : String(e2))); }
+              }
+              await client.logout();
+            } catch (e) {
+              console.log("CONNECT THREW: " + (e && e.stack ? e.stack : String(e)));
+            }
+            process.exit(0);
+          })();
+          JS
+          $C exec -T -e REPRO_ADDR="$REPRO_ADDR" api node < /tmp/jm-folders-repro.cjs 2>&1 | tail -60
+
           echo; echo "===== api logs (error-ish, last 200) ====="
           $C logs api --since 6h --no-color 2>&1 \
             | grep -iE 'error|exception|throw|EXDEV|ECONNREFUSED|ETIMEDOUT|EACCES|ENOENT|radicale|storage|MKCOL|PROPFIND|status 4|status 5|Unhandled|at async|at /|at Object' \
