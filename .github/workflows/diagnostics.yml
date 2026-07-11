@@ -44,6 +44,25 @@ jobs:
           echo; echo "===== radicale logs (last 80) ====="
           $C logs radicale --since 6h --no-color --tail 80 2>&1
 
+          echo; echo "===== worker logs (send failures, last 120) ====="
+          $C logs worker --since 24h --no-color 2>&1 \
+            | grep -iE 'scheduled send|virus|clamav|storage|attachment|error|exception|EXDEV|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|status 4|status 5' \
+            | tail -120
+
+          echo; echo "===== scheduled_sends failures (db, last 20) ====="
+          PGUSER=$(grep -E '^POSTGRES_USER=' /opt/justmail/.env | cut -d= -f2-)
+          PGDB=$(grep -E '^POSTGRES_DB=' /opt/justmail/.env | cut -d= -f2-)
+          $C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -P pager=off -c \
+            "SELECT id, status, attempts, left(last_error,180) AS last_error, created_at
+               FROM scheduled_sends
+              WHERE last_error IS NOT NULL
+              ORDER BY updated_at DESC LIMIT 20;" </dev/null 2>&1
+
+          echo; echo "===== clamav reachability (from worker) + logs ====="
+          # nc/curl may be absent in the node image; use the bundled runtime.
+          $C exec -T worker node -e 'const net=require("net");const s=net.connect(3310,"clamav");s.setTimeout(3000);s.on("connect",()=>{console.log("clamav:3310 reachable");s.end();process.exit(0)});s.on("error",e=>{console.log("clamav:3310 UNREACHABLE",e.code);process.exit(0)});s.on("timeout",()=>{console.log("clamav:3310 TIMEOUT");s.destroy();process.exit(0)})' </dev/null 2>&1
+          $C logs clamav --since 6h --no-color --tail 15 2>&1
+
           echo; echo "===== storage dir (host) ====="
           ls -ld /opt/justmail/attachments 2>&1
           stat -c '%U:%G %a %n' /opt/justmail/attachments 2>&1
