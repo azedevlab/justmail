@@ -15,6 +15,7 @@ import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { open, seal } from "../common/secretbox";
 import type { SessionPrincipal } from "../auth/auth.service";
+import { config } from "../config";
 
 interface EndpointRow {
   id: string;
@@ -212,7 +213,9 @@ export class WebhooksService {
             "x-justmail-signature": `sha256=${sig}`,
           },
           body: bodyStr,
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(
+            config.WEBHOOK_DELIVERY_TIMEOUT_SECONDS * 1_000,
+          ),
         });
         status = res.status;
       } catch (err) {

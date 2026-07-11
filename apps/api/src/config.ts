@@ -6,6 +6,7 @@ const Env = z.object({
   DATABASE_URL: z.string().url(),
   DATABASE_READONLY_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),
+  REDIS_MAX_RETRIES_PER_REQUEST: z.coerce.number().int().min(0).default(2),
   ENCRYPTION_KEY: z.string().min(32),
   EVENTS_INGEST_TOKEN: z.string().min(16),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
@@ -36,6 +37,7 @@ const Env = z.object({
   SIEVE_PORT: z.coerce.number().int().positive().default(4190),
   SIEVE_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(false),
   SIEVE_SCRIPT_NAME: z.string().default("justmail"),
+  SIEVE_CONNECT_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(15),
 
   // Radicale CardDAV/CalDAV store. The API reaches it over the internal network
   // and brokers per-user access with the X-Remote-User header (Radicale trusts
@@ -99,6 +101,10 @@ const Env = z.object({
   SSO_CALLBACK_BASE_URL: z.string().url().optional(),
   SSO_DEFAULT_RELAY_URL: z.string().url().optional(),
   SSO_FLOW_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  // OIDC discovery/JWKS HTTP fetch: request timeout and how long the fetched
+  // documents are cached before a re-fetch.
+  OIDC_HTTP_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(8),
+  OIDC_METADATA_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
   // Backups. The worker shells out to these client binaries against
   // DATABASE_URL; override the paths if they are not on $PATH. The due-check
@@ -110,6 +116,7 @@ const Env = z.object({
   // Worker tick cadences (seconds). Each background loop's poll interval; the
   // loop body no-ops when nothing is due, so these bound latency, not load.
   WEBHOOK_POLL_SECONDS: z.coerce.number().int().positive().default(5),
+  WEBHOOK_DELIVERY_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(10),
   QUEUE_SNAPSHOT_POLL_SECONDS: z.coerce.number().int().positive().default(60),
   DNSBL_POLL_SECONDS: z.coerce.number().int().positive().default(1800),
   CRED_SWEEP_POLL_SECONDS: z.coerce.number().int().positive().default(600),

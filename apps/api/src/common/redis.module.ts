@@ -18,7 +18,7 @@ function createClient(): RedisClient {
     return null;
   }
   const client = new Redis(config.REDIS_URL, {
-    maxRetriesPerRequest: 2,
+    maxRetriesPerRequest: config.REDIS_MAX_RETRIES_PER_REQUEST,
     enableReadyCheck: true,
   });
   client.on("error", (err) => logger.error(`redis error: ${err.message}`));
