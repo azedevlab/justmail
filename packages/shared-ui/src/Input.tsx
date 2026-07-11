@@ -72,7 +72,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           aria-pressed={visible}
           className={cn(
             "absolute right-1 top-1/2 -translate-y-1/2 inline-grid place-items-center",
-            "w-8 h-8 rounded-md text-[var(--color-neutral-800)]",
+            "w-8 h-8 rounded-lg text-[var(--color-neutral-800)]",
             "transition-colors duration-[var(--motion-base)]",
             "hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)]",

@@ -25,7 +25,7 @@ export function Tooltip({
       <Rx.Portal>
         <Rx.Content
           side={side}
-          className="rounded-md bg-[var(--color-surface-3)] border border-[var(--color-border-strong)] px-2 py-1 text-[11px] text-[var(--color-neutral-1000)] shadow-[var(--shadow-3)] z-[var(--z-tooltip)]"
+          className="rounded-lg bg-[var(--color-surface-3)] border border-[var(--color-border-strong)] px-2 py-1 text-[11px] text-[var(--color-neutral-1000)] shadow-[var(--shadow-3)] z-[var(--z-tooltip)]"
         >
           {content}
           <Rx.Arrow className="fill-[var(--color-surface-3)]" />

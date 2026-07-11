@@ -20,7 +20,7 @@ export function DropdownMenu({
           align={align}
           sideOffset={4}
           className={cn(
-            "min-w-[180px] rounded-lg bg-[var(--color-surface-3)]",
+            "min-w-[180px] rounded-xl bg-[var(--color-surface-3)]",
             "border border-[var(--color-border-strong)] shadow-[var(--shadow-3)] p-1",
             "z-[var(--z-modal)] animate-in fade-in-0 zoom-in-95 duration-100",
           )}
@@ -48,7 +48,7 @@ export function DropdownItem({
         onSelect?.();
       }}
       className={cn(
-        "flex items-center gap-2 px-2.5 py-1.5 text-sm rounded-md cursor-pointer",
+        "flex items-center gap-2 px-2.5 py-1.5 text-sm rounded-lg cursor-pointer",
         "focus:outline-none focus:bg-[var(--hover-overlay)]",
         destructive && "text-[var(--color-bad)]",
       )}

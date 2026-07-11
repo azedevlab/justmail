@@ -67,7 +67,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className={cn(
               "pointer-events-auto min-w-[260px] max-w-sm bg-[var(--color-surface-3)]",
-              "relative overflow-hidden border border-[var(--color-border-strong)] rounded-lg",
+              "relative overflow-hidden border border-[var(--color-border-strong)] rounded-xl",
               "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px]",
               "shadow-[var(--shadow-3)] px-4 py-3 text-sm",
               "animate-in fade-in-0 slide-in-from-right-2",

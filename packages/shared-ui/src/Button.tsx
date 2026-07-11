@@ -38,8 +38,8 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  xs: "text-xs px-2 py-1 rounded-md gap-1",
-  sm: "text-sm px-2.5 py-1.5 rounded-md gap-1.5",
+  xs: "text-xs px-2 py-1 rounded-lg gap-1",
+  sm: "text-sm px-2.5 py-1.5 rounded-lg gap-1.5",
   md: "text-sm px-3.5 py-2 rounded-lg gap-2",
   lg: "text-base px-4 py-2.5 rounded-lg gap-2",
 };

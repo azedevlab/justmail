@@ -102,7 +102,7 @@ export function CommandPalette({
                       onOpenChange(false);
                     }}
                     className={cn(
-                      "flex items-center justify-between gap-3 px-2 py-2 rounded-md text-sm cursor-pointer",
+                      "flex items-center justify-between gap-3 px-2 py-2 rounded-lg text-sm cursor-pointer",
                       "aria-selected:bg-[var(--color-accent-muted)] text-[var(--color-neutral-1100)]",
                     )}
                   >

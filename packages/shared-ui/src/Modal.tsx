@@ -55,7 +55,7 @@ export function Modal({
             </div>
             <Dialog.Close
               aria-label="Close"
-              className="p-1 rounded-md hover:bg-[var(--hover-overlay)] text-[var(--color-neutral-900)] shrink-0"
+              className="p-1 rounded-lg hover:bg-[var(--hover-overlay)] text-[var(--color-neutral-900)] shrink-0"
             >
               <X size={16} />
             </Dialog.Close>
