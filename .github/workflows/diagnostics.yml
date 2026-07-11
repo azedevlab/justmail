@@ -34,23 +34,32 @@ jobs:
           $C ps -a
 
           echo; echo "===== webmail folders repro (LIST-STATUS) ====="
-          PGUSER=$(grep -E '^POSTGRES_USER=' /opt/justmail/.env | cut -d= -f2-)
-          PGDB=$(grep -E '^POSTGRES_DB=' /opt/justmail/.env | cut -d= -f2-)
-          REPRO_ADDR=$($C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -tA -c \
-            "SELECT m.local_part||'@'||d.name FROM mailboxes m JOIN domains d ON d.id=m.domain_id ORDER BY m.created_at LIMIT 1" \
-            </dev/null 2>/dev/null | tr -d '[:space:]')
-          echo "repro address: ${REPRO_ADDR:-<none>}"
-          cat >/tmp/jm-folders-repro.cjs <<'JS'
+          CRED_KEY=$($C exec -T redis redis-cli --scan --pattern 'webmail:cred:*' </dev/null 2>/dev/null | grep -v ':idx:' | head -1 | tr -d '[:space:]')
+          echo "cred key: ${CRED_KEY:-<none>}"
+          if [ -n "$CRED_KEY" ]; then
+            CRED_JSON=$($C exec -T redis redis-cli GET "$CRED_KEY" </dev/null 2>/dev/null)
+            JM_ADDR=$(printf '%s' "$CRED_JSON" | sed -n 's/.*"address":"\([^"]*\)".*/\1/p')
+            JM_SEALED=$(printf '%s' "$CRED_JSON" | sed -n 's/.*"sealed":"\([^"]*\)".*/\1/p')
+            echo "repro address: ${JM_ADDR:-<none>} sealed_present=$([ -n "$JM_SEALED" ] && echo yes || echo no)"
+            cat >/tmp/jm-folders-repro.cjs <<'JS'
+          const crypto = require("node:crypto");
           const { ImapFlow } = require("imapflow");
+          function keyBuf(k) { return /^[0-9a-f]{64}$/i.test(k) ? Buffer.from(k, "hex") : crypto.createHash("sha256").update(k).digest(); }
+          function open(sealed, key) {
+            const [iv, ct, tag] = sealed.split(".").map((p) => Buffer.from(p, "base64url"));
+            const d = crypto.createDecipheriv("aes-256-gcm", key, iv);
+            d.setAuthTag(tag);
+            return Buffer.concat([d.update(ct), d.final()]).toString("utf8");
+          }
           (async () => {
-            const host = process.env.IMAP_HOST || "dovecot";
-            const port = Number(process.env.IMAP_PORT || 993);
-            const mu = process.env.DOVECOT_MASTER_USER;
-            const mp = process.env.DOVECOT_MASTER_PASSWORD;
-            const addr = process.env.REPRO_ADDR;
-            if (!mu || !mp) { console.log("MASTER creds unset user=" + !!mu + " pass=" + !!mp); process.exit(0); }
-            if (!addr) { console.log("no REPRO_ADDR"); process.exit(0); }
-            const client = new ImapFlow({ host, port, secure: true, auth: { user: addr + "*" + mu, pass: mp }, tls: { rejectUnauthorized: false }, logger: false });
+            const addr = process.env.JM_ADDR, sealed = process.env.JM_SEALED, ek = process.env.ENCRYPTION_KEY;
+            if (!addr || !sealed) { console.log("no cred to repro"); process.exit(0); }
+            if (!ek) { console.log("ENCRYPTION_KEY unset in api"); process.exit(0); }
+            let pass;
+            try { pass = open(sealed, keyBuf(ek)); console.log("open() OK pwlen=" + pass.length); }
+            catch (e) { console.log("open() THREW: " + (e && e.stack ? e.stack : String(e))); process.exit(0); }
+            const host = process.env.IMAP_HOST || "dovecot", port = Number(process.env.IMAP_PORT || 993);
+            const client = new ImapFlow({ host, port, secure: true, auth: { user: addr, pass }, tls: { rejectUnauthorized: false }, logger: false });
             client.on("error", (e) => console.log("CLIENT ERROR EVENT: " + (e && e.message)));
             try {
               await client.connect();
@@ -71,7 +80,8 @@ jobs:
             process.exit(0);
           })();
           JS
-          $C exec -T -e REPRO_ADDR="$REPRO_ADDR" api node < /tmp/jm-folders-repro.cjs 2>&1 | tail -60
+            $C exec -T -e JM_ADDR="$JM_ADDR" -e JM_SEALED="$JM_SEALED" api node < /tmp/jm-folders-repro.cjs 2>&1 | tail -60
+          fi
 
           echo; echo "===== api logs (error-ish, last 200) ====="
           $C logs api --since 6h --no-color 2>&1 \
