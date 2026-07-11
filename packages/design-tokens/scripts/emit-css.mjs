@@ -61,8 +61,11 @@ const tintTokens = (accent) => `  --color-accent-subtle: ${alpha(accent, 0.1)};
   --shadow-btn-primary: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(16, 24, 40, 0.24);
   --shadow-btn-active: inset 0 1px 2px rgba(0, 0, 0, 0.25);`;
 
-const lightAccentHex = t.brand[6];
-const darkAccentHex = t.brand[4];
+// Monochrome accent: interactive UI (buttons, links, focus, selection) resolves
+// to near-black on light and near-white on dark. The brand ramp is retained
+// only for identity surfaces (logo mark, avatars). Status colours stay semantic.
+const lightAccentHex = t.neutralLight[11]; // #0B0D10 near-black
+const darkAccentHex = t.neutralDark[11]; // #EDEFF2 near-white
 
 const light = `
 :root, .theme-light {
@@ -80,7 +83,9 @@ ${rampCss("color-brand", t.brand)}
   --color-field: #FFFFFF;
   --color-text: var(--color-neutral-1100);
   --color-text-muted: var(--color-neutral-800);
-  --color-accent: var(--color-brand-600);
+  --color-accent: var(--color-neutral-1100);
+  --color-accent-hover-solid: var(--color-neutral-1000);
+  --color-on-accent: #FFFFFF;
   --color-border: rgba(16,24,40,0.09);
   --color-border-strong: rgba(16,24,40,0.16);
   --highlight-top: inset 0 1px 0 rgba(255,255,255,0.6);
@@ -118,7 +123,9 @@ ${rampCss("color-neutral", t.neutralDark)}
   --color-field: ${t.surfaceDark["2"]};
   --color-text: var(--color-neutral-1100);
   --color-text-muted: var(--color-neutral-900);
-  --color-accent: var(--color-brand-400);
+  --color-accent: var(--color-neutral-1100);
+  --color-accent-hover-solid: var(--color-neutral-1000);
+  --color-on-accent: #0B0D10;
   --color-border: rgba(255,255,255,0.07);
   --color-border-strong: rgba(255,255,255,0.13);
   --highlight-top: inset 0 1px 0 rgba(255,255,255,0.04);

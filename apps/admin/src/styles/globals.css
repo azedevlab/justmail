@@ -34,12 +34,12 @@ a {
 }
 
 ::selection {
-  background: var(--color-brand-500);
-  color: white;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 *:focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: var(--radius-md);
 }
@@ -106,7 +106,7 @@ a {
   color: var(--color-neutral-1100);
 }
 .nav-item[aria-current="page"] {
-  background: color-mix(in oklab, var(--color-brand-500) 12%, transparent);
+  background: var(--color-accent-subtle);
   color: var(--color-neutral-1100);
   font-weight: 500;
 }

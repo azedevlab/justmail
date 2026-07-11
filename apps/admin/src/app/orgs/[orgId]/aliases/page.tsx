@@ -127,44 +127,10 @@ function CreateModal({
   loading: boolean;
   onClose: () => void;
 }) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const f = useForm<{
-    source: string;
-    destinations_str: string;
-    domain_id: string;
-  }>({
-    defaultValues: {
-      source: "",
-      destinations_str: "",
-      domain_id: domains[0]?.id,
-    },
-  });
-  const [err, setErr] = useState<string | null>(null);
-  const mut = useMutation({
-    mutationFn: (body: CreateAliasRequest & { domain_id: string }) => {
-      const { domain_id, ...rest } = body;
-      return api.post<Alias>(
-        `/v1/orgs/${orgId}/domains/${domain_id}/aliases`,
-        rest,
-      );
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["aliases", orgId] });
-      toast({ title: "Alias created", tone: "ok" });
-      onClose();
-    },
-    onError: (e) =>
-      setErr(
-        e instanceof ApiError
-          ? e.problem.detail ?? e.problem.title
-          : (e as Error).message,
-      ),
-  });
-
-  const hasDomains = domains.length > 0;
-
-  if (loading || !hasDomains) {
+  // Until domains have loaded (and there is at least one), render a loading or
+  // empty state. The form is a separate component so its useForm defaults are
+  // initialised from a non-empty domain list — avoids an undefined domain_id.
+  if (loading || domains.length === 0) {
     return (
       <Modal
         open
@@ -189,6 +155,53 @@ function CreateModal({
       </Modal>
     );
   }
+
+  return <CreateAliasForm orgId={orgId} domains={domains} onClose={onClose} />;
+}
+
+function CreateAliasForm({
+  orgId,
+  domains,
+  onClose,
+}: {
+  orgId: string;
+  domains: Domain[];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const f = useForm<{
+    source: string;
+    destinations_str: string;
+    domain_id: string;
+  }>({
+    defaultValues: {
+      source: "",
+      destinations_str: "",
+      domain_id: domains[0].id,
+    },
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const mut = useMutation({
+    mutationFn: (body: CreateAliasRequest & { domain_id: string }) => {
+      const { domain_id, ...rest } = body;
+      return api.post<Alias>(
+        `/v1/orgs/${orgId}/domains/${domain_id}/aliases`,
+        rest,
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["aliases", orgId] });
+      toast({ title: "Alias created", tone: "ok" });
+      onClose();
+    },
+    onError: (e) =>
+      setErr(
+        e instanceof ApiError
+          ? e.problem.detail ?? e.problem.title
+          : (e as Error).message,
+      ),
+  });
 
   return (
     <Modal
