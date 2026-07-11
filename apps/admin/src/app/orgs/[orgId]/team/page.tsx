@@ -121,7 +121,6 @@ export default function TeamPage() {
                       </TD>
                       <TD>
                         <Select
-                          className="!w-auto"
                           value={m.role}
                           onChange={(e) =>
                             updateRole.mutate({
