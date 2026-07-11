@@ -95,3 +95,11 @@ export function getDnsProvider(): DnsProvider {
       return new UnconfiguredProvider(config.DNS_PROVIDER);
   }
 }
+
+// Whether one-click record publishing is actually usable, so the UI can offer
+// "Publish to <provider>" only when it will work rather than fail loudly.
+export function dnsProviderStatus(): { name: string; configured: boolean } {
+  const name = config.DNS_PROVIDER;
+  const configured = name === "cloudflare" && Boolean(config.CLOUDFLARE_API_TOKEN);
+  return { name, configured };
+}

@@ -132,6 +132,26 @@ export class DnsService {
     }));
   }
 
+  /**
+   * Export every expected record as a BIND-format zone snippet. This is the
+   * provider-agnostic path for operators who run their own/local DNS (BIND,
+   * PowerDNS, Knot, NSD, Technitium, dnsmasq): download once, import into the
+   * zone, then Recheck — no Cloudflare or API credentials required.
+   */
+  async zoneFile(orgId: string, domainId: string, userId: string) {
+    await this.orgs.requireRole(orgId, userId, "viewer");
+    const { rows: dr } = await this.db.query<{ name: string }>(
+      "SELECT name FROM domains WHERE id = $1 AND org_id = $2",
+      [domainId, orgId],
+    );
+    if (!dr[0]) throw new NotFoundException({ title: "Domain not found" });
+    const { rows } = await this.db.query<RecordRow>(
+      "SELECT * FROM dns_records WHERE domain_id = $1 ORDER BY purpose, name",
+      [domainId],
+    );
+    return { filename: `${dr[0].name}.zone`, zone: toZoneFile(dr[0].name, rows) };
+  }
+
   private async resolveOne(type: string, name: string): Promise<string | null> {
     if (type === "TXT") {
       const txt = await resolveTxt(name);
@@ -152,4 +172,42 @@ export class DnsService {
 
 function strip(s: string): string {
   return s.replace(/^"|"$/g, "").trim();
+}
+
+export interface ZoneRecord {
+  type: string;
+  name: string;
+  content: string;
+  ttl: number;
+  priority?: number | null;
+}
+
+// Render expected records as a portable BIND zone snippet. Owner names are
+// fully qualified (trailing dot) so the file imports cleanly regardless of the
+// target server's $ORIGIN.
+export function toZoneFile(domain: string, records: ZoneRecord[]): string {
+  const lines = [
+    `; JustMail DNS records for ${domain}`,
+    `; Import into any authoritative DNS server (BIND, PowerDNS, Knot, NSD, Technitium, dnsmasq).`,
+    `; Owner names are fully qualified. After the zone reloads, click "Recheck" to verify.`,
+    "",
+  ];
+  for (const r of records) {
+    const head = `${fqdn(r.name)}\t${r.ttl}\tIN\t${r.type}`;
+    if (r.type === "TXT") lines.push(`${head}\t${txtRdata(r.content)}`);
+    else if (r.type === "MX") lines.push(`${head}\t${r.priority ?? 10} ${fqdn(r.content)}`);
+    else if (r.type === "CNAME") lines.push(`${head}\t${fqdn(r.content)}`);
+    else lines.push(`${head}\t${r.content}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+function fqdn(name: string): string {
+  return name.endsWith(".") ? name : `${name}.`;
+}
+
+// TXT rdata is one or more quoted character-strings, each capped at 255 bytes.
+function txtRdata(content: string): string {
+  const chunks = content.match(/.{1,255}/gs) ?? [""];
+  return chunks.map((c) => `"${c.replace(/"/g, '\\"')}"`).join(" ");
 }

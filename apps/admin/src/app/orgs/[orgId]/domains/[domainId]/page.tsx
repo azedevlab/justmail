@@ -29,7 +29,7 @@ import {
   useConfirm,
   useToast,
 } from "@justmail/shared-ui";
-import { Check, Copy, RefreshCw, Trash2 } from "lucide-react";
+import { Check, Copy, Download, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 import { api } from "@/lib/api";
 
 export default function DomainDetailPage() {
@@ -47,6 +47,92 @@ export default function DomainDetailPage() {
     queryKey: ["domain-dns", orgId, domainId],
     queryFn: () =>
       api.get<DnsRecord[]>(`/v1/orgs/${orgId}/domains/${domainId}/dns`),
+  });
+  const provider = useQuery({
+    queryKey: ["dns-provider", orgId, domainId],
+    queryFn: () =>
+      api.get<{ name: string; configured: boolean }>(
+        `/v1/orgs/${orgId}/domains/${domainId}/dns/provider`,
+      ),
+  });
+  const providerLabel = provider.data?.name
+    ? provider.data.name[0]!.toUpperCase() + provider.data.name.slice(1)
+    : "provider";
+
+  const publish = useMutation({
+    mutationFn: () =>
+      api.post<{ applied: { purpose: string; action: string }[] }>(
+        `/v1/orgs/${orgId}/domains/${domainId}/dns/sync`,
+        {},
+      ),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["domain-dns", orgId, domainId] });
+      const errors = res.applied.filter((a) => a.action === "error").length;
+      toast({
+        title: errors
+          ? `Published with ${errors} error${errors > 1 ? "s" : ""}`
+          : `Published ${res.applied.length} records to ${providerLabel}`,
+        description:
+          "DNS can take a few minutes to propagate — then click Verify DNS.",
+        tone: errors ? "warn" : "ok",
+      });
+    },
+    onError: (e) =>
+      toast({
+        title: "Publish failed",
+        description:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : String(e),
+        tone: "bad",
+      }),
+  });
+
+  const zone = useMutation({
+    mutationFn: () =>
+      api.get<{ filename: string; zone: string }>(
+        `/v1/orgs/${orgId}/domains/${domainId}/dns/zonefile`,
+      ),
+    onSuccess: (res) => {
+      const url = URL.createObjectURL(
+        new Blob([res.zone], { type: "text/plain" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Zone file downloaded",
+        description: "Import it into your DNS server, then click Recheck.",
+        tone: "ok",
+      });
+    },
+    onError: (e) =>
+      toast({
+        title: "Could not export zone file",
+        description:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : String(e),
+        tone: "bad",
+      }),
+  });
+
+  const recheck = useMutation({
+    mutationFn: () =>
+      api.post<DnsRecord[]>(
+        `/v1/orgs/${orgId}/domains/${domainId}/dns/check`,
+        {},
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["domain-dns", orgId, domainId] });
+      qc.invalidateQueries({ queryKey: ["domain", orgId, domainId] });
+      toast({ title: "Records re-checked", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title: "Check failed",
+        description:
+          e instanceof ApiError ? e.problem.detail ?? e.problem.title : String(e),
+        tone: "bad",
+      }),
   });
 
   const verify = useMutation({
@@ -144,7 +230,44 @@ export default function DomainDetailPage() {
           <>
             <Section
               title="DNS records"
-              description="Add these to your DNS provider, then verify. We re-check on each verify."
+              description={
+                provider.data?.configured
+                  ? `Publish these to ${providerLabel} in one click — or, if you run your own DNS (BIND, PowerDNS, Technitium…), download the zone file and import it. Then verify.`
+                  : "Add these to your DNS provider or local/self-hosted DNS server. Download the zone file to import them all at once, then verify — we re-check on each verify."
+              }
+              actions={
+                <div className="flex items-center gap-2">
+                  {provider.data?.configured && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={publish.isPending}
+                      onClick={() => publish.mutate()}
+                      leadingIcon={<UploadCloud size={14} />}
+                    >
+                      Publish to {providerLabel}
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={zone.isPending}
+                    onClick={() => zone.mutate()}
+                    leadingIcon={<Download size={14} />}
+                  >
+                    Zone file
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={recheck.isPending}
+                    onClick={() => recheck.mutate()}
+                    leadingIcon={<RefreshCw size={14} />}
+                  >
+                    Recheck
+                  </Button>
+                </div>
+              }
             >
               {dns.isLoading && <SkeletonRows count={4} />}
               {dns.data && (

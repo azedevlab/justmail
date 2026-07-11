@@ -16,6 +16,7 @@ import { Principal, SessionGuard } from "../auth/session.guard";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { DkimService } from "./dkim.service";
 import { DnsService } from "./dns.service";
+import { dnsProviderStatus } from "./dns-provider";
 
 const GenerateBody = z.object({
   algorithm: z.enum(["rsa2048", "ed25519"]).default("rsa2048"),
@@ -90,5 +91,19 @@ export class DkimController {
     @Param("domainId", ParseUUIDPipe) domainId: string,
   ) {
     return this.dns.check(orgId, domainId, principal.userId);
+  }
+
+  @Get("dns/provider")
+  dnsProvider() {
+    return dnsProviderStatus();
+  }
+
+  @Get("dns/zonefile")
+  zoneFile(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("domainId", ParseUUIDPipe) domainId: string,
+  ) {
+    return this.dns.zoneFile(orgId, domainId, principal.userId);
   }
 }
