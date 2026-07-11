@@ -83,6 +83,22 @@ jobs:
             $C exec -T -e JM_ADDR="$JM_ADDR" -e JM_SEALED="$JM_SEALED" api node < /tmp/jm-folders-repro.cjs 2>&1 | tail -60
           fi
 
+          echo; echo "===== dovecot auth diagnosis ====="
+          PGUSER=$(grep -E '^POSTGRES_USER=' /opt/justmail/.env | cut -d= -f2-)
+          PGDB=$(grep -E '^POSTGRES_DB=' /opt/justmail/.env | cut -d= -f2-)
+          DA=$($C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -tA -c \
+            "SELECT m.local_part||'@'||d.name FROM mailboxes m JOIN domains d ON d.id=m.domain_id ORDER BY m.created_at LIMIT 1" \
+            </dev/null 2>/dev/null | tr -d '[:space:]')
+          echo "-- mail_auth view sample (hash scheme prefix) --"
+          $C exec -T postgres psql -U "$PGUSER" -d "$PGDB" -P pager=off -c \
+            "SELECT \"user\", left(password, 14) AS pw_prefix, domain_name, local_part, quota_mb FROM mail_auth ORDER BY \"user\" LIMIT 5;" </dev/null 2>&1
+          echo "-- doveadm auth lookup ${DA:-<none>} (passdb resolution, no password) --"
+          $C exec -T dovecot doveadm auth lookup "$DA" </dev/null 2>&1 | head -30
+          echo "-- dovecot logs (auth/imap, last 6h) --"
+          $C logs dovecot --since 6h --no-color 2>&1 \
+            | grep -iE 'auth|argon|passdb|userdb|error|failed|unknown user|imap-login|Disconnected|Login' \
+            | tail -70
+
           echo; echo "===== api logs (error-ish, last 200) ====="
           $C logs api --since 6h --no-color 2>&1 \
             | grep -iE 'error|exception|throw|EXDEV|ECONNREFUSED|ETIMEDOUT|EACCES|ENOENT|radicale|storage|MKCOL|PROPFIND|status 4|status 5|Unhandled|at async|at /|at Object' \
