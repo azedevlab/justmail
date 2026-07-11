@@ -2418,7 +2418,7 @@ function RecipientField({
         className={
           unstyled
             ? "flex flex-wrap items-center gap-1.5"
-            : "flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent-ring)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]"
+            : "flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-border-strong)] focus-within:ring-2 focus-within:ring-[var(--color-accent-focus)]"
         }
       >
         {emails.map((addr, i) => (

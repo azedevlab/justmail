@@ -31,6 +31,13 @@ const IngestBody = z.object({
 });
 type IngestBody = z.infer<typeof IngestBody>;
 
+const IngestXmlBody = z.object({
+  org_id: z.string().uuid(),
+  // base64-encoded aggregate archive bytes (gzip, zip, or plain XML).
+  content_base64: z.string().min(1),
+});
+type IngestXmlBody = z.infer<typeof IngestXmlBody>;
+
 const digest = (s: string) => createHash("sha256").update(s).digest();
 
 @Controller()
@@ -46,6 +53,16 @@ export class DmarcController {
     return this.svc.list(orgId, principal.userId);
   }
 
+  @Get("orgs/:orgId/deliverability/dmarc/:id")
+  @UseGuards(SessionGuard)
+  getReport(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.getReport(orgId, id, principal.userId);
+  }
+
   @Post("internal/dmarc/ingest")
   @SkipThrottle()
   @HttpCode(204)
@@ -53,12 +70,30 @@ export class DmarcController {
     @Headers("x-ingest-token") token: string | undefined,
     @Body(new ZodPipe(IngestBody)) body: IngestBody,
   ) {
+    this.assertToken(token);
+    await this.svc.ingest({ ...body, raw: body.raw ?? null });
+  }
+
+  @Post("internal/dmarc/ingest-xml")
+  @SkipThrottle()
+  @HttpCode(204)
+  async ingestXml(
+    @Headers("x-ingest-token") token: string | undefined,
+    @Body(new ZodPipe(IngestXmlBody)) body: IngestXmlBody,
+  ) {
+    this.assertToken(token);
+    await this.svc.ingestArchive(
+      body.org_id,
+      Buffer.from(body.content_base64, "base64"),
+    );
+  }
+
+  private assertToken(token: string | undefined): void {
     if (
       !token ||
       !timingSafeEqual(digest(token), digest(config.EVENTS_INGEST_TOKEN))
     ) {
       throw new UnauthorizedException({ title: "Invalid ingest token" });
     }
-    await this.svc.ingest({ ...body, raw: body.raw ?? null });
   }
 }
