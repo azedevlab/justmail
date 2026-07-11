@@ -10,6 +10,11 @@ updates:
         dependency-type: development
       production-dependencies:
         dependency-type: production
+    ignore:
+      # Next.js 16's build-time TypeScript integration does not yet support the
+      # 7.x native compiler package; a major bump breaks `next build`. Hold on 5.x.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
 
