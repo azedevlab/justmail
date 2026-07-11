@@ -1,0 +1,11 @@
+# Default owners for everything in the repo.
+* @justmaildev/maintainers
+
+# Area owners
+/apps/api/            @justmaildev/backend
+/apps/admin/          @justmaildev/frontend
+/apps/webmail/        @justmaildev/frontend
+/packages/            @justmaildev/backend @justmaildev/frontend
+/services/            @justmaildev/infra
+/.github/             @justmaildev/infra
+/docs/                @justmaildev/maintainers
