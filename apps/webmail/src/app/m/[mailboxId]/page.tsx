@@ -72,6 +72,9 @@ import {
   type ToastItem,
 } from "@justmail/shared-ui";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   Archive,
   ArrowLeft,
   Bell,
@@ -80,9 +83,12 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Code,
   Download,
   Edit3,
+  Eraser,
   FileText,
+  Heading,
   Image as ImageIcon,
   Filter,
   Folder as FolderIcon,
@@ -90,6 +96,7 @@ import {
   Inbox,
   Italic,
   Link2,
+  Link2Off,
   List,
   ListOrdered,
   MailOpen,
@@ -97,12 +104,14 @@ import {
   Paperclip,
   PenLine,
   Plus,
+  Quote,
   LogOut,
   RefreshCw,
   Reply,
   Search,
   Settings,
   Star,
+  Strikethrough,
   Trash2,
   Underline,
   Users,
@@ -1554,8 +1563,19 @@ function RichTextEditor({
   const prompt = usePrompt();
   const exec = (command: string, value?: string) => {
     editorRef.current?.focus();
+    // Emit CSS (style="text-align:…") for alignment so it survives the
+    // server-side sanitizer's text-align allowlist rather than an align attr.
+    if (command.startsWith("justify")) {
+      document.execCommand("styleWithCSS", false, "true");
+    }
     document.execCommand(command, false, value);
     onInput();
+  };
+  // formatBlock toggles: re-applying the same block reverts to a paragraph.
+  const toggleBlock = (tag: string) => {
+    editorRef.current?.focus();
+    const current = document.queryCommandValue("formatBlock").toLowerCase();
+    exec("formatBlock", current === tag ? "<p>" : `<${tag}>`);
   };
   const addLink = async () => {
     const url = await prompt({
@@ -1581,21 +1601,43 @@ function RichTextEditor({
       {node}
     </IconButton>
   );
+  const divider = <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />;
   return (
     <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden">
-      <div className="flex items-center gap-0.5 border-b border-[var(--color-border)] px-1.5 py-1">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-[var(--color-border)] px-1.5 py-1">
         {btn("Bold", <Bold size={14} />, () => exec("bold"))}
         {btn("Italic", <Italic size={14} />, () => exec("italic"))}
         {btn("Underline", <Underline size={14} />, () => exec("underline"))}
-        <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
+        {btn("Strikethrough", <Strikethrough size={14} />, () =>
+          exec("strikeThrough"),
+        )}
+        {divider}
+        {btn("Heading", <Heading size={14} />, () => toggleBlock("h3"))}
+        {btn("Quote", <Quote size={14} />, () => toggleBlock("blockquote"))}
+        {btn("Code block", <Code size={14} />, () => toggleBlock("pre"))}
+        {divider}
         {btn("Bulleted list", <List size={14} />, () =>
           exec("insertUnorderedList"),
         )}
         {btn("Numbered list", <ListOrdered size={14} />, () =>
           exec("insertOrderedList"),
         )}
+        {divider}
+        {btn("Align left", <AlignLeft size={14} />, () => exec("justifyLeft"))}
+        {btn("Align center", <AlignCenter size={14} />, () =>
+          exec("justifyCenter"),
+        )}
+        {btn("Align right", <AlignRight size={14} />, () =>
+          exec("justifyRight"),
+        )}
+        {divider}
         {btn("Insert link", <Link2 size={14} />, addLink)}
-        <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
+        {btn("Remove link", <Link2Off size={14} />, () => exec("unlink"))}
+        {btn("Clear formatting", <Eraser size={14} />, () => {
+          exec("removeFormat");
+          exec("formatBlock", "<p>");
+        })}
+        {divider}
         {toolbarExtra}
       </div>
       <div
@@ -1607,7 +1649,7 @@ function RichTextEditor({
         suppressContentEditableWarning
         onInput={onInput}
         dangerouslySetInnerHTML={{ __html: initialHtml }}
-        className="min-h-[220px] max-h-[420px] overflow-y-auto px-3 py-2 text-[14px] leading-relaxed outline-none [&_a]:text-[var(--color-accent)] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+        className="min-h-[220px] max-h-[420px] overflow-y-auto px-3 py-2 text-[14px] leading-relaxed outline-none [&_a]:text-[var(--color-accent)] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h3]:text-[16px] [&_h3]:font-semibold [&_h3]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border-strong)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--color-neutral-700)] [&_blockquote]:my-2 [&_pre]:bg-[var(--color-surface-2)] [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[13px] [&_pre]:my-2 [&_pre]:whitespace-pre-wrap"
       />
     </div>
   );
