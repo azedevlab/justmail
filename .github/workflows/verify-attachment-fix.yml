@@ -1,0 +1,100 @@
+name: Verify attachment fix
+
+# Proves the attachment storage round-trip on the production host: writes a
+# tenant-prefixed object through StorageService, streams it back, compares the
+# bytes, then removes it. This is the exact put/stream path finalise and the
+# send worker depend on — the operation the MinIO CopySource bug used to break.
+# Read-mostly and self-cleaning (the probe object is deleted); sends no mail.
+# Manual dispatch only. Reuses the deploy SSH credentials.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-attachment-production
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Storage round-trip
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
+          set -e
+          cd /opt/justmail/app
+          C="docker compose --env-file /opt/justmail/.env -f services/compose/docker-compose.yml --profile core --profile app --profile storage"
+
+          # Probe script runs inside the api container so it reuses the app's
+          # own StorageService (and its configured adapter/credentials). It is
+          # placed under the app dir so node_modules resolution finds @nestjs.
+          cat > /tmp/verify-attachment.cjs <<'JS'
+          require("reflect-metadata");
+          const crypto = require("node:crypto");
+          const { NestFactory } = require("@nestjs/core");
+          const { AppModule } = require("./dist/app.module");
+          const { Db } = require("./dist/db/db.service");
+          const { StorageService } = require("./dist/storage/storage.service");
+
+          (async () => {
+            const app = await NestFactory.createApplicationContext(AppModule, {
+              logger: ["error"],
+            });
+            try {
+              const db = app.get(Db);
+              const storage = app.get(StorageService);
+              const { rows } = await db.query(
+                `SELECT d.org_id FROM mailboxes m
+                   JOIN domains d ON d.id = m.domain_id
+                  ORDER BY m.created_at ASC LIMIT 1`,
+              );
+              if (!rows[0]) {
+                console.log("RESULT NO_ORG");
+                return;
+              }
+              const orgId = rows[0].org_id;
+              const buf = Buffer.from("justmail-verify-" + Date.now());
+              const hash = crypto.createHash("sha256").update(buf).digest("hex");
+              const key = "attachments/" + hash;
+
+              await storage.put(orgId, key, buf, "text/plain");
+              const stream = await storage.stream(orgId, key);
+              const chunks = [];
+              for await (const c of stream) chunks.push(c);
+              const got = Buffer.concat(chunks);
+              const ok = got.equals(buf);
+              let removed = true;
+              try {
+                await storage.remove(orgId, key);
+              } catch (e) {
+                removed = false;
+              }
+              console.log(
+                "RESULT",
+                ok ? "PASS" : "FAIL",
+                "kind", storage.kind,
+                "bytes", got.length,
+                "removed", removed,
+              );
+            } catch (e) {
+              console.log("RESULT ERROR", (e && e.message) || String(e));
+            } finally {
+              await app.close();
+            }
+          })();
+          JS
+
+          $C cp /tmp/verify-attachment.cjs api:/repo/apps/api/verify-attachment.cjs
+          echo "===== storage round-trip (inside api container) ====="
+          $C exec -T -w /repo/apps/api api node verify-attachment.cjs </dev/null 2>&1 || true
+          $C exec -T api rm -f /repo/apps/api/verify-attachment.cjs </dev/null 2>&1 || true
+          rm -f /tmp/verify-attachment.cjs
+          REMOTE
