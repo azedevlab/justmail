@@ -1,0 +1,70 @@
+name: Provision Storage (MinIO)
+
+# One-shot operational workflow. Switches the production deployment to the
+# self-hosted MinIO object store by setting STORAGE_KIND=minio and the MinIO
+# endpoint/bucket/region in /opt/justmail/.env, generating the MinIO service
+# credentials on the host with openssl if they are not already set.
+#
+# Credentials are created on the box and NEVER printed to the Actions log.
+# The .env is backed up before editing. This workflow does not deploy — after
+# it succeeds, dispatch the Deploy workflow to bring up MinIO and apply.
+#
+# Manual dispatch only. Reuses the deploy SSH credentials.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: provision-production
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Provision MinIO env
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ENV=/opt/justmail/.env
+          test -f "$ENV" || { echo "FATAL: $ENV missing"; exit 1; }
+          cp -a "$ENV" "${ENV}.bak.$(date +%s)"
+
+          # Upsert KEY=VALUE: replace an existing uncommented line, else append.
+          upsert() {
+            k="$1"; v="$2"
+            if grep -qE "^${k}=" "$ENV"; then
+              sed -i "s|^${k}=.*|${k}=${v}|" "$ENV"; echo "  ${k}: updated"
+            else
+              printf '%s=%s\n' "$k" "$v" >> "$ENV"; echo "  ${k}: added"
+            fi
+          }
+
+          # Generate service credentials once. If they already exist (non-empty),
+          # keep them so we never orphan objects already stored under the old key.
+          if grep -qE '^STORAGE_ACCESS_KEY=.+' "$ENV"; then
+            echo "  STORAGE_ACCESS_KEY: kept existing"
+          else
+            upsert STORAGE_ACCESS_KEY "jm$(openssl rand -hex 8)"
+          fi
+          if grep -qE '^STORAGE_SECRET_KEY=.+' "$ENV"; then
+            echo "  STORAGE_SECRET_KEY: kept existing"
+          else
+            upsert STORAGE_SECRET_KEY "$(openssl rand -hex 24)"
+          fi
+
+          upsert STORAGE_KIND minio
+          upsert STORAGE_ENDPOINT http://minio:9000
+          upsert STORAGE_BUCKET justmail
+          upsert STORAGE_REGION us-east-1
+          chmod 600 "$ENV"
+          echo "==> MinIO env provisioned (values not shown). Dispatch Deploy to apply."
+          REMOTE

@@ -16,6 +16,13 @@ PROFILES=(--profile core --profile certs --profile mail --profile obs --profile 
 if [[ -f "$APP_DIR/services/docker/api/Dockerfile" ]]; then
   PROFILES+=(--profile app)
 fi
+# Self-hosted object storage: bring up MinIO + the one-shot bucket init only
+# when this deploy actually selects it, so local / external-S3 deploys don't
+# run an unused MinIO. The bucket-init container exits 0 once done; `compose ps`
+# (without -a) hides exited containers, so the health check won't flag it.
+if [[ -f "$ENV_FILE" ]] && grep -qE '^STORAGE_KIND=minio[[:space:]]*$' "$ENV_FILE"; then
+  PROFILES+=(--profile storage)
+fi
 
 [[ -f "$ENV_FILE" ]] || { echo "FATAL: $ENV_FILE missing (copy services/compose/.env.example)"; exit 1; }
 
