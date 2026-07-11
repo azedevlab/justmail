@@ -108,6 +108,8 @@ import {
   ListOrdered,
   MailOpen,
   MailWarning,
+  Maximize2,
+  Minimize2,
   Minus,
   Paperclip,
   PenLine,
@@ -911,7 +913,7 @@ export default function MailboxView() {
                 {message.data.subject || "(no subject)"}
               </h2>
               <div className="mt-4 flex items-center gap-3 pb-4 border-b border-[var(--color-border)]">
-                <Avatar name={message.data.from} size={34} />
+                <Avatar name={senderDisplay(message.data.from)} size={34} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium truncate">
                     {message.data.from}
@@ -1337,6 +1339,12 @@ function AttachmentItem({
   );
 }
 
+// "Jane Doe <jane@example.com>" → "Jane Doe"; bare addresses pass through.
+function senderDisplay(from: string): string {
+  const name = from.replace(/<[^>]*>/g, "").replace(/["']/g, "").trim();
+  return name || (from.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? from);
+}
+
 function MessageRow({
   m,
   count,
@@ -1379,88 +1387,97 @@ function MessageRow({
           }
         />
       )}
-      <span className="flex items-center gap-2">
-        {unread && (
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] shrink-0" />
-        )}
-        <span
-          className={
-            "flex-1 truncate text-[13px] " +
-            (unread
-              ? "font-semibold text-[var(--color-neutral-1100)]"
-              : "text-[var(--color-neutral-1000)]")
-          }
-        >
-          {sender}
-        </span>
-        {onToggle && (
-          <span
-            role="button"
-            tabIndex={0}
-            aria-label={expanded ? "Collapse conversation" : "Expand conversation"}
-            aria-expanded={expanded}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.stopPropagation();
-                onToggle();
-              }
-            }}
-            className="flex items-center gap-0.5 shrink-0 rounded-full pl-1.5 pr-1 py-px text-[10px] font-medium tabular-nums bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-neutral-800)] hover:text-[var(--color-neutral-1100)] hover:border-[var(--color-border-strong)] transition-colors cursor-pointer"
-          >
-            {count}
-            <ChevronRight
-              size={11}
+      <span className="flex items-start gap-2.5">
+        <Avatar
+          name={senderDisplay(sender)}
+          size={child ? 24 : 30}
+          className="shrink-0 mt-0.5"
+        />
+        <span className="flex-1 min-w-0">
+          <span className="flex items-center gap-2">
+            {unread && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] shrink-0" />
+            )}
+            <span
               className={
-                "transition-transform " + (expanded ? "rotate-90" : "")
+                "flex-1 truncate text-[13px] " +
+                (unread
+                  ? "font-semibold text-[var(--color-neutral-1100)]"
+                  : "text-[var(--color-neutral-1000)]")
               }
-            />
+            >
+              {senderDisplay(sender)}
+            </span>
+            {onToggle && (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={expanded ? "Collapse conversation" : "Expand conversation"}
+                aria-expanded={expanded}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggle();
+                  }
+                }}
+                className="flex items-center gap-0.5 shrink-0 rounded-full pl-1.5 pr-1 py-px text-[10px] font-medium tabular-nums bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-neutral-800)] hover:text-[var(--color-neutral-1100)] hover:border-[var(--color-border-strong)] transition-colors cursor-pointer"
+              >
+                {count}
+                <ChevronRight
+                  size={11}
+                  className={
+                    "transition-transform " + (expanded ? "rotate-90" : "")
+                  }
+                />
+              </span>
+            )}
+            <span className="text-[11px] tabular-nums text-[var(--color-neutral-700)] shrink-0">
+              {m.date &&
+                new Date(m.date).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })}
+            </span>
           </span>
-        )}
-        <span className="text-[11px] tabular-nums text-[var(--color-neutral-700)] shrink-0">
-          {m.date &&
-            new Date(m.date).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-            })}
+          <span className="mt-0.5 flex items-center gap-1.5 text-xs">
+            {starred && (
+              <Star
+                size={11}
+                className="text-[var(--color-warn)] shrink-0"
+                fill="currentColor"
+                aria-label="Starred"
+              />
+            )}
+            {m.has_attachments && (
+              <Paperclip
+                size={11}
+                className="text-[var(--color-neutral-700)] shrink-0"
+                aria-label="Has attachments"
+              />
+            )}
+            <span
+              className={
+                "truncate " +
+                (unread
+                  ? "text-[var(--color-neutral-1000)]"
+                  : "text-[var(--color-neutral-800)]")
+              }
+            >
+              {m.envelope.subject || "(no subject)"}
+            </span>
+          </span>
+          {m.preview && (
+            <span className="mt-0.5 block truncate text-[11px] text-[var(--color-neutral-700)]">
+              {m.preview}
+            </span>
+          )}
         </span>
       </span>
-      <span className="mt-0.5 flex items-center gap-1.5 text-xs">
-        {starred && (
-          <Star
-            size={11}
-            className="text-[var(--color-warn)] shrink-0"
-            fill="currentColor"
-            aria-label="Starred"
-          />
-        )}
-        {m.has_attachments && (
-          <Paperclip
-            size={11}
-            className="text-[var(--color-neutral-700)] shrink-0"
-            aria-label="Has attachments"
-          />
-        )}
-        <span
-          className={
-            "truncate " +
-            (unread
-              ? "text-[var(--color-neutral-1000)]"
-              : "text-[var(--color-neutral-800)]")
-          }
-        >
-          {m.envelope.subject || "(no subject)"}
-        </span>
-      </span>
-      {m.preview && (
-        <span className="mt-0.5 block truncate text-[11px] text-[var(--color-neutral-700)]">
-          {m.preview}
-        </span>
-      )}
     </button>
   );
 }
@@ -1640,11 +1657,14 @@ function RichTextEditor({
   initialHtml,
   onInput,
   toolbarExtra,
+  fill,
 }: {
   editorRef: RefObject<HTMLDivElement | null>;
   initialHtml: string;
   onInput: () => void;
   toolbarExtra?: ReactNode;
+  /** Stretch to the parent's height (resizable compose) instead of capping. */
+  fill?: boolean;
 }) {
   const prompt = usePrompt();
   // Seed the contentEditable imperatively so React never re-commits its
@@ -1700,8 +1720,13 @@ function RichTextEditor({
   );
   const divider = <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />;
   return (
-    <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-[var(--color-border)] px-1.5 py-1">
+    <div
+      className={
+        "rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]" +
+        (fill ? " flex h-full min-h-0 flex-col" : "")
+      }
+    >
+      <div className="shrink-0 flex flex-wrap items-center gap-0.5 border-b border-[var(--color-border)] px-1.5 py-1">
         {btn("Bold", <Bold size={14} />, () => exec("bold"))}
         {btn("Italic", <Italic size={14} />, () => exec("italic"))}
         {btn("Underline", <Underline size={14} />, () => exec("underline"))}
@@ -1745,7 +1770,10 @@ function RichTextEditor({
         contentEditable
         suppressContentEditableWarning
         onInput={onInput}
-        className="min-h-[220px] max-h-[420px] overflow-y-auto px-3 py-2 text-[14px] leading-relaxed outline-none [&_a]:text-[var(--color-accent)] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h3]:text-[16px] [&_h3]:font-semibold [&_h3]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border-strong)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--color-neutral-700)] [&_blockquote]:my-2 [&_pre]:bg-[var(--color-surface-2)] [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[13px] [&_pre]:my-2 [&_pre]:whitespace-pre-wrap"
+        className={
+          (fill ? "flex-1 min-h-[220px] " : "min-h-[220px] max-h-[420px] ") +
+          "overflow-y-auto px-3 py-2 text-[14px] leading-relaxed outline-none [&_a]:text-[var(--color-accent)] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h3]:text-[16px] [&_h3]:font-semibold [&_h3]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border-strong)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--color-neutral-700)] [&_blockquote]:my-2 [&_pre]:bg-[var(--color-surface-2)] [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[13px] [&_pre]:my-2 [&_pre]:whitespace-pre-wrap"
+        }
       />
     </div>
   );
@@ -3354,7 +3382,12 @@ function ComposePanel({
   const qc = useQueryClient();
   const [err, setErr] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
+  const [maximized, setMaximized] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  // null = the default 560px-wide, content-sized panel; set once the user
+  // drags a resize edge. The panel is anchored bottom-right, so growing
+  // width/height extends it left/up.
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [attachments, setAttachments] = useState<UploadItem[]>([]);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -3526,6 +3559,7 @@ function ComposePanel({
   });
 
   const startDrag = (e: ReactPointerEvent<HTMLElement>) => {
+    if (maximized) return;
     if ((e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
     const sx = e.clientX - offset.x;
@@ -3535,6 +3569,40 @@ function ComposePanel({
         x: Math.min(0, ev.clientX - sx),
         y: Math.min(0, ev.clientY - sy),
       });
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  // Edge/corner resize. The panel is anchored bottom-right, so the left and
+  // top edges are the growable ones; clamps keep it on-screen even after the
+  // panel has been dragged away from its anchor.
+  const startResize = (
+    e: ReactPointerEvent<HTMLElement>,
+    edges: { w?: boolean; n?: boolean },
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const start = { x: e.clientX, y: e.clientY, w: rect.width, h: rect.height };
+    const move = (ev: PointerEvent) => {
+      setSize((prev) => {
+        const maxW = window.innerWidth - 32 + offset.x;
+        const maxH = window.innerHeight - 32 + offset.y;
+        return {
+          w: edges.w
+            ? Math.min(maxW, Math.max(380, start.w + (start.x - ev.clientX)))
+            : prev?.w ?? start.w,
+          h: edges.n
+            ? Math.min(maxH, Math.max(420, start.h + (start.y - ev.clientY)))
+            : prev?.h ?? start.h,
+        };
+      });
+    };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
@@ -3829,12 +3897,46 @@ function ComposePanel({
       ref={panelRef}
       role="dialog"
       aria-label="Compose message"
-      className="fixed bottom-4 right-4 z-[var(--z-overlay)] w-[560px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden rounded-2xl bg-[var(--color-surface-1)] border border-[var(--color-border-strong)] shadow-[var(--shadow-5)] animate-in fade-in-0 slide-in-from-bottom-3 duration-200"
-      style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+      className={
+        "fixed bottom-4 right-4 z-[var(--z-overlay)] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden rounded-2xl bg-[var(--color-surface-1)] border border-[var(--color-border-strong)] shadow-[var(--shadow-5)] animate-in fade-in-0 slide-in-from-bottom-3 duration-200 " +
+        (maximized ? "w-[min(1100px,calc(100vw-2rem))] h-[calc(100vh-2rem)]" : "w-[560px]")
+      }
+      style={
+        maximized
+          ? undefined
+          : {
+              transform: `translate(${offset.x}px, ${offset.y}px)`,
+              width: size?.w,
+              height: size?.h,
+            }
+      }
     >
+      {!maximized && (
+        <>
+          <span
+            onPointerDown={(e) => startResize(e, { w: true })}
+            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-10 touch-none"
+            aria-hidden
+          />
+          <span
+            onPointerDown={(e) => startResize(e, { n: true })}
+            className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize z-10 touch-none"
+            aria-hidden
+          />
+          <span
+            onPointerDown={(e) => startResize(e, { w: true, n: true })}
+            className="absolute left-0 top-0 w-4 h-4 cursor-nwse-resize z-20 touch-none"
+            aria-hidden
+          />
+        </>
+      )}
       <header
         onPointerDown={startDrag}
-        className="h-11 shrink-0 px-3 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] cursor-grab active:cursor-grabbing select-none touch-none"
+        onDoubleClick={() => setMaximized((m) => !m)}
+        className={
+          "h-11 shrink-0 px-3 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] select-none touch-none " +
+          (maximized ? "" : "cursor-grab active:cursor-grabbing")
+        }
       >
         <Edit3 size={13} className="text-[var(--color-accent)] ml-1" />
         <span className="flex-1 text-[13px] font-medium truncate">
@@ -3846,6 +3948,13 @@ function ComposePanel({
           onClick={() => setMinimized(true)}
         >
           <Minus size={14} />
+        </IconButton>
+        <IconButton
+          size="sm"
+          aria-label={maximized ? "Restore compose size" : "Expand compose"}
+          onClick={() => setMaximized((m) => !m)}
+        >
+          {maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
         </IconButton>
         <IconButton size="sm" aria-label="Close compose" onClick={onClose}>
           <X size={14} />
@@ -3941,6 +4050,7 @@ function ComposePanel({
         </div>
         <div className="flex-1 min-h-0 px-4 pt-3 pb-2">
           <RichTextEditor
+            fill
             editorRef={editorRef}
             initialHtml={initialHtml}
             onInput={() => setBodyRev((r) => r + 1)}
