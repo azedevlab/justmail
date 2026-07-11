@@ -27,7 +27,7 @@
     "@changesets/cli": "^2.27.0",
     "prettier": "^3.4.0",
     "turbo": "^2.5.0",
-    "typescript": "^5.8.0"
+    "typescript": "^7.0.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["argon2", "sharp"]
