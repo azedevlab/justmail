@@ -16,7 +16,7 @@ const inputClass = cn(
   "placeholder:text-[var(--color-neutral-700)]",
   "transition-[border-color,box-shadow,background] duration-[var(--motion-base)]",
   "hover:border-[var(--color-border-strong)]",
-  "focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]",
+  "focus:outline-none focus:border-[var(--color-accent)] focus:ring-[3px] focus:ring-[var(--color-accent-focus)]",
   "disabled:bg-[var(--color-surface-2)] disabled:text-[var(--color-neutral-600)] disabled:border-[var(--color-border)] disabled:cursor-not-allowed",
   "font-[var(--font-sans)]",
 );
@@ -37,7 +37,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       className={cn(
         inputClass,
         monospace && "font-mono text-xs",
-        invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad)]",
+        invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad-focus)]",
         className,
       )}
       {...rest}
@@ -61,7 +61,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           className={cn(
             inputClass,
             "pr-10",
-            invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad)]",
+            invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad-focus)]",
             className,
           )}
           {...rest}
@@ -76,7 +76,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
             "w-8 h-8 rounded-lg text-[var(--color-neutral-800)]",
             "transition-colors duration-[var(--motion-base)]",
             "hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)]",
+            "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--color-accent-focus)]",
           )}
         >
           {visible ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -100,7 +100,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         className={cn(
           inputClass,
           "resize-y min-h-[80px]",
-          invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad)]",
+          invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad-focus)]",
           className,
         )}
         {...rest}
@@ -128,7 +128,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         className={cn(
           inputClass,
           "appearance-none pr-9 cursor-pointer",
-          invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad)]",
+          invalid && "border-[var(--color-bad)] focus:ring-[var(--color-bad-focus)]",
           className,
         )}
         {...rest}
@@ -151,7 +151,7 @@ const controlBox = cn(
   "transition-[background,border-color] duration-[var(--motion-base)]",
   "hover:border-[var(--color-accent)]",
   "checked:bg-[var(--color-accent)] checked:border-[var(--color-accent)]",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)]",
+  "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--color-accent-focus)]",
   "disabled:opacity-50 disabled:cursor-not-allowed",
 );
 

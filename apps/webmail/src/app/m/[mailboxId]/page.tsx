@@ -680,7 +680,7 @@ export default function MailboxView() {
         <DropdownMenu
           trigger={
             <button
-              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              className="rounded-full focus:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--color-accent-focus)]"
               aria-label="Account"
             >
               <Avatar name={me.data?.email ?? "?"} size={28} />
@@ -779,7 +779,7 @@ export default function MailboxView() {
           style={{ width: listW }}
           aria-label="Messages"
         >
-          <div className="shrink-0 z-10 px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2 rounded-md transition-[box-shadow] duration-[var(--motion-base)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]">
+          <div className="shrink-0 z-10 px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2 rounded-md transition-[box-shadow] duration-[var(--motion-base)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]">
             <Search size={13} className="text-[var(--color-neutral-700)] shrink-0" />
             <input
               value={search}
@@ -1700,7 +1700,7 @@ function RichTextEditor({
   );
   const divider = <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />;
   return (
-    <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]">
+    <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-[var(--color-border)] px-1.5 py-1">
         {btn("Bold", <Bold size={14} />, () => exec("bold"))}
         {btn("Italic", <Italic size={14} />, () => exec("italic"))}
@@ -2542,7 +2542,7 @@ function RecipientField({
         className={
           unstyled
             ? "flex flex-wrap items-center gap-1.5"
-            : "flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]"
+            : "flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]"
         }
       >
         {emails.map((addr, i) => (

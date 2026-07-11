@@ -18,7 +18,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
           "transition-[background,color,transform] duration-[var(--motion-base)]",
           "hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)]",
           "active:translate-y-px",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)]",
+          "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--color-accent-focus)]",
           "disabled:opacity-50 disabled:cursor-not-allowed disabled:active:translate-y-0",
           size === "md" ? "w-8 h-8" : "w-7 h-7",
           className,

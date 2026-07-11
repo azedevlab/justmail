@@ -414,7 +414,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
 
           <DropdownMenu
             trigger={
-              <button className="rounded-full ring-1 ring-[var(--color-border-strong)] hover:ring-[var(--color-accent-ring)] transition-shadow" aria-label="Account menu">
+              <button className="rounded-full ring-1 ring-[var(--color-border-strong)] hover:ring-[var(--color-accent-hover)] transition-shadow" aria-label="Account menu">
                 <Avatar name={me.data.name || me.data.email} size={28} />
               </button>
             }

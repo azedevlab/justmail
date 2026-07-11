@@ -17,13 +17,13 @@ const variantClasses: Record<ButtonVariant, string> = {
     "text-[var(--color-on-accent)] bg-[var(--color-accent)] border border-transparent",
     "shadow-[var(--shadow-btn-primary)]",
     "hover:bg-[var(--color-accent-hover-solid)]",
-    "active:translate-y-px active:shadow-[var(--shadow-btn-active)]",
+    "active:translate-y-px active:scale-[0.98] active:shadow-[var(--shadow-btn-active)]",
   ),
   secondary: cn(
     "text-[var(--color-neutral-1100)] bg-transparent",
     "border border-[var(--color-border-strong)]",
     "hover:bg-[var(--hover-overlay)]",
-    "active:translate-y-px",
+    "active:translate-y-px active:scale-[0.98]",
   ),
   ghost: cn(
     "bg-transparent text-[var(--color-neutral-1000)] border border-transparent",
@@ -32,7 +32,7 @@ const variantClasses: Record<ButtonVariant, string> = {
   danger: cn(
     "bg-transparent text-[var(--color-bad)] border border-[var(--color-bad-border)]",
     "hover:bg-[var(--color-bad-hover)] hover:border-[var(--color-bad-border)]",
-    "active:translate-y-px",
+    "active:translate-y-px active:scale-[0.98]",
   ),
   link: "bg-transparent text-[var(--color-accent)] border-none underline-offset-2 hover:underline p-0",
 };
@@ -67,8 +67,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(
         "inline-flex items-center justify-center font-medium select-none whitespace-nowrap",
         "tracking-[-0.006em]",
-        "transition-[background,border-color,box-shadow,transform,color] duration-[var(--motion-base)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-bg)]",
+        "transition-[background,border-color,box-shadow,translate,scale,color] duration-[var(--motion-base)]",
+        "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--color-accent-focus)]",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         variantClasses[variant],
         sizeClasses[size],

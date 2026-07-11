@@ -38,11 +38,15 @@ a {
   color: var(--color-on-accent);
 }
 
-/* Softer than a solid near-black accent so keyboard focus reads as a ring, not
-   a heavy box; rounded controls inherit their radius for the outline. */
-*:focus-visible {
-  outline: 2px solid var(--color-accent-ring);
-  outline-offset: 2px;
+/* Keyboard focus = a soft brand halo hugging the control, nube-style. Must
+   live in the base layer: unlayered it outranks Tailwind's utilities layer, so
+   focus:outline-none could never suppress it and fields showed this outline
+   stacked on top of their own ring. */
+@layer base {
+  *:focus-visible {
+    outline: 3px solid var(--color-accent-focus);
+    outline-offset: 0;
+  }
 }
 
 ::-webkit-scrollbar {

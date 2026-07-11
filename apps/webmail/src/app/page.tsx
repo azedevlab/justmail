@@ -79,7 +79,7 @@ export default function WebmailIndex() {
         <DropdownMenu
           trigger={
             <button
-              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              className="rounded-full focus:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--color-accent-focus)]"
               aria-label="Account"
             >
               <Avatar name={me.data.email} size={30} />

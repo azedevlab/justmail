@@ -51,6 +51,7 @@ const tintTokens = (accent) => `  --color-accent-subtle: ${alpha(accent, 0.1)};
   --color-bad-surface: ${alpha(t.semantic.bad, 0.12)};
   --color-bad-border: ${alpha(t.semantic.bad, 0.25)};
   --color-bad-hover: ${alpha(t.semantic.bad, 0.1)};
+  --color-bad-focus: ${alpha(t.semantic.bad, 0.18)};
   --color-info-surface: ${alpha(t.semantic.info, 0.12)};
   --color-info-border: ${alpha(t.semantic.info, 0.25)};
   --gradient-brand: linear-gradient(135deg, var(--color-brand-400), var(--color-ok));
@@ -62,10 +63,10 @@ const tintTokens = (accent) => `  --color-accent-subtle: ${alpha(accent, 0.1)};
   --shadow-btn-active: inset 0 1px 2px rgba(0, 0, 0, 0.25);`;
 
 // Brand accent: interactive UI (buttons, links, focus, selection) resolves to
-// the indigo brand primary. Light uses step 6; dark uses the brighter step 5 so
-// it reads on the dark canvas. Status colours stay semantic.
-const lightAccentHex = t.brand[6]; // #4F46E5 indigo-600
-const darkAccentHex = t.brand[5]; // #6366F1 brighter indigo for dark surfaces
+// the electric-blue brand primary. Light uses step 6; dark uses the brighter
+// step 5 so it reads on the dark canvas. Status colours stay semantic.
+const lightAccentHex = t.brand[6]; // #0052FF nube action blue
+const darkAccentHex = t.brand[5]; // #194BFB working blue for dark surfaces
 
 const light = `
 :root, .theme-light {
