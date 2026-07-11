@@ -5,10 +5,16 @@ Source is the truth; the site refreshes on merge to `main`.
 
 ## Reading order for operators
 
-1. [redesign/00-overview.md](redesign/00-overview.md) — where the project is going
-2. [redesign/11-installation.md](redesign/11-installation.md) — get it running
-3. [redesign/10-deployment.md](redesign/10-deployment.md) — topology + upgrades
-4. [runbooks/](runbooks/) — playbooks for when things go sideways
+1. [operations/quickstart.md](operations/quickstart.md) — install in ~15 minutes
+2. [architecture.md](architecture.md) — how the pieces fit together
+3. [operations/backup-restore.md](operations/backup-restore.md) — scheduled backups + restore
+4. [operations/upgrade.md](operations/upgrade.md) — move to a new release safely
+5. [operations/troubleshooting.md](operations/troubleshooting.md) — when something is off
+6. [redesign/10-deployment.md](redesign/10-deployment.md) — topology + observability
+7. [runbooks/](runbooks/) — playbooks for when things go sideways
+
+The API reference is served live at `/v1/docs` (rendered) and
+`/v1/openapi.json` (raw OpenAPI 3.1).
 
 ## Reading order for contributors
 
