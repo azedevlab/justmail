@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an enhancement
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that JustMail makes hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - API
+        - Admin console
+        - Webmail
+        - Mail delivery (Postfix/Dovecot)
+        - Backups / retention
+        - Deployment / infra
+        - Other
+    validations:
+      required: true
