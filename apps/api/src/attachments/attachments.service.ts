@@ -193,6 +193,7 @@ export class AttachmentsService {
       hash.update(buf as Buffer);
       bufs.push(buf as Buffer);
     }
+    const body = Buffer.concat(bufs);
     const contentHash = hash.digest("hex");
     const finalKey = `attachments/${contentHash}`;
 
@@ -207,7 +208,13 @@ export class AttachmentsService {
       return toAttachment(existing.rows[0]);
     }
 
-    await this.storage.copy(orgId, upload.storage_key, finalKey);
+    // Promote the staged upload to its content-addressed key with a direct PUT
+    // of the bytes we already hold in memory. A server-side copy would depend on
+    // adapter-specific CopySource encoding of the tenant-prefixed key, which
+    // silently no-ops on some S3-compatible backends (MinIO) — leaving an
+    // attachment row whose object never lands, so every send fails "object not
+    // found". Re-putting the known body is backend-agnostic and cannot desync.
+    await this.storage.put(orgId, finalKey, body, upload.mime);
     await this.storage.remove(orgId, upload.storage_key).catch(() => undefined);
 
     const { rows: inserted } = await this.db.query<AttachmentRow>(
@@ -221,7 +228,7 @@ export class AttachmentsService {
         contentHash,
         upload.filename,
         upload.mime,
-        Buffer.concat(bufs).length,
+        body.length,
         this.storage.kind,
         finalKey,
       ],

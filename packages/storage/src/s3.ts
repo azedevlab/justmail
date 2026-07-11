@@ -128,10 +128,16 @@ export class S3Adapter implements StorageAdapter {
   }
 
   async copyObject(from: string, to: string): Promise<void> {
+    // CopySource must keep path separators literal: encode each segment but
+    // preserve the slashes. encodeURIComponent() on the whole key turns "/" into
+    // "%2F", which some S3-compatible backends (MinIO) fail to resolve, making
+    // the copy silently miss its source. The leading-slash /bucket/key form is
+    // the unambiguous shape accepted across AWS S3, R2, B2, and MinIO.
+    const source = from.split("/").map(encodeURIComponent).join("/");
     await this.client.send(
       new CopyObjectCommand({
         Bucket: this.bucket,
-        CopySource: `${this.bucket}/${encodeURIComponent(from)}`,
+        CopySource: `/${this.bucket}/${source}`,
         Key: to,
       }),
     );
