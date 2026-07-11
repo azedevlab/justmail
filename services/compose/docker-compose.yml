@@ -79,6 +79,40 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     logging: *default-logging
 
+  # ── object storage (opt-in; set STORAGE_KIND=minio in .env) ───────────────
+  # Self-hosted S3-compatible store for attachments. External S3/R2/B2/GCS
+  # operators leave this profile disabled and point STORAGE_* at their provider.
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    profiles: [storage]
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
+    volumes: [miniodata:/data]
+    networks: [data]
+    logging: *default-logging
+
+  # One-shot: wait for MinIO, then create the attachments bucket and exit.
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    profiles: [storage]
+    restart: "no"
+    entrypoint: >-
+      /bin/sh -c "
+      until mc alias set jm http://minio:9000 $${STORAGE_ACCESS_KEY} $${STORAGE_SECRET_KEY}; do sleep 2; done &&
+      mc mb --ignore-existing jm/$${STORAGE_BUCKET} &&
+      mc anonymous set none jm/$${STORAGE_BUCKET}"
+    environment:
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+    networks: [data]
+    depends_on:
+      minio: { condition: service_started }
+    logging: *default-logging
+
   # ── mail data plane ───────────────────────────────────────────────────────
   postfix:
     build: { context: ../docker/postfix }
@@ -177,7 +211,11 @@ services:
       NODE_ENV: production
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
-    volumes: [dkim-keys:/var/lib/justmail/dkim]
+    volumes:
+      - dkim-keys:/var/lib/justmail/dkim
+      # Shared so the worker (sender) can read what the API (uploader) wrote when
+      # STORAGE_KIND=local. Ignored for object-store backends.
+      - attachments:/opt/justmail/attachments
     networks: [edge, data, mail]
     depends_on:
       postgres: { condition: service_healthy }
@@ -208,7 +246,9 @@ services:
       NODE_ENV: production
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
-    volumes: [dkim-keys:/var/lib/justmail/dkim]
+    volumes:
+      - dkim-keys:/var/lib/justmail/dkim
+      - attachments:/opt/justmail/attachments
     networks: [data, mail]
     depends_on:
       postgres: { condition: service_healthy }
@@ -389,3 +429,5 @@ volumes:
   maillog: {}
   fail2ban-data: {}
   radicale-data: {}
+  attachments: {}
+  miniodata: {}
