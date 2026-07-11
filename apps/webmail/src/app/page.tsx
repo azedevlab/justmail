@@ -5,19 +5,25 @@ import { useQuery } from "@tanstack/react-query";
 import type { Mailbox } from "@justmail/contracts";
 import {
   AuroraBackdrop,
+  Avatar,
   Card,
+  DropdownItem,
+  DropdownLabel,
+  DropdownMenu,
+  DropdownSeparator,
   Empty,
   Spinner,
   Wordmark,
 } from "@justmail/shared-ui";
-import { Mail } from "lucide-react";
+import { LogOut, Mail } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { useMe } from "@/lib/session";
+import { useLogout, useMe } from "@/lib/session";
 
 export default function WebmailIndex() {
   const router = useRouter();
   const me = useMe();
+  const logout = useLogout();
 
   useEffect(() => {
     if (me.data === null) router.replace("/login");
@@ -40,6 +46,25 @@ export default function WebmailIndex() {
   return (
     <main className="relative min-h-screen bg-[var(--color-bg)]">
       <AuroraBackdrop />
+      <div className="absolute top-3 right-4 z-10">
+        <DropdownMenu
+          trigger={
+            <button
+              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              aria-label="Account"
+            >
+              <Avatar name={me.data.email} size={30} />
+            </button>
+          }
+        >
+          <DropdownLabel>{me.data.email}</DropdownLabel>
+          <DropdownSeparator />
+          <DropdownItem destructive onSelect={() => logout.mutate()}>
+            <LogOut size={14} />
+            Sign out
+          </DropdownItem>
+        </DropdownMenu>
+      </div>
       <div className="relative mx-auto max-w-3xl px-6 pt-[12vh] pb-16 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
         <div className="flex justify-center mb-2">
           <Wordmark size={36} sub="Webmail" />
