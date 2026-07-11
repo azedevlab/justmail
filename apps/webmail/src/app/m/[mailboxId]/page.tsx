@@ -696,51 +696,68 @@ export default function MailboxView() {
       <div className="flex-1 min-h-0 flex">
         {/* Folder rail */}
         <nav
-          className="w-[200px] shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-1)] overflow-y-auto p-2"
+          className="w-[200px] shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-1)] flex flex-col"
           aria-label="Folders"
         >
-          <div className="px-2 pt-2 pb-1 text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-700)]">
-            Folders
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="px-2 pt-2 pb-1 text-[11px] uppercase tracking-[0.08em] font-medium text-[var(--color-neutral-700)]">
+              Folders
+            </div>
+            {folders.isPending ? (
+              <div className="space-y-1 px-1 pt-1" aria-hidden>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 rounded-[7px]" />
+                ))}
+              </div>
+            ) : folders.data && folders.data.length > 0 ? (
+              folders.data.map((f) => {
+                const active = folder === f.path;
+                return (
+                  <button
+                    key={f.path}
+                    onClick={() => {
+                      setFolder(f.path);
+                      setOpenUid(null);
+                    }}
+                    className={
+                      "w-full flex items-center gap-2.5 h-8 px-2 rounded-[7px] text-[13px] transition-colors " +
+                      (active
+                        ? "bg-[var(--color-accent-muted)] text-[var(--color-neutral-1100)]"
+                        : "text-[var(--color-neutral-1000)] hover:bg-[var(--hover-overlay)]")
+                    }
+                  >
+                    <span
+                      className={
+                        active
+                          ? "text-[var(--color-accent)]"
+                          : "text-[var(--color-neutral-800)]"
+                      }
+                    >
+                      {f.path === "INBOX" ? (
+                        <Inbox size={14} />
+                      ) : (
+                        <FolderIcon size={14} />
+                      )}
+                    </span>
+                    <span className="flex-1 text-left truncate">{f.name}</span>
+                    {f.unread > 0 && (
+                      <span className="text-[10px] font-medium tabular-nums px-1.5 py-px rounded-full bg-[var(--color-accent-strong)] text-[var(--color-accent)]">
+                        {f.unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-2 py-8 text-center text-[12px] text-[var(--color-neutral-700)]">
+                No folders yet
+              </div>
+            )}
           </div>
-          {folders.data?.map((f) => {
-            const active = folder === f.path;
-            return (
-              <button
-                key={f.path}
-                onClick={() => {
-                  setFolder(f.path);
-                  setOpenUid(null);
-                }}
-                className={
-                  "w-full flex items-center gap-2.5 h-8 px-2 rounded-[7px] text-[13px] transition-colors " +
-                  (active
-                    ? "bg-[var(--color-accent-muted)] text-[var(--color-neutral-1100)]"
-                    : "text-[var(--color-neutral-1000)] hover:bg-[var(--hover-overlay)]")
-                }
-              >
-                <span
-                  className={
-                    active
-                      ? "text-[var(--color-accent)]"
-                      : "text-[var(--color-neutral-800)]"
-                  }
-                >
-                  {f.path === "INBOX" ? (
-                    <Inbox size={14} />
-                  ) : (
-                    <FolderIcon size={14} />
-                  )}
-                </span>
-                <span className="flex-1 text-left truncate">{f.name}</span>
-                {f.unread > 0 && (
-                  <span className="text-[10px] font-medium tabular-nums px-1.5 py-px rounded-full bg-[var(--color-accent-strong)] text-[var(--color-accent)]">
-                    {f.unread}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          <div className="mt-6 px-2 space-y-1.5 text-[11px] text-[var(--color-neutral-700)]">
+          <div className="shrink-0 border-t border-[var(--color-border)] p-3 space-y-1.5 text-[11px] text-[var(--color-neutral-700)]">
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.08em] text-[var(--color-neutral-600)]">
+              Shortcuts
+            </div>
             <div className="flex items-center gap-2">
               <KeyHint combo="c" /> compose
             </div>
@@ -2455,6 +2472,16 @@ function RecipientField({
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // The compose panel mounts with an entrance transform, so the native
+  // autoFocus attribute frequently loses the race and the cursor lands nowhere.
+  // Focus imperatively on the next frame instead, once the panel has settled.
+  useEffect(() => {
+    if (!autoFocus) return;
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [autoFocus]);
 
   const emit = (nextEmails: string[], nextDraft: string) => {
     onChange([...nextEmails, nextDraft].filter(Boolean).join(", "));
@@ -2517,7 +2544,7 @@ function RecipientField({
         className={
           unstyled
             ? "flex flex-wrap items-center gap-1.5"
-            : "flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]"
+            : "flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-field)] px-2.5 py-1.5 shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]"
         }
       >
         {emails.map((addr, i) => (
@@ -2536,9 +2563,9 @@ function RecipientField({
           </span>
         ))}
         <input
+          ref={inputRef}
           className="flex-1 min-w-[8rem] bg-transparent focus:outline-none text-[13px] py-0.5"
           aria-label={ariaLabel}
-          autoFocus={autoFocus}
           placeholder={emails.length === 0 ? placeholder : undefined}
           value={draft}
           onChange={(e) => {
@@ -3839,7 +3866,7 @@ function ComposePanel({
         <div className="px-4 pt-3 space-y-3">
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <label className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+              <label className="text-[13px] font-medium text-[var(--color-neutral-1000)]">
                 To
               </label>
               {!showCcBcc && (
@@ -3870,7 +3897,7 @@ function ComposePanel({
           {showCcBcc && (
             <>
               <div>
-                <label className="mb-1 block text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+                <label className="mb-1.5 block text-[13px] font-medium text-[var(--color-neutral-1000)]">
                   Cc
                 </label>
                 <Controller
@@ -3888,7 +3915,7 @@ function ComposePanel({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+                <label className="mb-1.5 block text-[13px] font-medium text-[var(--color-neutral-1000)]">
                   Bcc
                 </label>
                 <Controller
