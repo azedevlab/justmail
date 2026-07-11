@@ -37,12 +37,18 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   private setCookie(res: Response, token: string, expiresAt: Date): void {
+    const domain =
+      config.NODE_ENV === "production" ? config.JM_WEB_HOST : undefined;
+    // A leftover host-only cookie (set before this cookie was scoped to the
+    // parent domain) would shadow the domain-scoped one — cookie-parser keeps
+    // the first duplicate — making authenticated requests 401 after a valid
+    // login. Clear the host-only variant so only the domain cookie survives.
+    if (domain) res.clearCookie(SESSION_COOKIE, { path: "/" });
     res.cookie(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: config.NODE_ENV === "production",
       sameSite: "lax",
-      domain:
-        config.NODE_ENV === "production" ? config.JM_WEB_HOST : undefined,
+      domain,
       path: "/",
       expires: expiresAt,
     });
@@ -95,6 +101,12 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.auth.logout(principal, req.ip);
+    res.clearCookie(SESSION_COOKIE, {
+      path: "/",
+      domain:
+        config.NODE_ENV === "production" ? config.JM_WEB_HOST : undefined,
+    });
+    // Also drop any legacy host-only cookie so logout clears both scopes.
     res.clearCookie(SESSION_COOKIE, { path: "/" });
   }
 
