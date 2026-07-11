@@ -32,9 +32,9 @@ jobs:
             --exclude .git --exclude node_modules --exclude .next --exclude dist \
             --exclude .turbo --exclude coverage \
             -e "ssh -i ~/.ssh/deploy_key" \
-            ./ ubuntu@${{ secrets.DEPLOY_HOST }}:/opt/justmail/app/
+            ./ root@${{ secrets.DEPLOY_HOST }}:/opt/justmail/app/
 
       - name: Run deploy script
         run: |
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+          ssh -i ~/.ssh/deploy_key root@${{ secrets.DEPLOY_HOST }} \
             'bash /opt/justmail/app/scripts/deploy.sh'

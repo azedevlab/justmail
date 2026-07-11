@@ -32,7 +32,7 @@ jobs:
 
       - name: Provision MinIO env
         run: |
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
+          ssh -i ~/.ssh/deploy_key root@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
           set -euo pipefail
           ENV=/opt/justmail/.env
           test -f "$ENV" || { echo "FATAL: $ENV missing"; exit 1; }

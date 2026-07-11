@@ -45,7 +45,7 @@ jobs:
         env:
           TEST_TO: ${{ inputs.to }}
         run: |
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' "$TEST_TO" <<'REMOTE'
+          ssh -i ~/.ssh/deploy_key root@${{ secrets.DEPLOY_HOST }} 'bash -s' "$TEST_TO" <<'REMOTE'
           set -e
           TO="$1"
           cd /opt/justmail/app
