@@ -1,0 +1,53 @@
+name: Diagnostics
+
+# Read-only operational diagnostics: tails recent container logs and checks
+# storage/Radicale wiring on the production host. Manual dispatch only; never
+# mutates state. Reuses the deploy SSH credentials.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: diagnostics-production
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Collect diagnostics
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
+          set +e
+          cd /opt/justmail/app
+          C="docker compose --env-file /opt/justmail/.env -f services/compose/docker-compose.yml --profile core --profile certs --profile mail --profile obs --profile sec --profile app"
+
+          echo "===== compose ps ====="
+          $C ps
+
+          echo; echo "===== api logs (error-ish, last 200) ====="
+          $C logs api --since 6h --no-color 2>&1 \
+            | grep -iE 'error|exception|throw|EXDEV|ECONNREFUSED|ETIMEDOUT|EACCES|ENOENT|radicale|storage|MKCOL|PROPFIND|status 4|status 5|Unhandled|at async|at /|at Object' \
+            | tail -200
+
+          echo; echo "===== api logs (raw, last 60) ====="
+          $C logs api --since 6h --no-color --tail 60 2>&1
+
+          echo; echo "===== radicale logs (last 80) ====="
+          $C logs radicale --since 6h --no-color --tail 80 2>&1
+
+          echo; echo "===== storage dir (host) ====="
+          ls -ld /opt/justmail/attachments 2>&1
+          stat -c '%U:%G %a %n' /opt/justmail/attachments 2>&1
+
+          echo; echo "===== cross-device / perms (inside api container) ====="
+          $C exec -T api sh -lc 'echo "-- ls target --"; ls -ld /opt/justmail/attachments 2>&1; echo "-- df target vs /tmp --"; df -P /opt/justmail/attachments /tmp 2>&1; echo "-- whoami --"; id 2>&1' 2>&1
+          REMOTE
