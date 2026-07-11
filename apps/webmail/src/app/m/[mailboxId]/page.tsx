@@ -3681,14 +3681,20 @@ function ComposePanel({
   const ccVal = f.watch("cc");
   const bccVal = f.watch("bcc");
 
-  // Drop a default signature into a fresh compose once signatures load.
+  // Drop a default signature into a fresh compose once signatures load. insertHtml
+  // focuses the editor, so seeding would yank the caret out of the recipient field
+  // the moment signatures finish loading (an async result); restore focus to
+  // wherever the user was afterwards. It is all synchronous, so no keystroke is
+  // lost and the focus round-trip never paints.
   const signatureSeeded = useRef(false);
   useEffect(() => {
     if (signatureSeeded.current) return;
     const def = signatures.data?.find((s) => s.is_default);
-    if (!def || !editorRef.current) return;
+    if (!def?.html || !editorRef.current) return;
     signatureSeeded.current = true;
-    if (def.html) insertHtml(`<br><br>${def.html}`);
+    const prev = document.activeElement as HTMLElement | null;
+    insertHtml(`<br><br>${def.html}`);
+    if (prev && prev !== editorRef.current) prev.focus?.();
   }, [signatures.data]);
 
   // Autosave to \Drafts after a pause in typing, replacing the prior version so
