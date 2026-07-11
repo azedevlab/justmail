@@ -1195,7 +1195,7 @@ function MessageRow({
           className={
             "absolute left-0 top-0 bottom-0 w-[2px] " +
             (selected
-              ? "bg-[var(--color-brand-500)]"
+              ? "bg-[var(--color-accent)]"
               : "bg-[var(--color-border-strong)]")
           }
         />
@@ -3407,13 +3407,11 @@ function ComposePanel({
             </>
           )}
           <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
-            <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
-              Subject
-            </span>
             <input
               {...f.register("subject")}
               placeholder="Subject"
-              className="flex-1 min-w-0 bg-transparent text-[13px] text-[var(--color-neutral-1100)] placeholder:text-[var(--color-neutral-700)] focus:outline-none"
+              aria-label="Subject"
+              className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-[var(--color-neutral-1100)] placeholder:font-normal placeholder:text-[var(--color-neutral-700)] focus:outline-none"
             />
           </div>
         </div>
