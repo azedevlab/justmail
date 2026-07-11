@@ -8,6 +8,8 @@ export * from "./StatusBadge.js";
 export * from "./StatusDot.js";
 export * from "./KeyHint.js";
 export * from "./Modal.js";
+export * from "./Confirm.js";
+export * from "./Prompt.js";
 export * from "./Toast.js";
 export * from "./Table.js";
 export * from "./Tabs.js";

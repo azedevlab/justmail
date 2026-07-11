@@ -36,6 +36,14 @@ describe("sanitizeMailHtml", () => {
     expect(out).toContain("<div>x</div>");
   });
 
+  it("keeps text-align but drops other styles", () => {
+    const out = sanitizeMailHtml(
+      '<p style="text-align:center;position:fixed">x</p>',
+    );
+    expect(out).toContain("text-align:center");
+    expect(out).not.toContain("position");
+  });
+
   it("allows http and cid image sources but not others", () => {
     const ok = sanitizeMailHtml('<img src="https://x.com/a.png">');
     expect(ok).toContain('src="https://x.com/a.png"');

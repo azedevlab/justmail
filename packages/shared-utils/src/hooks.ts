@@ -1,3 +1,4 @@
+"use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
@@ -23,7 +24,8 @@ export function useHotkey(
       if (
         !options.allowInInput &&
         e.target instanceof HTMLElement &&
-        ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)
+        (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName) ||
+          e.target.isContentEditable)
       )
         return;
       if (e.key.toLowerCase() !== key) return;

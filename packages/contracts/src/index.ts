@@ -11,6 +11,7 @@ export * from "./orgs.js";
 export * from "./domains.js";
 export * from "./mailboxes.js";
 export * from "./aliases.js";
+export * from "./groups.js";
 export * from "./dkim.js";
 export * from "./dns.js";
 export * from "./dashboard.js";
