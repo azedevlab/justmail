@@ -32,11 +32,14 @@ export class SessionGuard implements CanActivate {
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<Request>();
-    const cookies = (req as Request & { cookies?: Record<string, string> })
-      .cookies;
-    const cookieToken = cookies?.[SESSION_COOKIE];
-    if (cookieToken) {
-      const principal = await this.auth.resolveSession(cookieToken);
+    // A browser can hold more than one jm_session cookie at different scopes
+    // (e.g. a stale host-only cookie left over from before the cookie was
+    // scoped to the parent domain). It then sends `jm_session=A; jm_session=B`
+    // and cookie-parser surfaces only the FIRST — which may be the stale one,
+    // making a perfectly valid login 401. Try every jm_session value present
+    // (capped) so a good token is never masked by a stale duplicate.
+    for (const token of sessionTokens(req)) {
+      const principal = await this.auth.resolveSession(token);
       if (principal) {
         req.principal = principal;
         return true;
@@ -55,6 +58,42 @@ export class SessionGuard implements CanActivate {
       return true;
     }
     throw new UnauthorizedException({ title: "Not authenticated" });
+  }
+}
+
+// Collect every distinct jm_session token the request carries: the one
+// cookie-parser exposed plus any additional duplicates in the raw Cookie
+// header (which cookie-parser drops). Order: parser value first, then header
+// order. Capped so a client can't force unbounded session lookups.
+const MAX_SESSION_TOKENS = 5;
+function sessionTokens(req: Request): string[] {
+  const tokens: string[] = [];
+  const parsed = (req as Request & { cookies?: Record<string, string> })
+    .cookies?.[SESSION_COOKIE];
+  if (parsed) tokens.push(parsed);
+
+  const raw = req.headers.cookie;
+  if (raw) {
+    for (const part of raw.split(";")) {
+      const eq = part.indexOf("=");
+      if (eq === -1) continue;
+      if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue;
+      const value = decodeCookieValue(part.slice(eq + 1).trim());
+      if (value) tokens.push(value);
+    }
+  }
+  return [...new Set(tokens)].slice(0, MAX_SESSION_TOKENS);
+}
+
+function decodeCookieValue(raw: string): string {
+  const unquoted =
+    raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')
+      ? raw.slice(1, -1)
+      : raw;
+  try {
+    return decodeURIComponent(unquoted);
+  } catch {
+    return unquoted;
   }
 }
 
