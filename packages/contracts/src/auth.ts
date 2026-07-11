@@ -97,6 +97,9 @@ export const Me = z.object({
   totp_enabled: z.boolean(),
   passkey_enabled: z.boolean(),
   orgs: z.array(SessionOrg),
+  // When set, this session is bound to a single mailbox (mailbox-first webmail
+  // login); the client opens that inbox directly instead of showing a picker.
+  mailbox_id: Uuid.nullable().default(null),
 });
 export type Me = z.infer<typeof Me>;
 

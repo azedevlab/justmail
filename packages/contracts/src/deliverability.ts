@@ -13,6 +13,21 @@ export const DmarcReport = z.object({
 });
 export type DmarcReport = z.infer<typeof DmarcReport>;
 
+export const DmarcRecord = z.object({
+  source_ip: z.string(),
+  count: z.number().int(),
+  disposition: z.string(),
+  dkim_pass: z.boolean(),
+  spf_pass: z.boolean(),
+  header_from: z.string().nullable(),
+});
+export type DmarcRecord = z.infer<typeof DmarcRecord>;
+
+export const DmarcReportDetail = DmarcReport.extend({
+  records: z.array(DmarcRecord),
+});
+export type DmarcReportDetail = z.infer<typeof DmarcReportDetail>;
+
 export const ReputationDay = z.object({
   day: z.string(),
   sent: z.number().int(),

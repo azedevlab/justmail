@@ -11,6 +11,13 @@ const Env = z.object({
   EVENTS_INGEST_TOKEN: z.string().min(16),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   DKIM_DIR: z.string().default("/var/lib/justmail/dkim"),
+  // Automatic DKIM key rotation (worker). Opt-in: only rotates when Cloudflare
+  // publishing is configured, and never promotes a fresh selector to signing
+  // until its TXT record actually resolves — so rotation can't break signing.
+  DKIM_ROTATION_ENABLED: z.coerce.boolean().default(false),
+  DKIM_ROTATION_DAYS: z.coerce.number().int().positive().default(90),
+  DKIM_ROTATION_OVERLAP_HOURS: z.coerce.number().int().positive().default(24),
+  DKIM_ROTATION_POLL_SECONDS: z.coerce.number().int().positive().default(3600),
   MAIL_HOSTNAME: z.string().default("mail.localhost"),
 
   // Internal mail service discovery (compose service names by default).

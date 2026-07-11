@@ -23,6 +23,7 @@ import {
   THead,
   Textarea,
   TR,
+  useConfirm,
   useToast,
 } from "@justmail/shared-ui";
 import { Copy, Plus, Settings2 } from "lucide-react";
@@ -123,6 +124,7 @@ export default function SsoPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<SsoProvider | null>(null);
   const [creating, setCreating] = useState(false);
   const [endpoints, setEndpoints] = useState<SsoProvider | null>(null);
@@ -209,8 +211,15 @@ export default function SsoPage() {
                       </button>
                       <button
                         className="text-xs text-[var(--color-bad)] hover:underline"
-                        onClick={() => {
-                          if (confirm(`Delete "${p.name}"?`)) remove.mutate(p.id);
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: `Delete "${p.name}"?`,
+                              tone: "danger",
+                              confirmLabel: "Delete",
+                            })
+                          )
+                            remove.mutate(p.id);
                         }}
                       >
                         Delete

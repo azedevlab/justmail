@@ -38,6 +38,15 @@ export class AttachmentsController {
     return this.svc.createUpload(principal, orgId, body, req.ip);
   }
 
+  @Get("uploads/:id")
+  uploadStatus(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.getUpload(principal, orgId, id);
+  }
+
   @Post("uploads/:id/chunks")
   async appendChunk(
     @Principal() principal: SessionPrincipal,
@@ -52,15 +61,19 @@ export class AttachmentsController {
         title: "Missing or invalid Upload-Offset header",
       });
     }
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(chunk as Buffer);
-    return this.svc.appendChunk(
-      principal,
-      orgId,
-      id,
-      offset,
-      Buffer.concat(chunks),
-    );
+    // The global raw body-parser (application/offset+octet-stream) drains the
+    // request stream into req.body, so prefer that buffer; fall back to reading
+    // the stream directly if the parser did not run for this request.
+    const parsed: unknown = (req as { body?: unknown }).body;
+    let buffer: Buffer;
+    if (Buffer.isBuffer(parsed)) {
+      buffer = parsed;
+    } else {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      buffer = Buffer.concat(chunks);
+    }
+    return this.svc.appendChunk(principal, orgId, id, offset, buffer);
   }
 
   @Post("uploads/:id/finalise")
