@@ -1680,7 +1680,7 @@ function RichTextEditor({
   );
   const divider = <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />;
   return (
-    <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden">
+    <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] overflow-hidden shadow-[var(--shadow-inset-input)] transition-[border-color,box-shadow] duration-[var(--motion-base)] focus-within:border-[var(--color-accent)] focus-within:ring-2 focus-within:ring-[var(--color-accent-ring)]">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-[var(--color-border)] px-1.5 py-1">
         {btn("Bold", <Bold size={14} />, () => exec("bold"))}
         {btn("Italic", <Italic size={14} />, () => exec("italic"))}
@@ -4026,7 +4026,7 @@ function ComposePanel({
                   type="datetime-local"
                   value={scheduleAt}
                   onChange={(e) => setScheduleAt(e.target.value)}
-                  className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-1 text-[13px]"
+                  className="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-2 py-1 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]"
                 />
                 <div className="mt-2 flex justify-end gap-2">
                   <Button
