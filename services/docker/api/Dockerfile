@@ -2,7 +2,7 @@
 # (dist/worker.js — compose overrides the command).
 
 FROM node:26-bookworm-slim AS build
-RUN corepack enable
+RUN npm install --global corepack@latest && corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
@@ -26,7 +26,7 @@ RUN pnpm -r --filter '@justmail/contracts...' \
     && pnpm --filter @justmail/api build
 
 FROM node:26-bookworm-slim AS prod-deps
-RUN corepack enable
+RUN npm install --global corepack@latest && corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/

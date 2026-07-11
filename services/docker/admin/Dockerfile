@@ -1,7 +1,7 @@
 # Build context = repo root. Next.js standalone output.
 
 FROM node:26-bookworm-slim AS build
-RUN corepack enable
+RUN npm install --global corepack@latest && corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
 COPY apps/admin/package.json apps/admin/
