@@ -298,6 +298,15 @@ export class WebmailController {
     return this.svc.send(principal, orgId, mailboxId, body);
   }
 
+  @Get("attachment-limits")
+  attachmentLimits(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+  ) {
+    return this.svc.attachmentLimits(principal, orgId, mailboxId);
+  }
+
   @Get("scheduled")
   listScheduled(
     @Principal() principal: SessionPrincipal,
