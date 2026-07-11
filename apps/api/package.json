@@ -32,7 +32,7 @@
     "fast-xml-parser": "^5.10.0",
     "imapflow": "^1.4.7",
     "ioredis": "^5.4.1",
-    "ldapts": "^8.1.8",
+    "ldapts": "^9.0.0",
     "nodemailer": "^9.0.3",
     "otplib": "^13.4.1",
     "pg": "^8.16.0",
