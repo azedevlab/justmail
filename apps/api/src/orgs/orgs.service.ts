@@ -1,8 +1,10 @@
 import {
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import type {
   AddMemberRequest,
@@ -29,6 +31,7 @@ const ROLE_RANK: Record<OrgRole, number> = {
 export class OrgsService {
   constructor(
     private readonly db: Db,
+    @Inject(forwardRef(() => AuditService))
     private readonly audit: AuditService,
   ) {}
 
