@@ -69,7 +69,7 @@ export class DomainsService {
     private readonly audit: AuditService,
     private readonly webhooks: WebhooksService,
   ) {
-    // Derive the platform's own root (e.g. api.justmail.devlab.az → devlab.az).
+    // Derive the platform's own root (e.g. api.mail.example.com → example.com).
     // Falls back to whatever's after the second dot; users can override in settings.
     this.mailRoot = extractRoot(config.JM_WEB_HOST ?? "justmail.local");
   }

@@ -6,7 +6,7 @@ import { config } from "../config";
 /**
  * MTA-STS is served over HTTPS at mta-sts.<domain>/.well-known/mta-sts.txt.
  * Traefik routes all mta-sts.* hosts here (see infra/services/traefik).
- * The policy pins traffic to config.MAIL_HOSTNAME (mail.devlab.az by default).
+ * The policy pins traffic to config.MAIL_HOSTNAME (mail.localhost by default).
  */
 @Controller()
 export class MtaStsController {

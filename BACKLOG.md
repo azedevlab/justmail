@@ -126,7 +126,7 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 | M11-6 | P2 | DNS provider plugins: Cloudflare/Route53/Google/Azure/DO/Hetzner/Namecheap/GoDaddy/Porkbun/manual behind one interface | L | — | todo |
 | M11-7 | P1 | Distributed mail storage support (NFS/SMB/CephFS/ZFS) via config; document Dovecot index/lock constraints | M | — | todo |
 | M11-8 | P2 | Admin storage-migration tool: move attachments between providers with no downtime + progress/health | M | M11-2 | todo |
-| M11-9 | P0 | No-personalization audit: grep out every hardcoded domain/host/IP/port/path/email/brand/secret/maintainer id → placeholders/config; repo reusable with zero edits | M | M11-1 | todo |
+| M11-9 | P0 | No-personalization audit: grep out every hardcoded domain/host/IP/port/path/email/brand/secret/maintainer id → placeholders/config; repo reusable with zero edits | M | M11-1 | done |
 | M11-10 | P1 | Multi-arch (ARM64 + AMD64) image builds in CI | S | — | todo |
 
 ## M12 — Packaging & deployment targets
