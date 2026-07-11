@@ -3348,93 +3348,88 @@ function ComposePanel({
         </IconButton>
       </header>
       <form className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        {/* Recipient + subject rows: borderless with inline labels and hairline
-            dividers, Superhuman/Gmail-style, rather than boxed form fields. */}
-        <div className="px-4">
-          <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
-            <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
-              To
-            </span>
-            <div className="flex-1 min-w-0">
-              <Controller
-                control={f.control}
-                name="to"
-                rules={{ required: true }}
-                render={({ field }) => (
-                  <RecipientField
-                    ariaLabel="To"
-                    value={field.value}
-                    onChange={field.onChange}
-                    suggestions={recipientSuggestions}
-                    placeholder="alice@example.com"
-                    autoFocus
-                    unstyled
-                  />
-                )}
-              />
+        {/* Recipient + subject rows: clearly bordered, labelled fields so the
+            inputs are visible against the panel surface. */}
+        <div className="px-4 pt-3 space-y-3">
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+                To
+              </label>
+              {!showCcBcc && (
+                <button
+                  type="button"
+                  onClick={() => setShowCcBcc(true)}
+                  className="text-[11px] font-medium text-[var(--color-neutral-800)] hover:text-[var(--color-neutral-1100)] transition-colors"
+                >
+                  Add Cc/Bcc
+                </button>
+              )}
             </div>
-            {!showCcBcc && (
-              <button
-                type="button"
-                onClick={() => setShowCcBcc(true)}
-                className="shrink-0 text-[12px] text-[var(--color-neutral-800)] hover:text-[var(--color-neutral-1100)] transition-colors"
-              >
-                Cc/Bcc
-              </button>
-            )}
+            <Controller
+              control={f.control}
+              name="to"
+              rules={{ required: true }}
+              render={({ field }) => (
+                <RecipientField
+                  ariaLabel="To"
+                  value={field.value}
+                  onChange={field.onChange}
+                  suggestions={recipientSuggestions}
+                  placeholder="alice@example.com"
+                  autoFocus
+                />
+              )}
+            />
           </div>
           {showCcBcc && (
             <>
-              <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
-                <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
                   Cc
-                </span>
-                <div className="flex-1 min-w-0">
-                  <Controller
-                    control={f.control}
-                    name="cc"
-                    render={({ field }) => (
-                      <RecipientField
-                        ariaLabel="Cc"
-                        value={field.value}
-                        onChange={field.onChange}
-                        suggestions={recipientSuggestions}
-                        placeholder="(optional)"
-                        unstyled
-                      />
-                    )}
-                  />
-                </div>
+                </label>
+                <Controller
+                  control={f.control}
+                  name="cc"
+                  render={({ field }) => (
+                    <RecipientField
+                      ariaLabel="Cc"
+                      value={field.value}
+                      onChange={field.onChange}
+                      suggestions={recipientSuggestions}
+                      placeholder="(optional)"
+                    />
+                  )}
+                />
               </div>
-              <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
-                <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
                   Bcc
-                </span>
-                <div className="flex-1 min-w-0">
-                  <Controller
-                    control={f.control}
-                    name="bcc"
-                    render={({ field }) => (
-                      <RecipientField
-                        ariaLabel="Bcc"
-                        value={field.value}
-                        onChange={field.onChange}
-                        suggestions={recipientSuggestions}
-                        placeholder="(optional)"
-                        unstyled
-                      />
-                    )}
-                  />
-                </div>
+                </label>
+                <Controller
+                  control={f.control}
+                  name="bcc"
+                  render={({ field }) => (
+                    <RecipientField
+                      ariaLabel="Bcc"
+                      value={field.value}
+                      onChange={field.onChange}
+                      suggestions={recipientSuggestions}
+                      placeholder="(optional)"
+                    />
+                  )}
+                />
               </div>
             </>
           )}
-          <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
-            <input
+          <div>
+            <label className="mb-1 block text-[11px] uppercase tracking-wider text-[var(--color-neutral-900)]">
+              Subject
+            </label>
+            <Input
               {...f.register("subject")}
               placeholder="Subject"
               aria-label="Subject"
-              className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-[var(--color-neutral-1100)] placeholder:font-normal placeholder:text-[var(--color-neutral-700)] focus:outline-none"
             />
           </div>
         </div>
