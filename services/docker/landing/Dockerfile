@@ -1,6 +1,6 @@
 # Build context = repo root. Next.js standalone output.
 
-FROM node:22-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
@@ -13,7 +13,7 @@ COPY apps/landing apps/landing
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @justmail/landing build
 
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3002
 WORKDIR /app
 COPY --from=build /repo/apps/landing/.next/standalone ./

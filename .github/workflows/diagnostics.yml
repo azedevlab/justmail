@@ -28,10 +28,10 @@ jobs:
           ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
           set +e
           cd /opt/justmail/app
-          C="docker compose --env-file /opt/justmail/.env -f services/compose/docker-compose.yml --profile core --profile certs --profile mail --profile obs --profile sec --profile app"
+          C="docker compose --env-file /opt/justmail/.env -f services/compose/docker-compose.yml --profile core --profile certs --profile mail --profile obs --profile sec --profile app --profile storage"
 
           echo "===== compose ps ====="
-          $C ps
+          $C ps -a
 
           echo; echo "===== api logs (error-ish, last 200) ====="
           $C logs api --since 6h --no-color 2>&1 \
@@ -49,5 +49,23 @@ jobs:
           stat -c '%U:%G %a %n' /opt/justmail/attachments 2>&1
 
           echo; echo "===== cross-device / perms (inside api container) ====="
-          $C exec -T api sh -lc 'echo "-- ls target --"; ls -ld /opt/justmail/attachments 2>&1; echo "-- df target vs /tmp --"; df -P /opt/justmail/attachments /tmp 2>&1; echo "-- whoami --"; id 2>&1' 2>&1
+          # Redirect stdin from /dev/null: `docker compose exec` otherwise drains
+          # the SSH heredoc, swallowing every section below it.
+          $C exec -T api sh -lc 'echo "-- ls target --"; ls -ld /opt/justmail/attachments 2>&1; echo "-- df target vs /tmp --"; df -P /opt/justmail/attachments /tmp 2>&1; echo "-- whoami --"; id 2>&1' </dev/null 2>&1
+
+          echo; echo "===== storage backend (.env, redacted) ====="
+          grep -E '^STORAGE_(KIND|ENDPOINT|BUCKET|REGION)=' /opt/justmail/.env 2>&1
+          grep -qE '^STORAGE_ACCESS_KEY=.+' /opt/justmail/.env && echo "STORAGE_ACCESS_KEY=<set>" || echo "STORAGE_ACCESS_KEY=<unset>"
+          grep -qE '^STORAGE_SECRET_KEY=.+' /opt/justmail/.env && echo "STORAGE_SECRET_KEY=<set>" || echo "STORAGE_SECRET_KEY=<unset>"
+
+          if grep -qE '^STORAGE_KIND=minio[[:space:]]*$' /opt/justmail/.env; then
+            echo; echo "===== minio service + bucket init ====="
+            $C logs minio --no-color --tail 20 2>&1
+            echo "-- minio-init (bucket creation) --"
+            $C logs minio-init --no-color 2>&1
+            echo "-- bucket listing (objects) --"
+            docker run --rm --network justmail_data --env-file /opt/justmail/.env \
+              minio/mc:RELEASE.2025-04-16T18-13-26Z /bin/sh -c \
+              'mc alias set jm http://minio:9000 "$STORAGE_ACCESS_KEY" "$STORAGE_SECRET_KEY" >/dev/null 2>&1 && mc ls --recursive jm/"$STORAGE_BUCKET" 2>&1 | head -50 || echo "(mc could not reach minio / bucket)"'
+          fi
           REMOTE
