@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import * as argon2 from "argon2";
-import { authenticator } from "otplib";
+import { generateSecret, generateURI, verifySync } from "otplib";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import type {
   BootstrapRequest,
@@ -162,7 +162,7 @@ export class AuthService {
         });
       }
       const secret = open(user.totp_secret!);
-      if (!authenticator.check(req.totp_code, secret)) {
+      if (!verifySync({ strategy: "totp", secret, token: req.totp_code }).valid) {
         throw new UnauthorizedException({ title: "Invalid two-factor code" });
       }
     }
@@ -444,14 +444,19 @@ export class AuthService {
     if (rows[0]?.totp_enabled) {
       throw new ConflictException({ title: "Two-factor already enabled" });
     }
-    const secret = authenticator.generateSecret();
+    const secret = generateSecret();
     await this.db.query(
       "UPDATE users SET totp_secret = $1, updated_at = now() WHERE id = $2",
       [seal(secret), principal.userId],
     );
     return {
       secret,
-      otpauth_url: authenticator.keyuri(principal.email, "JustMail", secret),
+      otpauth_url: generateURI({
+        strategy: "totp",
+        issuer: "JustMail",
+        label: principal.email,
+        secret,
+      }),
     };
   }
 
@@ -468,7 +473,7 @@ export class AuthService {
         title: "Two-factor setup not in progress",
       });
     }
-    if (!authenticator.check(code, open(row.totp_secret))) {
+    if (!verifySync({ strategy: "totp", secret: open(row.totp_secret), token: code }).valid) {
       throw new UnauthorizedException({ title: "Invalid two-factor code" });
     }
     await this.db.query(
