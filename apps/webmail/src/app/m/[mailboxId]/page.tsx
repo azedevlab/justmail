@@ -36,6 +36,7 @@ import type {
   SieveMatch,
   Upload,
   Attachment,
+  AttachmentLimits,
   Contact,
   ContactRequest,
   CalendarEvent,
@@ -73,6 +74,7 @@ import {
   type ToastItem,
 } from "@justmail/shared-ui";
 import {
+  AlertCircle,
   AlignCenter,
   AlignLeft,
   AlignRight,
@@ -81,6 +83,7 @@ import {
   Bell,
   Bold,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -110,6 +113,7 @@ import {
   LogOut,
   RefreshCw,
   Reply,
+  RotateCw,
   Search,
   Settings,
   Star,
@@ -1515,6 +1519,19 @@ function UnlockScreen({
 const UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
 // Per-chunk retry budget before an upload is reported as failed.
 const UPLOAD_MAX_RETRIES = 4;
+
+// A composer attachment that begins uploading the moment it is picked, so the
+// send action never blocks on transfer. `controller` aborts the in-flight
+// upload when the file is removed; `attachmentId` is set once finalised.
+interface UploadItem {
+  key: string;
+  file: File;
+  status: "uploading" | "done" | "error";
+  progress: number;
+  attachmentId?: string;
+  error?: string;
+  controller: AbortController;
+}
 
 // Idle delay before a compose draft is autosaved to \Drafts.
 const DRAFT_AUTOSAVE_MS = 2500;
@@ -3196,14 +3213,18 @@ function EventForm({
 }
 
 // Picked-file preview in the composer: image files get an inline thumbnail so
-// the sender can confirm what they are attaching before it uploads.
+// the sender can confirm what they are attaching. Uploading starts on pick, so
+// each tile also carries its own transfer state (progress / done / retry).
 function ComposeAttachment({
-  file,
+  item,
   onRemove,
+  onRetry,
 }: {
-  file: File;
+  item: UploadItem;
   onRemove: () => void;
+  onRetry: () => void;
 }) {
+  const { file, status, progress, error } = item;
   const isImage = file.type.startsWith("image/") && file.size < 5_000_000;
   const [thumb, setThumb] = useState<string | null>(null);
 
@@ -3214,27 +3235,70 @@ function ComposeAttachment({
     return () => URL.revokeObjectURL(obj);
   }, [file, isImage]);
 
+  const pct = Math.round(progress * 100);
   return (
     <li className="group relative flex items-center gap-2 pl-1.5 pr-1 py-1 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs">
-      {thumb ? (
-        <img
-          src={thumb}
-          alt={file.name}
-          className="w-7 h-7 rounded object-cover shrink-0"
-        />
-      ) : (
-        <span className="w-7 h-7 rounded grid place-items-center bg-[var(--color-surface-1)] text-[var(--color-neutral-700)] shrink-0">
-          {isImage ? <ImageIcon size={13} /> : <Paperclip size={13} />}
-        </span>
-      )}
+      <span className="relative w-7 h-7 shrink-0">
+        {thumb ? (
+          <img
+            src={thumb}
+            alt={file.name}
+            className="w-7 h-7 rounded object-cover"
+          />
+        ) : (
+          <span className="w-7 h-7 rounded grid place-items-center bg-[var(--color-surface-1)] text-[var(--color-neutral-700)]">
+            {isImage ? <ImageIcon size={13} /> : <Paperclip size={13} />}
+          </span>
+        )}
+        {status === "uploading" && (
+          <span className="absolute inset-0 grid place-items-center rounded bg-[color-mix(in_srgb,var(--color-surface-1)_65%,transparent)]">
+            <Spinner size={12} />
+          </span>
+        )}
+        {status === "done" && (
+          <span className="absolute -bottom-0.5 -right-0.5 grid place-items-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-ok)]">
+            <CheckCircle2 size={13} />
+          </span>
+        )}
+        {status === "error" && (
+          <span className="absolute -bottom-0.5 -right-0.5 grid place-items-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-bad)]">
+            <AlertCircle size={13} />
+          </span>
+        )}
+      </span>
       <span className="min-w-0">
         <span className="block max-w-40 truncate font-medium" title={file.name}>
           {file.name}
         </span>
-        <span className="block text-[10px] text-[var(--color-neutral-800)]">
-          {fmtSize(file.size)}
-        </span>
+        {status === "uploading" ? (
+          <span className="mt-0.5 block h-1 w-28 overflow-hidden rounded-full bg-[var(--color-surface-1)]">
+            <span
+              className="block h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-200"
+              style={{ width: `${Math.max(6, pct)}%` }}
+            />
+          </span>
+        ) : status === "error" ? (
+          <span
+            className="block max-w-40 truncate text-[10px] text-[var(--color-bad)]"
+            title={error}
+          >
+            {error ?? "Upload failed"}
+          </span>
+        ) : (
+          <span className="block text-[10px] text-[var(--color-neutral-800)]">
+            {fmtSize(file.size)}
+          </span>
+        )}
       </span>
+      {status === "error" && (
+        <IconButton
+          size="sm"
+          aria-label={`Retry ${file.name}`}
+          onClick={onRetry}
+        >
+          <RotateCw size={12} />
+        </IconButton>
+      )}
       <IconButton size="sm" aria-label={`Remove ${file.name}`} onClick={onRemove}>
         <X size={12} />
       </IconButton>
@@ -3272,8 +3336,7 @@ function ComposePanel({
   const [err, setErr] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [files, setFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [attachments, setAttachments] = useState<UploadItem[]>([]);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
@@ -3331,6 +3394,18 @@ function ComposePanel({
         `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/templates`,
       ),
   });
+  // Effective per-org attachment ceilings (admin override or config default), so
+  // the composer enforces exactly what the send path will. Falls back to the
+  // config defaults while loading.
+  const limits = useQuery({
+    queryKey: ["attachment-limits", orgId, mailboxId],
+    queryFn: () =>
+      api.get<AttachmentLimits>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/attachment-limits`,
+      ),
+  });
+  const maxTotalBytes = limits.data?.max_total_bytes ?? 15_000_000;
+  const maxCount = limits.data?.max_count ?? 16;
   const contacts = useQuery({
     queryKey: ["contacts", orgId, mailboxId],
     queryFn: () =>
@@ -3449,83 +3524,156 @@ function ComposePanel({
     window.addEventListener("pointerup", up);
   };
 
+  const patchItem = (key: string, patch: Partial<UploadItem>) =>
+    setAttachments((p) =>
+      p.map((a) => (a.key === key ? { ...a, ...patch } : a)),
+    );
+
   const onPick = (e: ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (picked.length === 0) return;
-    const next = [...files, ...picked].slice(0, 16);
-    if (next.reduce((s, x) => s + x.size, 0) > 15_000_000) {
-      setErr("Attachments must stay under 15 MB total.");
+    const room = maxCount - attachments.length;
+    if (room <= 0) {
+      setErr(`You can attach at most ${maxCount} files.`);
+      return;
+    }
+    const accepted = picked.slice(0, room);
+    const currentBytes = attachments.reduce((s, a) => s + a.file.size, 0);
+    const addedBytes = accepted.reduce((s, x) => s + x.size, 0);
+    if (currentBytes + addedBytes > maxTotalBytes) {
+      setErr(`Attachments must stay under ${fmtSize(maxTotalBytes)} total.`);
       return;
     }
     setErr(null);
-    setFiles(next);
+    const items: UploadItem[] = accepted.map((file) => ({
+      key: `${file.name}-${file.size}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+      file,
+      status: "uploading",
+      progress: 0,
+      controller: new AbortController(),
+    }));
+    setAttachments((p) => [...p, ...items]);
+    // Upload starts the moment files are picked so the send action never blocks
+    // on transfer — by the time the user hits Send the bytes are already stored.
+    for (const item of items) void startUpload(item);
   };
 
-  // Upload a file to storage via the tus-style endpoints and return its
-  // finalised attachment id. Chunked to stay under the raw-body limit.
-  const uploadFile = async (file: File): Promise<string> => {
-    const upload = await api.post<Upload>(`/v1/orgs/${orgId}/uploads`, {
-      filename: file.name,
-      mime: file.type || "application/octet-stream",
-      size_bytes: file.size,
-    });
-    const chunksUrl = `${API_BASE}/v1/orgs/${orgId}/uploads/${upload.id}/chunks`;
-    let offset = 0;
-    while (offset < file.size) {
-      const start = offset;
-      const slice = file.slice(
-        start,
-        Math.min(start + UPLOAD_CHUNK_BYTES, file.size),
+  // Chunked tus upload for one item, reporting per-chunk progress into state and
+  // aborting cleanly when the file is removed mid-flight.
+  const startUpload = async (item: UploadItem) => {
+    const { file, controller } = item;
+    try {
+      const upload = await api.post<Upload>(
+        `/v1/orgs/${orgId}/uploads`,
+        {
+          filename: file.name,
+          mime: file.type || "application/octet-stream",
+          size_bytes: file.size,
+        },
+        { signal: controller.signal },
       );
-      let sent = false;
-      for (let attempt = 0; attempt < UPLOAD_MAX_RETRIES && !sent; attempt++) {
-        if (attempt > 0) {
-          // Back off, then resync to the server's authoritative offset: a lost
-          // response may already have committed this chunk, advancing the
-          // server past our local position.
-          await new Promise((r) => setTimeout(r, 400 * attempt));
-          try {
-            const status = await api.get<Upload>(
-              `/v1/orgs/${orgId}/uploads/${upload.id}`,
-            );
-            offset = status.offset_bytes;
-            if (offset >= start + slice.size) {
-              sent = true;
-              break;
+      const chunksUrl = `${API_BASE}/v1/orgs/${orgId}/uploads/${upload.id}/chunks`;
+      let offset = 0;
+      while (offset < file.size) {
+        const start = offset;
+        const slice = file.slice(
+          start,
+          Math.min(start + UPLOAD_CHUNK_BYTES, file.size),
+        );
+        let sent = false;
+        for (let attempt = 0; attempt < UPLOAD_MAX_RETRIES && !sent; attempt++) {
+          if (attempt > 0) {
+            // Back off, then resync to the server's authoritative offset: a lost
+            // response may already have committed this chunk, advancing the
+            // server past our local position.
+            await new Promise((r) => setTimeout(r, 400 * attempt));
+            try {
+              const status = await api.get<Upload>(
+                `/v1/orgs/${orgId}/uploads/${upload.id}`,
+                { signal: controller.signal },
+              );
+              offset = status.offset_bytes;
+              if (offset >= start + slice.size) {
+                sent = true;
+                break;
+              }
+            } catch (e) {
+              if (controller.signal.aborted) throw e;
             }
-          } catch {
-            // Status probe failed too; retry the chunk from our local offset.
+          }
+          try {
+            const res = await fetch(chunksUrl, {
+              method: "POST",
+              credentials: "include",
+              signal: controller.signal,
+              headers: {
+                "content-type": "application/offset+octet-stream",
+                "upload-offset": String(offset),
+              },
+              body: slice,
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const next = (await res.json()) as Upload;
+            offset = next.offset_bytes;
+            sent = true;
+          } catch (e) {
+            if (controller.signal.aborted) throw e;
           }
         }
-        try {
-          const res = await fetch(chunksUrl, {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "content-type": "application/offset+octet-stream",
-              "upload-offset": String(offset),
-            },
-            body: slice,
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const next = (await res.json()) as Upload;
-          offset = next.offset_bytes;
-          sent = true;
-        } catch {
-          // Network error or non-2xx; loop retries after a resync.
+        if (!sent) {
+          throw new Error(
+            `Couldn't upload ${file.name} — check your connection and try again.`,
+          );
         }
+        patchItem(item.key, {
+          progress: Math.min(1, offset / Math.max(1, file.size)),
+        });
       }
-      if (!sent) {
-        throw new Error(
-          `Couldn't upload ${file.name} — check your connection and try again.`,
-        );
-      }
+      const att = await api.post<Attachment>(
+        `/v1/orgs/${orgId}/uploads/${upload.id}/finalise`,
+        undefined,
+        { signal: controller.signal },
+      );
+      patchItem(item.key, {
+        status: "done",
+        progress: 1,
+        attachmentId: att.id,
+      });
+    } catch (e) {
+      // Aborted uploads belong to files the user already removed; leave them be.
+      if (controller.signal.aborted) return;
+      patchItem(item.key, {
+        status: "error",
+        error:
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+      });
     }
-    const att = await api.post<Attachment>(
-      `/v1/orgs/${orgId}/uploads/${upload.id}/finalise`,
-    );
-    return att.id;
+  };
+
+  const retryUpload = (key: string) => {
+    const existing = attachments.find((a) => a.key === key);
+    if (!existing) return;
+    const controller = new AbortController();
+    const item: UploadItem = {
+      ...existing,
+      status: "uploading",
+      progress: 0,
+      error: undefined,
+      controller,
+    };
+    setAttachments((p) => p.map((a) => (a.key === key ? item : a)));
+    void startUpload(item);
+  };
+
+  const removeAttachment = (key: string) => {
+    const item = attachments.find((a) => a.key === key);
+    item?.controller.abort();
+    setAttachments((p) => p.filter((a) => a.key !== key));
   };
 
   const subject = f.watch("subject");
@@ -3597,21 +3745,15 @@ function ComposePanel({
         .map((s) => s.trim())
         .filter(Boolean);
       if (to.length === 0) return setErr("At least one recipient required.");
-      let attachmentIds: string[] | undefined;
-      if (files.length > 0) {
-        setUploading(true);
-        try {
-          attachmentIds = await Promise.all(files.map(uploadFile));
-        } catch (e) {
-          setUploading(false);
-          return setErr(
-            e instanceof ApiError
-              ? e.problem.detail ?? e.problem.title
-              : (e as Error).message,
-          );
-        }
-        setUploading(false);
-      }
+      // Uploads already ran on pick, so send never waits on transfer — it only
+      // guards against firing while an attachment is mid-flight or failed.
+      if (attachments.some((a) => a.status === "uploading"))
+        return setErr("Wait for attachments to finish uploading.");
+      if (attachments.some((a) => a.status === "error"))
+        return setErr("Retry or remove the failed attachment before sending.");
+      const attachmentIds = attachments
+        .map((a) => a.attachmentId)
+        .filter((id): id is string => Boolean(id));
       const html = bodyHtml();
       mut.mutate({
         to,
@@ -3620,7 +3762,7 @@ function ComposePanel({
         subject: v.subject,
         text: bodyText(),
         html: html.trim() ? html : undefined,
-        attachment_ids: attachmentIds,
+        attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
         in_reply_to: initial?.in_reply_to,
         references: initial?.references,
         send_at: sendAt,
@@ -3638,6 +3780,9 @@ function ComposePanel({
     setScheduleOpen(false);
     void submit(at.toISOString());
   };
+
+  const uploading = attachments.some((a) => a.status === "uploading");
+  const hasErrored = attachments.some((a) => a.status === "error");
 
   if (minimized) {
     return (
@@ -3801,17 +3946,16 @@ function ComposePanel({
             }
           />
         </div>
-        {(files.length > 0 || err) && (
+        {(attachments.length > 0 || err) && (
           <div className="px-4 pb-3 space-y-2">
-            {files.length > 0 && (
+            {attachments.length > 0 && (
               <ul className="flex flex-wrap gap-2">
-                {files.map((file, i) => (
+                {attachments.map((item) => (
                   <ComposeAttachment
-                    key={`${file.name}-${i}`}
-                    file={file}
-                    onRemove={() =>
-                      setFiles((p) => p.filter((_, j) => j !== i))
-                    }
+                    key={item.key}
+                    item={item}
+                    onRemove={() => removeAttachment(item.key)}
+                    onRetry={() => retryUpload(item.key)}
                   />
                 ))}
               </ul>
@@ -3834,7 +3978,7 @@ function ComposePanel({
             onChange={onPick}
             aria-label="Attach files"
           />
-          <Tooltip content="Attach files (15 MB max)">
+          <Tooltip content={`Attach files (${fmtSize(maxTotalBytes)} max)`}>
             <IconButton
               size="sm"
               aria-label="Attach files"
@@ -3900,7 +4044,8 @@ function ComposePanel({
           </div>
           <Button
             variant="primary"
-            loading={mut.isPending || uploading}
+            loading={mut.isPending}
+            disabled={uploading || hasErrored}
             onClick={send}
           >
             {uploading ? "Uploading…" : "Send"}
