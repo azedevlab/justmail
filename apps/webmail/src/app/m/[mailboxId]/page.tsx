@@ -23,6 +23,7 @@ import type {
   ComposeRequest,
   SavedDraft,
   SendResult,
+  SendStatus,
   Signature,
   Template,
   SieveRule,
@@ -63,6 +64,7 @@ import {
   Tooltip,
   useToast,
   Wordmark,
+  type ToastItem,
 } from "@justmail/shared-ui";
 import {
   Archive,
@@ -121,6 +123,46 @@ type ComposeInit = {
 
 // Idle delay before the search box issues a server-side IMAP SEARCH.
 const SEARCH_DEBOUNCE_MS = 300;
+
+// After the undo window elapses the worker dispatches the send asynchronously.
+// Poll the send row to surface the real terminal outcome instead of leaving the
+// "Sending…" toast to silently disappear.
+async function confirmSendOutcome(
+  orgId: string,
+  mailboxId: string,
+  id: string,
+  toast: (t: Omit<ToastItem, "id">) => void,
+  onSent: () => void,
+): Promise<void> {
+  const url = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/sends/${id}`;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const s = await api.get<SendStatus>(url);
+      if (s.status === "sent") {
+        toast({ title: "Message sent", tone: "ok" });
+        onSent();
+        return;
+      }
+      if (s.status === "failed") {
+        toast({
+          title: "Send failed",
+          description: s.last_error ?? "The message could not be delivered.",
+          tone: "bad",
+        });
+        return;
+      }
+      if (s.status === "cancelled") return;
+    } catch {
+      // Transient (row not yet visible / network) — retry.
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  toast({
+    title: "Still sending…",
+    description: "Your message is queued and will be delivered shortly.",
+    tone: "info",
+  });
+}
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -2131,6 +2173,7 @@ function RecipientField({
   placeholder,
   autoFocus,
   ariaLabel,
+  unstyled,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -2138,6 +2181,7 @@ function RecipientField({
   placeholder?: string;
   autoFocus?: boolean;
   ariaLabel: string;
+  unstyled?: boolean;
 }) {
   // Local source of truth, seeded once from the incoming value.
   const [emails, setEmails] = useState<string[]>(() => splitAddresses(value));
@@ -2202,7 +2246,13 @@ function RecipientField({
 
   return (
     <div className="relative">
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2 py-1.5 focus-within:border-[var(--color-accent)] transition-colors">
+      <div
+        className={
+          unstyled
+            ? "flex flex-wrap items-center gap-1.5"
+            : "flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-2 py-1.5 focus-within:border-[var(--color-accent)] transition-colors"
+        }
+      >
         {emails.map((addr, i) => (
           <span
             key={`${addr}-${i}`}
@@ -2887,14 +2937,17 @@ function ComposePanel({
   const f = useForm<{
     to: string;
     cc: string;
+    bcc: string;
     subject: string;
   }>({
     defaultValues: {
       to: initial?.to ?? "",
       cc: initial?.cc ?? "",
+      bcc: "",
       subject: initial?.subject ?? "",
     },
   });
+  const [showCcBcc, setShowCcBcc] = useState(Boolean(initial?.cc));
   const { toast } = useToast();
   const qc = useQueryClient();
   const [err, setErr] = useState<string | null>(null);
@@ -3006,21 +3059,25 @@ function ComposePanel({
     onSuccess: async (res) => {
       await discardDraft();
       onClose();
-      const cancel = () =>
-        api
+      let cancelled = false;
+      const cancel = () => {
+        cancelled = true;
+        return api
           .post(
             `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/scheduled/${res.id}/cancel`,
           )
           .then(() => toast({ title: "Send cancelled", tone: "ok" }))
-          .catch((e) =>
+          .catch((e) => {
+            cancelled = false;
             toast({
               title:
                 e instanceof ApiError
                   ? e.problem.detail ?? e.problem.title
                   : "Could not cancel",
               tone: "bad",
-            }),
-          );
+            });
+          });
+      };
       if (res.scheduled) {
         toast({
           title: "Scheduled",
@@ -3030,7 +3087,9 @@ function ComposePanel({
         });
         return;
       }
-      // Undo window: keep the toast up until the send actually fires.
+      // Undo window: hold an "Undo" toast until the worker fires the send, then
+      // poll the send row to report the real outcome — sent or failed — instead
+      // of leaving the user guessing once the toast disappears.
       const windowMs = Math.max(0, new Date(res.send_at).getTime() - Date.now());
       toast({
         title: "Sending…",
@@ -3038,6 +3097,12 @@ function ComposePanel({
         durationMs: windowMs,
         action: { label: "Undo", onClick: () => void cancel() },
       });
+      window.setTimeout(() => {
+        if (cancelled) return;
+        void confirmSendOutcome(orgId, mailboxId, res.id, toast, () =>
+          qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] }),
+        );
+      }, windowMs + 400);
     },
     onError: (e) =>
       setErr(
@@ -3172,6 +3237,10 @@ function ComposePanel({
         .split(/[,\s]+/)
         .map((s) => s.trim())
         .filter(Boolean);
+      const bcc = v.bcc
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (to.length === 0) return setErr("At least one recipient required.");
       let attachmentIds: string[] | undefined;
       if (files.length > 0) {
@@ -3192,6 +3261,7 @@ function ComposePanel({
       mut.mutate({
         to,
         cc: cc.length > 0 ? cc : undefined,
+        bcc: bcc.length > 0 ? bcc : undefined,
         subject: v.subject,
         text: bodyText(),
         html: html.trim() ? html : undefined,
@@ -3254,43 +3324,100 @@ function ComposePanel({
           <X size={14} />
         </IconButton>
       </header>
-      <form className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-        <FormField label="To">
-          <Controller
-            control={f.control}
-            name="to"
-            rules={{ required: true }}
-            render={({ field }) => (
-              <RecipientField
-                ariaLabel="To"
-                value={field.value}
-                onChange={field.onChange}
-                suggestions={recipientSuggestions}
-                placeholder="alice@example.com"
-                autoFocus
+      <form className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        {/* Recipient + subject rows: borderless with inline labels and hairline
+            dividers, Superhuman/Gmail-style, rather than boxed form fields. */}
+        <div className="px-4">
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
+            <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
+              To
+            </span>
+            <div className="flex-1 min-w-0">
+              <Controller
+                control={f.control}
+                name="to"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <RecipientField
+                    ariaLabel="To"
+                    value={field.value}
+                    onChange={field.onChange}
+                    suggestions={recipientSuggestions}
+                    placeholder="alice@example.com"
+                    autoFocus
+                    unstyled
+                  />
+                )}
               />
+            </div>
+            {!showCcBcc && (
+              <button
+                type="button"
+                onClick={() => setShowCcBcc(true)}
+                className="shrink-0 text-[12px] text-[var(--color-neutral-800)] hover:text-[var(--color-neutral-1100)] transition-colors"
+              >
+                Cc/Bcc
+              </button>
             )}
-          />
-        </FormField>
-        <FormField label="Cc">
-          <Controller
-            control={f.control}
-            name="cc"
-            render={({ field }) => (
-              <RecipientField
-                ariaLabel="Cc"
-                value={field.value}
-                onChange={field.onChange}
-                suggestions={recipientSuggestions}
-                placeholder="(optional)"
-              />
-            )}
-          />
-        </FormField>
-        <FormField label="Subject">
-          <Input {...f.register("subject")} />
-        </FormField>
-        <FormField label="Message">
+          </div>
+          {showCcBcc && (
+            <>
+              <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
+                <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
+                  Cc
+                </span>
+                <div className="flex-1 min-w-0">
+                  <Controller
+                    control={f.control}
+                    name="cc"
+                    render={({ field }) => (
+                      <RecipientField
+                        ariaLabel="Cc"
+                        value={field.value}
+                        onChange={field.onChange}
+                        suggestions={recipientSuggestions}
+                        placeholder="(optional)"
+                        unstyled
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
+                <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
+                  Bcc
+                </span>
+                <div className="flex-1 min-w-0">
+                  <Controller
+                    control={f.control}
+                    name="bcc"
+                    render={({ field }) => (
+                      <RecipientField
+                        ariaLabel="Bcc"
+                        value={field.value}
+                        onChange={field.onChange}
+                        suggestions={recipientSuggestions}
+                        placeholder="(optional)"
+                        unstyled
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] py-1.5">
+            <span className="w-9 shrink-0 text-[12px] text-[var(--color-neutral-800)]">
+              Subject
+            </span>
+            <input
+              {...f.register("subject")}
+              placeholder="Subject"
+              className="flex-1 min-w-0 bg-transparent text-[13px] text-[var(--color-neutral-1100)] placeholder:text-[var(--color-neutral-700)] focus:outline-none"
+            />
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 px-4 pt-3 pb-2">
           <RichTextEditor
             editorRef={editorRef}
             initialHtml={initialHtml}
@@ -3323,41 +3450,45 @@ function ComposePanel({
               </>
             }
           />
-        </FormField>
-        {files.length > 0 && (
-          <ul className="flex flex-wrap gap-2">
-            {files.map((file, i) => (
-              <li
-                key={`${file.name}-${i}`}
-                className="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs"
-              >
-                <Paperclip
-                  size={11}
-                  className="text-[var(--color-neutral-800)] shrink-0"
-                />
-                <span className="max-w-40 truncate font-medium">
-                  {file.name}
-                </span>
-                <span className="text-[var(--color-neutral-800)]">
-                  {fmtSize(file.size)}
-                </span>
-                <IconButton
-                  size="sm"
-                  aria-label={`Remove ${file.name}`}
-                  onClick={() =>
-                    setFiles((p) => p.filter((_, j) => j !== i))
-                  }
-                >
-                  <X size={12} />
-                </IconButton>
-              </li>
-            ))}
-          </ul>
-        )}
-        {err && (
-          <p className="text-xs text-[var(--color-bad)]" role="alert">
-            {err}
-          </p>
+        </div>
+        {(files.length > 0 || err) && (
+          <div className="px-4 pb-3 space-y-2">
+            {files.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {files.map((file, i) => (
+                  <li
+                    key={`${file.name}-${i}`}
+                    className="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs"
+                  >
+                    <Paperclip
+                      size={11}
+                      className="text-[var(--color-neutral-800)] shrink-0"
+                    />
+                    <span className="max-w-40 truncate font-medium">
+                      {file.name}
+                    </span>
+                    <span className="text-[var(--color-neutral-800)]">
+                      {fmtSize(file.size)}
+                    </span>
+                    <IconButton
+                      size="sm"
+                      aria-label={`Remove ${file.name}`}
+                      onClick={() =>
+                        setFiles((p) => p.filter((_, j) => j !== i))
+                      }
+                    >
+                      <X size={12} />
+                    </IconButton>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {err && (
+              <p className="text-xs text-[var(--color-bad)]" role="alert">
+                {err}
+              </p>
+            )}
+          </div>
         )}
       </form>
       <footer className="shrink-0 px-4 py-3 border-t border-[var(--color-border)] flex items-center justify-between gap-2">
