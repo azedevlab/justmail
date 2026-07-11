@@ -37,7 +37,7 @@ jobs:
 
       - name: Internal self-send + delivery verify + queue diagnostics
         run: |
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
+          ssh -i ~/.ssh/deploy_key root@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'REMOTE'
           set -e
           cd /opt/justmail/app
           C="docker compose --env-file /opt/justmail/.env -f services/compose/docker-compose.yml --profile core --profile app --profile storage --profile mail"
