@@ -107,6 +107,15 @@ const Env = z.object({
   PG_RESTORE_BIN: z.string().default("pg_restore"),
   BACKUP_POLL_SECONDS: z.coerce.number().int().positive().default(300),
 
+  // Worker tick cadences (seconds). Each background loop's poll interval; the
+  // loop body no-ops when nothing is due, so these bound latency, not load.
+  WEBHOOK_POLL_SECONDS: z.coerce.number().int().positive().default(5),
+  QUEUE_SNAPSHOT_POLL_SECONDS: z.coerce.number().int().positive().default(60),
+  DNSBL_POLL_SECONDS: z.coerce.number().int().positive().default(1800),
+  CRED_SWEEP_POLL_SECONDS: z.coerce.number().int().positive().default(600),
+  LDAP_POLL_SECONDS: z.coerce.number().int().positive().default(60),
+  RETENTION_POLL_SECONDS: z.coerce.number().int().positive().default(3600),
+
   // Rate limiting (window seconds / max hits). Generous defaults; tune per deploy.
   RATE_LIMIT_GLOBAL_TTL: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().positive().default(300),
