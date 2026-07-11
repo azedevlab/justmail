@@ -118,6 +118,26 @@ export const SendResult = z.object({
 });
 export type SendResult = z.infer<typeof SendResult>;
 
+// Lifecycle of a deferred send, polled by the composer after the undo window to
+// confirm the final outcome. `pending`/`sending` are transient; `sent`,
+// `failed`, and `cancelled` are terminal. `last_error` carries the SMTP failure.
+export const SendStatusValue = z.enum([
+  "pending",
+  "sending",
+  "sent",
+  "failed",
+  "cancelled",
+]);
+export type SendStatusValue = z.infer<typeof SendStatusValue>;
+
+export const SendStatus = z.object({
+  id: Uuid,
+  status: SendStatusValue,
+  last_error: z.string().nullable(),
+  send_at: IsoDate,
+});
+export type SendStatus = z.infer<typeof SendStatus>;
+
 // An outstanding deferred send (undo window or future schedule) awaiting dispatch.
 export const ScheduledSend = z.object({
   id: Uuid,

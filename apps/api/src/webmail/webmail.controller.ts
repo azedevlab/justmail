@@ -307,6 +307,16 @@ export class WebmailController {
     return this.svc.listScheduledSends(principal, orgId, mailboxId);
   }
 
+  @Get("sends/:id")
+  sendStatus(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.getSendStatus(principal, orgId, mailboxId, id);
+  }
+
   @Post("scheduled/:id/cancel")
   @HttpCode(204)
   cancelScheduled(

@@ -20,6 +20,7 @@ import {
   type SavedDraft,
   type ScheduledSend,
   type SendResult,
+  type SendStatus,
 } from "@justmail/contracts";
 import MailComposer from "nodemailer/lib/mail-composer";
 import { Db } from "../db/db.service";
@@ -772,6 +773,40 @@ export class WebmailService {
       send_at: r.send_at.toISOString(),
       created_at: r.created_at.toISOString(),
     }));
+  }
+
+  /** Current lifecycle state of a single deferred send, for post-undo confirmation. */
+  async getSendStatus(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    id: string,
+  ): Promise<SendStatus> {
+    await this.mailboxFor(orgId, mailboxId, principal.userId);
+    const { rows } = await this.db.query<{
+      id: string;
+      status: SendStatus["status"];
+      last_error: string | null;
+      send_at: Date;
+    }>(
+      `SELECT id, status, last_error, send_at
+         FROM scheduled_sends
+        WHERE id = $1 AND org_id = $2 AND mailbox_id = $3`,
+      [id, orgId, mailboxId],
+    );
+    const row = rows[0];
+    if (!row) {
+      throw new NotFoundException({
+        title: "Not found",
+        detail: "No such send.",
+      });
+    }
+    return {
+      id: row.id,
+      status: row.status,
+      last_error: row.last_error,
+      send_at: row.send_at.toISOString(),
+    };
   }
 
   /**
