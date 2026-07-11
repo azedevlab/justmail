@@ -3,10 +3,15 @@ import {
   createPublicKey,
   randomBytes,
   verify as cryptoVerify,
-  type JsonWebKey,
+  type JsonWebKeyInput,
   type KeyObject,
 } from "node:crypto";
 import { config } from "../config";
+
+// Newer @types/node dropped the top-level JsonWebKey re-export from
+// `node:crypto`. Derive the exact JWK shape `createPublicKey` expects from
+// JsonWebKeyInput, which resolves on both the old and new typings.
+type JsonWebKey = JsonWebKeyInput["key"];
 
 // Minimal OpenID Connect authorization-code (+ PKCE) client. Discovery documents
 // and JWKS are fetched over TLS and cached briefly. id_token signatures are
