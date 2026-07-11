@@ -316,7 +316,7 @@ function CreateForm({
         </FormField>
         <FormField label="Members" hint="Comma, space, or newline separated">
           <textarea
-            className="w-full min-h-24 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] font-mono outline-none focus:border-[var(--color-accent)] transition-colors resize-y"
+            className="w-full min-h-24 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] font-mono shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
             placeholder="alice@example.com bob@example.com"
             {...f.register("members")}
           />
@@ -478,7 +478,7 @@ function ManageForm({
         hint="Comma, space, or newline separated"
       >
         <textarea
-          className="w-full min-h-32 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] font-mono outline-none focus:border-[var(--color-accent)] transition-colors resize-y"
+          className="w-full min-h-32 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] font-mono shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
           {...f.register("members")}
         />
       </FormField>

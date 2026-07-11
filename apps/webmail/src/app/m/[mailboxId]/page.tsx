@@ -2098,7 +2098,7 @@ const ACTION_OPTIONS: { value: SieveActionType; label: string; arg?: string }[] 
 ];
 
 const filterSelectClass =
-  "h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 text-[13px] text-[var(--color-neutral-1000)] outline-none focus:border-[var(--color-accent)]";
+  "h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 text-[13px] text-[var(--color-neutral-1000)] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]";
 
 function actionNeedsArg(type: SieveActionType): string | null {
   return ACTION_OPTIONS.find((o) => o.value === type)?.arg ?? null;
@@ -2828,7 +2828,7 @@ function ContactForm({
           onChange={(e) => setNote(e.target.value)}
           rows={3}
           placeholder="(optional)"
-          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors resize-y"
+          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
         />
       </FormField>
       <div className="flex items-center justify-end gap-2 pt-1">
@@ -3163,7 +3163,7 @@ function EventForm({
                 allDay ? dateToIso(e.target.value) : localDateTimeToIso(e.target.value),
               )
             }
-            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors"
+            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]"
           />
         </FormField>
         <FormField label="Ends">
@@ -3175,7 +3175,7 @@ function EventForm({
                 allDay ? dateToIso(e.target.value) : localDateTimeToIso(e.target.value),
               )
             }
-            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors"
+            className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)]"
           />
         </FormField>
       </div>
@@ -3192,7 +3192,7 @@ function EventForm({
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
           placeholder="(optional)"
-          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-accent)] transition-colors resize-y"
+          className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-1)] px-3 py-2 text-[13px] shadow-[var(--shadow-inset-input)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-base)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-ring)] resize-y"
         />
       </FormField>
       <div className="flex items-center justify-end gap-2 pt-1">
