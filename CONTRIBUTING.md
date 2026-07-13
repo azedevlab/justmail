@@ -27,7 +27,7 @@ Requirements:
   the compose stack
 
 ```bash
-git clone https://github.com/justmaildev/justmail
+git clone https://github.com/azedevlab/justmail
 cd justmail
 pnpm install
 pnpm dev
@@ -38,7 +38,7 @@ mail plane. Hot reload is on for apps and packages.
 
 ## What to work on
 
-- Look for issues labelled [`good first issue`](https://github.com/justmaildev/justmail/issues?q=label%3A%22good+first+issue%22).
+- Look for issues labelled [`good first issue`](https://github.com/azedevlab/justmail/issues?q=label%3A%22good+first+issue%22).
 - The [`docs/redesign/13-roadmap.md`](docs/redesign/13-roadmap.md) lists
   milestones. Milestones with open placeholder issues welcome contributors.
 - If you want to build a plugin, see

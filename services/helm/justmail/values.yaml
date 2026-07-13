@@ -2,10 +2,10 @@ domain: mail.example.com
 adminEmail: postmaster@example.com
 
 image:
-  api: ghcr.io/justmaildev/api:1.0.0-alpha.1
-  admin: ghcr.io/justmaildev/admin:1.0.0-alpha.1
-  webmail: ghcr.io/justmaildev/webmail:1.0.0-alpha.1
-  landing: ghcr.io/justmaildev/landing:1.0.0-alpha.1
+  api: ghcr.io/azedevlab/api:1.0.0-alpha.1
+  admin: ghcr.io/azedevlab/admin:1.0.0-alpha.1
+  webmail: ghcr.io/azedevlab/webmail:1.0.0-alpha.1
+  landing: ghcr.io/azedevlab/landing:1.0.0-alpha.1
   pullPolicy: IfNotPresent
 
 api:

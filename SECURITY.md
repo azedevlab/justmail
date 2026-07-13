@@ -39,7 +39,7 @@ In scope:
 
 - Everything in this repository (control plane, mail plane configs,
   installer, plugin runtime, SDKs).
-- Official container images (`ghcr.io/justmaildev/*`).
+- Official container images (`ghcr.io/azedevlab/*`).
 - The hosted preview at `demo.justmail.dev` (in-scope for read-only
   probes; no destructive testing).
 

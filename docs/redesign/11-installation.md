@@ -23,7 +23,7 @@ Some cloud providers block outbound 25 by default. Use JustMail's
 ## Path A — Ubuntu single-node (the one-liner)
 
 ```bash
-curl -fsSL https://get.justmail.dev | sudo bash
+curl -fsSL https://raw.githubusercontent.com/azedevlab/justmail/main/scripts/install.sh | sudo bash
 ```
 
 The installer:
@@ -46,7 +46,7 @@ Idempotent: re-running the installer re-verifies state and repairs drift.
 ## Path B — Docker Compose (manual)
 
 ```bash
-git clone https://github.com/justmaildev/justmail
+git clone https://github.com/azedevlab/justmail
 cd justmail/services/compose
 cp .env.example .env       # edit secrets, hostnames, storage, DNS provider
 docker compose --profile core --profile certs --profile mail \
@@ -63,10 +63,9 @@ justmail status                                # health snapshot
 ## Path C — Kubernetes (HA)
 
 ```bash
-helm repo add justmail https://charts.justmail.dev
-helm repo update
+git clone https://github.com/azedevlab/justmail.git
 
-helm install justmail justmail/justmail \
+helm install justmail ./justmail/services/helm/justmail \
   --namespace justmail --create-namespace \
   --values values.yaml
 ```
@@ -107,7 +106,7 @@ Chart docs at `services/helm/justmail/README.md`.
 
 ```hcl
 module "justmail" {
-  source  = "justmaildev/justmail/aws"
+  source  = "azedevlab/justmail/aws"
   version = "1.0.0"
 
   domain          = "mail.example.com"

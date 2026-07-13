@@ -10,7 +10,7 @@ export default function DownloadPage() {
       </p>
 
       <Section title="Ubuntu 24.04+" recommended>
-        <Cmd cmd="curl -fsSL https://get.justmail.dev | sudo bash" />
+        <Cmd cmd="curl -fsSL https://raw.githubusercontent.com/azedevlab/justmail/main/scripts/install.sh | sudo bash" />
         <p className="mt-3 text-sm text-[var(--color-neutral-1000)]">
           The installer verifies prerequisites, sets up Docker, generates
           secrets, seeds the initial admin, and issues LetsEncrypt certs.
@@ -20,7 +20,7 @@ export default function DownloadPage() {
       <Section title="Docker Compose">
         <Cmd
           cmd={
-            "git clone https://github.com/justmaildev/justmail\n" +
+            "git clone https://github.com/azedevlab/justmail\n" +
             "cd justmail/services/compose\n" +
             "cp .env.example .env    # edit hostnames and secrets\n" +
             "docker compose --profile core --profile mail --profile app up -d"
@@ -31,8 +31,8 @@ export default function DownloadPage() {
       <Section title="Kubernetes (HA)">
         <Cmd
           cmd={
-            "helm repo add justmail https://charts.justmail.dev\n" +
-            "helm install justmail justmail/justmail \\\n" +
+            "git clone https://github.com/azedevlab/justmail.git\n" +
+            "helm install justmail ./justmail/services/helm/justmail \\\n" +
             "  --namespace justmail --create-namespace \\\n" +
             "  --values values.yaml"
           }
@@ -43,7 +43,7 @@ export default function DownloadPage() {
         <p className="text-sm text-[var(--color-neutral-1000)]">
           Modules for AWS, Hetzner, and DigitalOcean. See{" "}
           <a
-            href="https://github.com/justmaildev/justmail/tree/main/services/terraform"
+            href="https://github.com/azedevlab/justmail/tree/main/services/terraform"
             className="underline"
           >
             services/terraform

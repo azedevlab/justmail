@@ -13,7 +13,7 @@ security incident.
 
 1. **Bootstrap the new host.**
    ```bash
-   curl -fsSL https://get.justmail.dev | sudo bash
+   curl -fsSL https://raw.githubusercontent.com/azedevlab/justmail/main/scripts/install.sh | sudo bash
    ```
    Edit `/opt/justmail/.env` with the same secrets as the old install (use
    your secret manager, not the old plaintext file — always assume it may

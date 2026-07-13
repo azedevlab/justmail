@@ -5,8 +5,8 @@ Production-shaped chart for JustMail on Kubernetes.
 ## Install
 
 ```bash
-helm repo add justmail https://charts.justmail.dev
-helm install justmail justmail/justmail \
+git clone https://github.com/azedevlab/justmail.git
+helm install justmail ./justmail/services/helm/justmail \
   --namespace justmail --create-namespace \
   --values values.yaml
 ```

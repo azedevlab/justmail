@@ -67,7 +67,7 @@ function TopNav() {
           <Link href="/pricing">Pricing</Link>
           <Link href="/changelog">Changelog</Link>
           <a
-            href="https://github.com/justmaildev/justmail"
+            href="https://github.com/azedevlab/justmail"
             className="flex items-center gap-1"
           >
             <GithubMark size={14} /> GitHub
@@ -103,13 +103,13 @@ function Footer() {
             <li><Link href="/docs">Docs</Link></li>
             <li><Link href="/docs/latest/api">API reference</Link></li>
             <li><Link href="/docs/latest/plugin-development">Plugins</Link></li>
-            <li><a href="https://github.com/justmaildev/justmail">GitHub</a></li>
+            <li><a href="https://github.com/azedevlab/justmail">GitHub</a></li>
           </ul>
         </div>
         <div>
           <div className="font-semibold mb-3">Community</div>
           <ul className="space-y-2 text-[var(--color-neutral-1000)]">
-            <li><a href="https://github.com/justmaildev/justmail/discussions">Discussions</a></li>
+            <li><a href="https://github.com/azedevlab/justmail/discussions">Discussions</a></li>
             <li><Link href="/community">Chat</Link></li>
             <li><Link href="/blog">Blog</Link></li>
           </ul>

@@ -7,7 +7,7 @@
   "homepage": "https://justmail.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/justmaildev/justmail.git"
+    "url": "https://github.com/azedevlab/justmail.git"
   },
   "packageManager": "pnpm@10.12.1",
   "engines": {

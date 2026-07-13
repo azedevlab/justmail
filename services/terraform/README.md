@@ -12,7 +12,7 @@ One-click deployments per provider.
 
 ```hcl
 module "justmail" {
-  source  = "justmaildev/justmail/aws"
+  source  = "azedevlab/justmail/aws"
   version = "1.0.0"
 
   domain          = "mail.example.com"

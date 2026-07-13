@@ -14,7 +14,7 @@ DNS propagation time.
 ## 1. Install
 
 ```bash
-curl -fsSL https://get.justmail.dev | sudo bash
+curl -fsSL https://raw.githubusercontent.com/azedevlab/justmail/main/scripts/install.sh | sudo bash
 ```
 
 The first run clones the repo to `/opt/justmail/app`, creates

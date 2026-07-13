@@ -21,10 +21,10 @@ export default function DocsIndex() {
         Everything an operator or contributor needs, versioned per release.
         Full source at{" "}
         <a
-          href="https://github.com/justmaildev/justmail/tree/main/docs"
+          href="https://github.com/azedevlab/justmail/tree/main/docs"
           className="underline"
         >
-          github.com/justmaildev/justmail/tree/main/docs
+          github.com/azedevlab/justmail/tree/main/docs
         </a>
         .
       </p>

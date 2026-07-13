@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # JustMail single-command installer for Ubuntu 24.04+.
-# Usage: curl -fsSL https://get.justmail.dev | sudo bash
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/azedevlab/justmail/main/scripts/install.sh | sudo bash
 set -euo pipefail
 
 DOMAIN=${JM_DOMAIN:-}
 ADMIN_EMAIL=${ADMIN_EMAIL:-}
 INSTALL_DIR=/opt/justmail
-REPO=${JM_REPO:-https://github.com/justmaildev/justmail.git}
+REPO=${JM_REPO:-https://github.com/azedevlab/justmail.git}
 BRANCH=${JM_BRANCH:-main}
 
 if [[ $EUID -ne 0 ]]; then

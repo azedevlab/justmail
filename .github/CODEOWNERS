@@ -1,11 +1,11 @@
 # Default owners for everything in the repo.
-* @justmaildev/maintainers
+* @azedevlab/maintainers
 
 # Area owners
-/apps/api/            @justmaildev/backend
-/apps/admin/          @justmaildev/frontend
-/apps/webmail/        @justmaildev/frontend
-/packages/            @justmaildev/backend @justmaildev/frontend
-/services/            @justmaildev/infra
-/.github/             @justmaildev/infra
-/docs/                @justmaildev/maintainers
+/apps/api/            @azedevlab/backend
+/apps/admin/          @azedevlab/frontend
+/apps/webmail/        @azedevlab/frontend
+/packages/            @azedevlab/backend @azedevlab/frontend
+/services/            @azedevlab/infra
+/.github/             @azedevlab/infra
+/docs/                @azedevlab/maintainers

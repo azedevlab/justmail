@@ -6,6 +6,6 @@ version: 1.0.0-alpha.1
 appVersion: 1.0.0-alpha.1
 home: https://justmail.dev
 sources:
-  - https://github.com/justmaildev/justmail
+  - https://github.com/azedevlab/justmail
 maintainers:
   - name: JustMail contributors

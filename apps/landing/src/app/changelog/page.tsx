@@ -5,7 +5,7 @@ export default function ChangelogPage() {
       <p className="text-[var(--color-neutral-1000)] mb-10">
         Every release is captured in{" "}
         <a
-          href="https://github.com/justmaildev/justmail/blob/main/CHANGELOG.md"
+          href="https://github.com/azedevlab/justmail/blob/main/CHANGELOG.md"
           className="underline"
         >
           CHANGELOG.md

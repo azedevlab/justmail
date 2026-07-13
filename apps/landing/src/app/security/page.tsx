@@ -15,7 +15,7 @@ export default function SecurityPage() {
       <p className="text-[var(--color-neutral-1000)]">
         Details, PGP key, and safe-harbor commitments in{" "}
         <a
-          href="https://github.com/justmaildev/justmail/blob/main/SECURITY.md"
+          href="https://github.com/azedevlab/justmail/blob/main/SECURITY.md"
           className="underline"
         >
           SECURITY.md
