@@ -36,8 +36,13 @@ export function synthId(subname: string, type: string): string {
 /** deSEC stores TXT quoted; the reconciler works with the raw value. */
 export function encodeContent(type: string, content: string, priority?: number): string {
   if (type === "TXT") {
-    const inner = content.replace(/^"|"$/g, "");
-    return `"${inner}"`;
+    // A single DNS TXT character-string caps at 255 bytes, so long values
+    // (notably an RSA-2048 DKIM key at ~400 chars) must be split into several
+    // quoted strings or deSEC rejects the RRset with a 400. Peel any quoting
+    // off first so re-encoding an already-quoted value doesn't nest quotes.
+    const inner = content.replace(/"\s+"/g, "").replace(/^"|"$/g, "");
+    const chunks = inner.match(/.{1,255}/gs) ?? [""];
+    return chunks.map((c) => `"${c}"`).join(" ");
   }
   if (type === "MX" && priority !== undefined) {
     const target = content.endsWith(".") ? content : `${content}.`;
@@ -48,7 +53,10 @@ export function encodeContent(type: string, content: string, priority?: number):
 
 export function decodeContent(type: string, record: string): { content: string; priority?: number } {
   if (type === "TXT") {
-    return { content: record.replace(/^"|"$/g, "") };
+    // deSEC returns TXT in presentation form: one or more quoted strings that
+    // concatenate to the logical value. Strip the quotes and the whitespace
+    // between chunks so a split DKIM key round-trips to its original value.
+    return { content: record.replace(/"\s+"/g, "").replace(/^"|"$/g, "") };
   }
   if (type === "MX") {
     const [prio, ...rest] = record.split(/\s+/);

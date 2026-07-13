@@ -38,6 +38,15 @@ describe("encodeContent / decodeContent", () => {
     });
   });
 
+  it("splits a long DKIM value into <=255-byte quoted strings", () => {
+    const key = "v=DKIM1; k=rsa; p=" + "A".repeat(400);
+    const encoded = encodeContent("TXT", key);
+    const strings = encoded.match(/"[^"]*"/g) ?? [];
+    expect(strings.length).toBeGreaterThan(1);
+    for (const s of strings) expect(s.length - 2).toBeLessThanOrEqual(255);
+    expect(decodeContent("TXT", encoded)).toEqual({ content: key });
+  });
+
   it("formats MX as priority + fqdn target", () => {
     expect(encodeContent("MX", "mail.example.com", 10)).toBe("10 mail.example.com.");
     expect(encodeContent("MX", "mail.example.com.", 10)).toBe("10 mail.example.com.");
