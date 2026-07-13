@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import type { Readable } from "node:stream";
 import { ImapFlow, type MessageStructureObject, type SearchObject } from "imapflow";
-import { parseMime } from "@justmail/mail-parser";
+import { MimeLimitError, parseMime } from "@justmail/mail-parser";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import {
@@ -445,7 +445,7 @@ export class WebmailService {
         }
         const raw = await client.download(String(uid), undefined, { uid: true });
         if (!raw) throw new NotFoundException({ title: "Message not found" });
-        const parsed = await parseMime(raw.content);
+        const parsed = await this.parseMimeSafe(raw.content);
         // Inline cid: images as data URIs so the sandboxed viewer can render
         // them without a credentialed cross-origin request.
         let html = parsed.html;
@@ -515,7 +515,7 @@ export class WebmailService {
         }
         const raw = await client.download(String(uid), undefined, { uid: true });
         if (!raw) throw new NotFoundException({ title: "Message not found" });
-        const parsed = await parseMime(raw.content);
+        const parsed = await this.parseMimeSafe(raw.content);
         const a = parsed.attachments[index];
         if (!a) throw new NotFoundException({ title: "Attachment not found" });
         return {
@@ -529,6 +529,19 @@ export class WebmailService {
         lock.release();
       }
     });
+  }
+
+  // A hostile MIME structure is a client-supplied-data problem, not a server
+  // fault, so surface the parser's depth/part guard as a 400 rather than a 500.
+  private async parseMimeSafe(source: Readable) {
+    try {
+      return await parseMime(source);
+    } catch (err) {
+      if (err instanceof MimeLimitError) {
+        throw new BadRequestException({ title: "Message too complex to render" });
+      }
+      throw err;
+    }
   }
 
   async setFlag(
