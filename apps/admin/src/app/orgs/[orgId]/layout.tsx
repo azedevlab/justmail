@@ -24,7 +24,6 @@ import {
   Menu,
   Network,
   Palette,
-  Puzzle,
   Search,
   Settings,
   ShieldCheck,
@@ -97,7 +96,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/webhooks", label: "Webhooks", icon: <Webhook size={15} /> },
       { href: "/api-keys", label: "API keys", icon: <KeyRound size={15} /> },
-      { href: "/plugins", label: "Plugins", icon: <Puzzle size={15} /> },
       { href: "/themes", label: "Themes", icon: <Palette size={15} /> },
       { href: "/developers", label: "Developers", icon: <Book size={15} /> },
     ],
