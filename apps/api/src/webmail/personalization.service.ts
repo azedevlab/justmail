@@ -23,7 +23,7 @@ export class PersonalizationService {
     orgId: string,
     mailboxId: string,
   ): Promise<void> {
-    await this.orgs.requireRole(orgId, principal.userId, "member");
+    await this.orgs.requireOrgAccess(principal, orgId, "member");
     const { rows } = await this.db.query(
       `SELECT 1 FROM mailboxes m JOIN domains d ON d.id = m.domain_id
         WHERE m.id = $1 AND d.org_id = $2`,
