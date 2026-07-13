@@ -4,3 +4,4 @@ export * from "./s3.js";
 export * from "./azure.js";
 export * from "./gcs.js";
 export * from "./factory.js";
+export * from "./migrate.js";

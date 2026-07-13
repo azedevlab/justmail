@@ -527,6 +527,9 @@ importers:
       '@justmail/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@justmail/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
     devDependencies:
       '@types/node':
         specifier: ^26.1.1

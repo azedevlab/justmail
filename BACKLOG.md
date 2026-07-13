@@ -125,7 +125,7 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 | M11-5 | P2 | Search adapter interface: PG FTS default, pluggable OpenSearch/Elasticsearch/Meilisearch/Typesense | L | M6-3 | todo |
 | M11-6 | P2 | DNS provider plugins: Cloudflare/Route53/Google/Azure/DO/Hetzner/Namecheap/GoDaddy/Porkbun/manual behind one interface | L | — | in-progress — Cloudflare + deSEC shipped behind `DnsProvider` interface (`DESEC_TOKEN`); others selectable but fail loudly until credentialed. deSEC path unverified against a live account. |
 | M11-7 | P1 | Distributed mail storage support (NFS/SMB/CephFS/ZFS) via config; document Dovecot index/lock constraints | M | — | todo |
-| M11-8 | P2 | Admin storage-migration tool: move attachments between providers with no downtime + progress/health | M | M11-2 | todo |
+| M11-8 | P2 | Admin storage-migration tool: move attachments between providers with no downtime + progress/health | M | M11-2 | done — `migrateStorage` (packages/storage) streams objects online, resumable/verifiable, exposed as `justmail storage:migrate` (TARGET_STORAGE_* env) with health preflight + progress. Live cross-provider run unverified. |
 | M11-9 | P0 | No-personalization audit: grep out every hardcoded domain/host/IP/port/path/email/brand/secret/maintainer id → placeholders/config; repo reusable with zero edits | M | M11-1 | done |
 | M11-10 | P1 | Multi-arch (ARM64 + AMD64) image builds in CI | S | — | done — `release.yml` builds `linux/amd64,linux/arm64` via buildx+QEMU. Registry push happens on `v*` tags; cross-arch push unverified until a tagged release runs. |
 

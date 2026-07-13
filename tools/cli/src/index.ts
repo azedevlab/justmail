@@ -7,8 +7,13 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  createStorageAdapter,
+  migrateStorage,
+  type FactoryEnv,
+} from "@justmail/storage";
 
-const COMMANDS: Record<string, (args: string[]) => number> = {
+const COMMANDS: Record<string, (args: string[]) => number | Promise<number>> = {
   status: statusCmd,
   install: installCmd,
   upgrade: upgradeCmd,
@@ -18,6 +23,7 @@ const COMMANDS: Record<string, (args: string[]) => number> = {
   logs: logsCmd,
   exec: execCmd,
   bootstrap: bootstrapCmd,
+  "storage:migrate": storageMigrateCmd,
   version: versionCmd,
   help: helpCmd,
 };
@@ -28,7 +34,13 @@ if (!cmd || cmd === "--help" || cmd === "-h") {
   process.exit(0);
 }
 const handler = COMMANDS[cmd] ?? helpCmd;
-process.exit(handler(rest));
+Promise.resolve(handler(rest)).then(
+  (code) => process.exit(code),
+  (err: unknown) => {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  },
+);
 
 function helpCmd(_: string[]): number {
   process.stdout.write(`justmail — operator CLI
@@ -46,7 +58,14 @@ Commands:
   logs <service>    Tail service logs
   exec <service>    Open a shell in a service container
   bootstrap         Create the first admin user (interactive)
+  storage:migrate   Copy objects to a second backend (TARGET_STORAGE_* env)
   version           Show version
+
+storage:migrate flags:
+  --prefix <p>   Only migrate keys under this prefix
+  --verify       Head-check each copy's size at the target
+  --force        Re-copy even when the target already has a same-size object
+  --dry-run      Walk and count without writing
 `);
   return 0;
 }
@@ -128,6 +147,70 @@ function versionCmd(_: string[]): number {
     process.stdout.write("justmail (dev)\n");
   }
   return 0;
+}
+
+function factoryEnvFrom(prefix: string): FactoryEnv {
+  const g = (k: string) => process.env[`${prefix}${k}`];
+  return {
+    STORAGE_KIND: (g("STORAGE_KIND") ?? "local") as FactoryEnv["STORAGE_KIND"],
+    STORAGE_LOCAL_PATH: g("STORAGE_LOCAL_PATH"),
+    STORAGE_BUCKET: g("STORAGE_BUCKET"),
+    STORAGE_ENDPOINT: g("STORAGE_ENDPOINT"),
+    STORAGE_REGION: g("STORAGE_REGION"),
+    STORAGE_ACCESS_KEY: g("STORAGE_ACCESS_KEY"),
+    STORAGE_SECRET_KEY: g("STORAGE_SECRET_KEY"),
+    ENCRYPTION_KEY: g("ENCRYPTION_KEY") ?? process.env.ENCRYPTION_KEY,
+    AZURE_CONNECTION_STRING: g("AZURE_CONNECTION_STRING"),
+    GCS_PROJECT_ID: g("GCS_PROJECT_ID"),
+    GCS_KEY_FILENAME: g("GCS_KEY_FILENAME"),
+  };
+}
+
+// Online copy of every object from the live backend (STORAGE_*) to a second one
+// described by TARGET_STORAGE_* env. Keys are preserved, so once this reports no
+// failures the operator flips STORAGE_KIND to the target with no data reshuffle.
+async function storageMigrateCmd(args: string[]): Promise<number> {
+  const flag = (n: string) => args.includes(n);
+  const opt = (n: string) => {
+    const i = args.indexOf(n);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const source = createStorageAdapter(factoryEnvFrom(""));
+  const target = createStorageAdapter(factoryEnvFrom("TARGET_"));
+  process.stdout.write(`Migrating storage: ${source.kind} → ${target.kind}\n`);
+
+  const [sh, th] = await Promise.all([source.healthCheck(), target.healthCheck()]);
+  process.stdout.write(
+    `  source ${source.kind}: ${sh.ok ? "ok" : `FAIL ${sh.detail}`} (${sh.latencyMs}ms)\n`,
+  );
+  process.stdout.write(
+    `  target ${target.kind}: ${th.ok ? "ok" : `FAIL ${th.detail}`} (${th.latencyMs}ms)\n`,
+  );
+  if (!sh.ok) {
+    process.stderr.write("source backend unhealthy — aborting\n");
+    return 1;
+  }
+  if (!th.ok && !flag("--dry-run")) {
+    process.stderr.write("target backend unhealthy — aborting\n");
+    return 1;
+  }
+
+  let seen = 0;
+  const summary = await migrateStorage(source, target, {
+    prefix: opt("--prefix"),
+    force: flag("--force"),
+    dryRun: flag("--dry-run"),
+    verify: flag("--verify"),
+    onProgress: (p) => {
+      seen += 1;
+      if (p.action === "failed") process.stderr.write(`  ! ${p.key}: ${p.detail}\n`);
+      else if (seen % 100 === 0) process.stdout.write(`  … ${seen} objects\n`);
+    },
+  });
+  process.stdout.write(
+    `Done: copied ${summary.copied}, skipped ${summary.skipped}, failed ${summary.failed}, ${summary.bytesCopied} bytes\n`,
+  );
+  return summary.failed > 0 ? 1 : 0;
 }
 
 function docker(args: string[]): number {

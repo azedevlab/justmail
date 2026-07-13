@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@justmail/contracts": "workspace:*"
+    "@justmail/contracts": "workspace:*",
+    "@justmail/storage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
