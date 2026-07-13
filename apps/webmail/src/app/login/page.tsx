@@ -43,17 +43,15 @@ export default function LoginPage() {
 
   async function continueWithPasskey() {
     setErr(null);
+    // Usernameless: an email narrows the prompt when given, but the passkey
+    // itself identifies the account so it isn't required.
     const email = f.getValues("email").trim();
-    if (!email) {
-      setErr("Enter your email to sign in with a passkey.");
-      return;
-    }
     setPasskeyBusy(true);
     try {
       const { challenge_id, options } =
         await api.post<PasskeyAuthOptionsResponse>(
           "/v1/auth/passkeys/login/options",
-          { email },
+          email ? { email } : {},
         );
       const response = await startAuthentication({
         optionsJSON: options as Parameters<

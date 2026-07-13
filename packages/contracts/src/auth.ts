@@ -53,7 +53,9 @@ export type PasskeyRegisterVerifyRequest = z.infer<
   typeof PasskeyRegisterVerifyRequest
 >;
 
-export const PasskeyAuthOptionsRequest = z.object({ email: Email });
+export const PasskeyAuthOptionsRequest = z.object({
+  email: Email.optional(),
+});
 export type PasskeyAuthOptionsRequest = z.infer<
   typeof PasskeyAuthOptionsRequest
 >;

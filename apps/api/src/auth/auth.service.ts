@@ -721,13 +721,20 @@ export class AuthService implements OnApplicationBootstrap {
     });
   }
 
-  async passkeyAuthOptions(email: string): Promise<PasskeyAuthOptionsResponse> {
-    const { rows } = await this.db.query<{ id: string }>(
-      "SELECT id FROM users WHERE email = $1 AND status = 'active'",
-      [email],
-    );
-    const userId = rows[0]?.id ?? null;
-    const allow = userId ? await this.loadCredentials(userId) : [];
+  async passkeyAuthOptions(email?: string): Promise<PasskeyAuthOptionsResponse> {
+    // Usernameless (discoverable) login: with no email we emit empty
+    // allowCredentials and let the authenticator surface any resident passkey.
+    // With an email we scope the prompt to that account's credentials.
+    let userId: string | null = null;
+    let allow: StoredCredential[] = [];
+    if (email) {
+      const { rows } = await this.db.query<{ id: string }>(
+        "SELECT id FROM users WHERE email = $1 AND status = 'active'",
+        [email],
+      );
+      userId = rows[0]?.id ?? null;
+      allow = userId ? await this.loadCredentials(userId) : [];
+    }
     const options = await authenticationOptions({ allow });
     // Store the challenge even for unknown accounts so the response shape and
     // timing don't reveal whether the email exists or has passkeys.
@@ -755,7 +762,7 @@ export class AuthService implements OnApplicationBootstrap {
       [challengeId],
     );
     const pending = rows[0];
-    if (!pending || !pending.user_id) {
+    if (!pending) {
       throw new UnauthorizedException({ title: "Passkey login failed" });
     }
     const credentialId =
@@ -765,20 +772,31 @@ export class AuthService implements OnApplicationBootstrap {
     if (!credentialId) {
       throw new UnauthorizedException({ title: "Passkey login failed" });
     }
+    // For a usernameless challenge (no bound user) resolve the account from the
+    // resident credential itself; credential_id is globally unique and the
+    // signature is still verified against its stored public key below.
     const credRows = await this.db.query<{
       id: string;
+      user_id: string;
       public_key: Buffer;
       counter: string;
       transports: string[];
     }>(
-      `SELECT id, public_key, counter, transports FROM webauthn_credentials
-       WHERE user_id = $1 AND credential_id = $2`,
-      [pending.user_id, credentialId],
+      pending.user_id
+        ? `SELECT c.id, c.user_id, c.public_key, c.counter, c.transports
+           FROM webauthn_credentials c
+           WHERE c.user_id = $1 AND c.credential_id = $2`
+        : `SELECT c.id, c.user_id, c.public_key, c.counter, c.transports
+           FROM webauthn_credentials c
+           JOIN users u ON u.id = c.user_id
+           WHERE c.credential_id = $1 AND u.status = 'active'`,
+      pending.user_id ? [pending.user_id, credentialId] : [credentialId],
     );
     const stored = credRows.rows[0];
     if (!stored) {
       throw new UnauthorizedException({ title: "Passkey login failed" });
     }
+    const userId = pending.user_id ?? stored.user_id;
     const result = await verifyAuthentication({
       response,
       expectedChallenge: pending.challenge,
@@ -798,13 +816,13 @@ export class AuthService implements OnApplicationBootstrap {
     );
     this.audit.log({
       actorType: "user",
-      actorId: pending.user_id,
+      actorId: userId,
       action: "auth.passkey.login",
       targetType: "user",
-      targetId: pending.user_id,
+      targetId: userId,
       ip,
     });
-    return this.createSession(pending.user_id, ip, userAgent);
+    return this.createSession(userId, ip, userAgent);
   }
 }
 
