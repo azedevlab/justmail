@@ -221,11 +221,11 @@ function CreateModal({ orgId, onClose }: { orgId: string; onClose: () => void })
         </FormField>
         <FormField
           label="Scopes"
-          hint="Comma or space separated; empty = full access"
+          hint="One or more of: read, write, admin. Empty = full access."
         >
           <Input
             monospace
-            placeholder="mailboxes:read domains:read"
+            placeholder="read write"
             {...f.register("scopes_str")}
           />
         </FormField>

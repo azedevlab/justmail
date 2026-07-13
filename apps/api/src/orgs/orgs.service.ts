@@ -46,14 +46,19 @@ export class OrgsService {
       [orgId, userId],
     );
     let role = memberRow.rows[0]?.role;
-    // API-key principals authenticate as their key.id — grant admin on the
-    // org the key was issued for.
+    // API-key principals authenticate as their key.id. The key's role is capped
+    // by its scopes, not blanket admin — a read-only key must not be able to
+    // perform admin/write actions even though it authenticates successfully.
     if (!role) {
-      const keyRow = await this.db.query<{ org_id: string }>(
-        "SELECT org_id FROM api_keys WHERE id = $1 AND revoked_at IS NULL",
+      const keyRow = await this.db.query<{ org_id: string; scopes: string[] }>(
+        `SELECT org_id, scopes FROM api_keys
+         WHERE id = $1 AND revoked_at IS NULL
+           AND (expires_at IS NULL OR expires_at > now())`,
         [userId],
       );
-      if (keyRow.rows[0]?.org_id === orgId) role = "admin";
+      if (keyRow.rows[0]?.org_id === orgId) {
+        role = roleFromScopes(keyRow.rows[0].scopes);
+      }
     }
     if (!role) throw new NotFoundException({ title: "Organization not found" });
     if ((ROLE_RANK[role] ?? -1) < ROLE_RANK[minRole]) {
@@ -422,6 +427,20 @@ export class OrgsService {
       });
     }
   }
+}
+
+/**
+ * Effective org role for an API key, derived from its scopes. An unscoped key
+ * ([]) keeps the historical "all access" meaning (the admin UI shows empty as
+ * "all"). A scoped key is capped at the highest role its scopes grant, so a
+ * leaked read-only key can never perform admin or write operations. Unknown or
+ * narrower scope strings fail safe to viewer (read-only).
+ */
+function roleFromScopes(scopes: string[] | null | undefined): OrgRole {
+  if (!scopes || scopes.length === 0) return "admin";
+  if (scopes.includes("admin")) return "admin";
+  if (scopes.includes("write")) return "member";
+  return "viewer";
 }
 
 function toOrg(row: Record<string, unknown>): Org {
