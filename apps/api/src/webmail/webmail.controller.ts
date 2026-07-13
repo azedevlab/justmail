@@ -30,6 +30,7 @@ import {
   TemplateRequest,
 } from "@justmail/contracts";
 import {
+  CreateFolderRequest,
   MoveRequest,
   SearchRequest,
   UnlockRequest,
@@ -85,6 +86,16 @@ export class WebmailController {
     @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
   ) {
     return this.svc.listFolders(principal, orgId, mailboxId);
+  }
+
+  @Post("folders")
+  createFolder(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Body(new ZodPipe(CreateFolderRequest)) body: z.infer<typeof CreateFolderRequest>,
+  ) {
+    return this.svc.createFolder(principal, orgId, mailboxId, body.name);
   }
 
   @Get("folders/:folder/messages")

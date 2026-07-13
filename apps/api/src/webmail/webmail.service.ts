@@ -649,6 +649,33 @@ export class WebmailService {
     await this.cache.bustMailbox(principal.sessionId, mailboxId);
   }
 
+  /** Create a user folder (IMAP mailbox). The name may use the server hierarchy
+   * separator for nesting; the folders cache is dropped so it appears at once. */
+  async createFolder(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    name: string,
+  ): Promise<{ path: string }> {
+    const path = name.trim();
+    if (!path || path.length > 255) {
+      throw new BadRequestException({ title: "Invalid folder name" });
+    }
+    const creds = await this.creds(principal, orgId, mailboxId);
+    const created = await this.withImap(
+      principal.sessionId,
+      mailboxId,
+      creds,
+      async (client) => client.mailboxCreate(path),
+    );
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
+    const resolved =
+      created && typeof created === "object" && "path" in created
+        ? String((created as { path: unknown }).path)
+        : path;
+    return { path: resolved };
+  }
+
   /**
    * A send is never dispatched inline: it is written to scheduled_sends with a
    * send_at that is either now+undo-window (so the user can cancel during the
@@ -1333,6 +1360,10 @@ export const UnlockRequest = z.object({
 
 export const MoveRequest = z.object({
   destination: z.string().min(1).max(500),
+});
+
+export const CreateFolderRequest = z.object({
+  name: z.string().min(1).max(255),
 });
 
 // Query params for folder search. has_attachment arrives as a query string, so

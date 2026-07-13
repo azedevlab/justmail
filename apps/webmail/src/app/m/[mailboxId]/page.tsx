@@ -154,6 +154,38 @@ type ComposeInit = {
 // Idle delay before the search box issues a server-side IMAP SEARCH.
 const SEARCH_DEBOUNCE_MS = 300;
 
+// Gmail-style operators the server understands (see webmail.service buildSearchCriteria),
+// surfaced as autocomplete so users don't have to know the syntax.
+const SEARCH_OPERATORS: Array<{ op: string; hint: string }> = [
+  { op: "from:", hint: "Sender address or name" },
+  { op: "to:", hint: "Recipient address" },
+  { op: "cc:", hint: "Cc recipient" },
+  { op: "subject:", hint: "Words in the subject" },
+  { op: "body:", hint: "Words in the body" },
+  { op: "has:attachment", hint: "Only messages with files" },
+  { op: "is:unread", hint: "Unread messages" },
+  { op: "is:starred", hint: "Starred messages" },
+  { op: "before:", hint: "Before a date (YYYY-MM-DD)" },
+  { op: "after:", hint: "After a date (YYYY-MM-DD)" },
+];
+
+// Suggestions for the token currently being typed (text after the last space).
+function searchSuggestions(query: string): Array<{ op: string; hint: string }> {
+  const token = query.slice(query.lastIndexOf(" ") + 1).toLowerCase();
+  if (!token) return SEARCH_OPERATORS;
+  return SEARCH_OPERATORS.filter(
+    (o) => o.op.startsWith(token) && o.op !== token,
+  );
+}
+
+// Replace the token under the caret with the chosen operator; keep the caret on
+// operators that still need a value (trailing ":"), add a space otherwise.
+function applySearchSuggestion(query: string, op: string): string {
+  const idx = query.lastIndexOf(" ");
+  const head = idx >= 0 ? query.slice(0, idx + 1) : "";
+  return head + op + (op.endsWith(":") ? "" : " ");
+}
+
 // After the undo window elapses the worker dispatches the send asynchronously.
 // Poll the send row to surface the real terminal outcome instead of leaving the
 // "Sending…" toast to silently disappear.
@@ -236,6 +268,7 @@ export default function MailboxView() {
   }, [me.isSuccess, me.data, router]);
   const qc = useQueryClient();
   const { toast } = useToast();
+  const prompt = usePrompt();
   const [folder, setFolder] = useState("INBOX");
   const [openUid, setOpenUid] = useState<number | null>(null);
   const [compose, setCompose] = useState<ComposeInit | null>(null);
@@ -247,6 +280,8 @@ export default function MailboxView() {
   const [pushCapable, setPushCapable] = useState(false);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [listW, setListW] = useState(360);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -507,6 +542,30 @@ export default function MailboxView() {
     },
   });
 
+  const createFolder = useMutation({
+    mutationFn: (name: string) =>
+      api.post<{ path: string }>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders`,
+        { name },
+      ),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+      setFolder(res.path);
+      setOpenUid(null);
+      toast({ title: "Folder created", tone: "ok" });
+    },
+    onError: () => toast({ title: "Could not create folder", tone: "bad" }),
+  });
+  const newFolder = async () => {
+    const name = await prompt({
+      title: "New folder",
+      label: "Folder name",
+      confirmLabel: "Create",
+    });
+    const trimmed = name?.trim();
+    if (trimmed) createFolder.mutate(trimmed);
+  };
+
   const replyTo = (m: Message) => {
     const addr = m.from.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? m.from;
     const subject = /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`;
@@ -716,8 +775,19 @@ export default function MailboxView() {
           aria-label="Folders"
         >
           <div className="flex-1 overflow-y-auto p-2">
-            <div className="px-2 pt-2 pb-1 text-[11px] font-medium text-[var(--color-neutral-700)]">
-              Folders
+            <div className="px-2 pt-2 pb-1 flex items-center justify-between">
+              <span className="text-[11px] font-medium text-[var(--color-neutral-700)]">
+                Folders
+              </span>
+              <button
+                onClick={newFolder}
+                disabled={createFolder.isPending}
+                title="New folder"
+                aria-label="New folder"
+                className="grid place-items-center h-5 w-5 rounded-[5px] text-[var(--color-neutral-700)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1000)] transition-colors disabled:opacity-50"
+              >
+                <Plus size={13} />
+              </button>
             </div>
             {folders.isPending ? (
               <div className="space-y-1 px-1 pt-1" aria-hidden>
@@ -792,19 +862,54 @@ export default function MailboxView() {
           style={{ width: listW }}
           aria-label="Messages"
         >
-          <div className="shrink-0 z-10 px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2 rounded-md transition-[box-shadow] duration-[var(--motion-base)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]">
-            <Search size={13} className="text-[var(--color-neutral-700)] shrink-0" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search — try from: subject: has:attachment"
-              aria-label="Search messages"
-              className="flex-1 min-w-0 bg-transparent focus:outline-none text-[13px] placeholder:text-[var(--color-neutral-700)]"
-            />
-            {searching && list.isFetching && <Spinner size={12} />}
-            <span className="text-[11px] tabular-nums text-[var(--color-neutral-800)] shrink-0">
-              {list.data ? `${listItems.length} of ${list.data.total}` : "…"}
-            </span>
+          <div className="relative shrink-0 z-20">
+            <div className="px-4 py-2 border-b border-[var(--color-border)] glass flex items-center gap-2 rounded-md transition-[box-shadow] duration-[var(--motion-base)] focus-within:ring-[3px] focus-within:ring-[var(--color-accent-focus)]">
+              <Search size={13} className="text-[var(--color-neutral-700)] shrink-0" />
+              <input
+                ref={searchInputRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Search — try from: subject: has:attachment"
+                aria-label="Search messages"
+                className="flex-1 min-w-0 bg-transparent focus:outline-none text-[13px] placeholder:text-[var(--color-neutral-700)]"
+              />
+              {searching && list.isFetching && <Spinner size={12} />}
+              <span className="text-[11px] tabular-nums text-[var(--color-neutral-800)] shrink-0">
+                {list.data ? `${listItems.length} of ${list.data.total}` : "…"}
+              </span>
+            </div>
+            {searchFocused &&
+              (() => {
+                const suggestions = searchSuggestions(search);
+                if (suggestions.length === 0) return null;
+                return (
+                  <ul className="absolute left-0 right-0 top-full mt-1 max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] py-1 shadow-lg">
+                    {suggestions.map((s) => (
+                      <li key={s.op}>
+                        <button
+                          type="button"
+                          // Keep the input focused so the dropdown doesn't blur away before the click lands.
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setSearch((q) => applySearchSuggestion(q, s.op));
+                            searchInputRef.current?.focus();
+                          }}
+                          className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-[var(--color-surface-2)]"
+                        >
+                          <span className="font-mono text-[12px] text-[var(--color-accent)]">
+                            {s.op}
+                          </span>
+                          <span className="text-[11px] text-[var(--color-neutral-700)]">
+                            {s.hint}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
           </div>
           <div ref={listParentRef} className="flex-1 min-h-0 overflow-y-auto">
             {list.isLoading ? (
@@ -1290,7 +1395,11 @@ function AttachmentItem({
   const { toast } = useToast();
   const [thumb, setThumb] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const isImage = att.mime.startsWith("image/") && att.size < 5_000_000;
+  const isPdf = att.mime === "application/pdf";
+  const canPreview = isImage || isPdf;
 
   useEffect(() => {
     if (!isImage) return;
@@ -1309,6 +1418,32 @@ function AttachmentItem({
       if (obj) URL.revokeObjectURL(obj);
     };
   }, [url, isImage]);
+
+  // Preview blob URLs are created on demand and revoked when the modal closes.
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  const openPreview = async () => {
+    if (!canPreview) return;
+    setPreviewLoading(true);
+    try {
+      const r = await fetch(url, { credentials: "include" });
+      if (!r.ok) throw new Error(`Preview failed (${r.status})`);
+      setPreview(URL.createObjectURL(await r.blob()));
+    } catch (e) {
+      toast({ title: (e as Error).message, tone: "bad" });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+  };
 
   const download = async () => {
     setBusy(true);
@@ -1332,7 +1467,7 @@ function AttachmentItem({
     <li className="w-44 rounded-xl overflow-hidden bg-[var(--color-surface-2)] border border-[var(--color-border)]">
       {thumb ? (
         <button
-          onClick={() => window.open(thumb, "_blank", "noopener")}
+          onClick={openPreview}
           className="block w-full h-24 cursor-zoom-in"
           aria-label={`Preview ${att.filename}`}
         >
@@ -1343,9 +1478,17 @@ function AttachmentItem({
           />
         </button>
       ) : (
-        <div className="h-24 grid place-items-center text-[var(--color-neutral-700)]">
-          <FileText size={22} />
-        </div>
+        <button
+          onClick={canPreview ? openPreview : undefined}
+          disabled={!canPreview}
+          className={
+            "h-24 w-full grid place-items-center text-[var(--color-neutral-700)]" +
+            (canPreview ? " cursor-zoom-in hover:text-[var(--color-neutral-1000)]" : "")
+          }
+          aria-label={canPreview ? `Preview ${att.filename}` : att.filename}
+        >
+          {previewLoading ? <Spinner size={18} /> : <FileText size={22} />}
+        </button>
       )}
       <div className="px-2.5 py-2 flex items-center gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface-1)]">
         <div className="flex-1 min-w-0">
@@ -1364,6 +1507,28 @@ function AttachmentItem({
           </IconButton>
         )}
       </div>
+      <Modal
+        open={preview !== null}
+        onClose={closePreview}
+        size="lg"
+        title={att.filename}
+      >
+        {preview &&
+          (isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview}
+              alt={att.filename}
+              className="mx-auto max-h-[70vh] w-auto object-contain"
+            />
+          ) : (
+            <iframe
+              src={preview}
+              title={att.filename}
+              className="h-[70vh] w-full rounded-md border border-[var(--color-border)] bg-white"
+            />
+          ))}
+      </Modal>
     </li>
   );
 }
@@ -1376,6 +1541,15 @@ function senderDisplay(from: string): string {
 
 function senderEmail(from: string): string {
   return from.match(/[\w.+-]+@[\w.-]+\.[\w.-]+/)?.[0] ?? "";
+}
+
+// A bare "example.com" typed into the link dialog isn't a valid href without a
+// scheme (it resolves relative to the current page); default to https.
+function normalizeLinkUrl(raw: string): string {
+  const t = raw.trim();
+  if (/^(https?:|mailto:|tel:)/i.test(t)) return t;
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t)) return `mailto:${t}`;
+  return `https://${t}`;
 }
 
 function MessageRow({
@@ -1746,13 +1920,34 @@ function RichTextEditor({
       confirmLabel: "Insert",
     });
     if (!url) return;
+    const href = normalizeLinkUrl(url);
     editorRef.current?.focus();
+    const s = window.getSelection();
     if (savedRange) {
-      const s = window.getSelection();
       s?.removeAllRanges();
       s?.addRange(savedRange);
     }
-    exec("createLink", url);
+    const range = s && s.rangeCount > 0 ? s.getRangeAt(0) : null;
+    // With a text selection, wrap it. With a collapsed caret (the common case —
+    // user clicks Insert link without selecting), createLink has nothing to wrap
+    // and silently no-ops, so insert the URL itself as the linked text instead.
+    if (range && !range.collapsed) {
+      exec("createLink", href);
+    } else {
+      const a = document.createElement("a");
+      a.href = href;
+      a.textContent = url;
+      if (range) {
+        range.insertNode(a);
+        range.setStartAfter(a);
+        range.collapse(true);
+        s?.removeAllRanges();
+        s?.addRange(range);
+      } else {
+        editorRef.current?.appendChild(a);
+      }
+      onInput();
+    }
   };
   const btn = (
     aria: string,
@@ -2211,6 +2406,13 @@ function FilterManager({
   const base = `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/filters`;
   const key = ["filters", orgId, mailboxId];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<SieveRule[]>(base) });
+  const folders = useQuery({
+    queryKey: ["folders", orgId, mailboxId],
+    queryFn: () =>
+      api.get<Folder[]>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders`,
+      ),
+  });
   const [editing, setEditing] = useState<SieveRule | "new" | null>(null);
   const [name, setName] = useState("");
   const [enabled, setEnabled] = useState(true);
@@ -2390,6 +2592,7 @@ function FilterManager({
               {actionNeedsArg(a.type) && (
                 <Input
                   value={a.arg ?? ""}
+                  list={a.type === "fileinto" ? "filter-folder-list" : undefined}
                   onChange={(e) =>
                     setActions((as) =>
                       as.map((x, j) => (j === i ? { ...x, arg: e.target.value } : x)),
@@ -2415,6 +2618,13 @@ function FilterManager({
           >
             Add action
           </Button>
+          <datalist id="filter-folder-list">
+            {folders.data?.map((f) => (
+              <option key={f.path} value={f.path}>
+                {f.name}
+              </option>
+            ))}
+          </datalist>
         </div>
 
         <label className="flex items-center gap-2 text-[13px] text-[var(--color-neutral-1000)]">
@@ -3595,9 +3805,14 @@ function ComposePanel({
       });
       window.setTimeout(() => {
         if (cancelled) return;
-        void confirmSendOutcome(orgId, mailboxId, res.id, toast, () =>
-          qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] }),
-        );
+        // The worker appends to Sent before flipping the row to 'sent', so once
+        // the poll sees 'sent' the message is already there — refresh the Sent
+        // message list (not just folder counts) so it appears without a manual
+        // reload.
+        void confirmSendOutcome(orgId, mailboxId, res.id, toast, () => {
+          qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+          qc.invalidateQueries({ queryKey: ["messages", orgId, mailboxId] });
+        });
       }, windowMs + 400);
     },
     onError: (e) =>
