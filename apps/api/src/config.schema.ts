@@ -128,6 +128,19 @@ export const Env = z.object({
   WEBMAIL_ATTACHMENT_INLINE_MAX_BYTES: z.coerce.number().int().positive().default(2_000_000),
   WEBMAIL_SEND_BODY_LIMIT: z.string().default("32mb"),
   WEBMAIL_MESSAGE_LIST_MAX: z.coerce.number().int().positive().default(200),
+  // Sender-avatar proxy. When enabled, the API resolves external senders'
+  // pictures server-side (Gravatar by email hash, then the sender domain's
+  // logo) so the browser never contacts third parties. Disable for maximum
+  // privacy — external senders then always render as coloured initials.
+  AVATAR_PROXY_ENABLED: z.coerce.boolean().default(true),
+  // Domain-logo fallback. `{domain}` is substituted only into this trusted
+  // host's path — never used as the host itself — to avoid SSRF. Empty string
+  // disables the logo fallback (Gravatar still applies).
+  AVATAR_LOGO_URL: z.string().default("https://logo.clearbit.com/{domain}"),
+  // How long resolved (and negative) external-avatar lookups are cached.
+  AVATAR_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(604_800),
+  // Max decoded bytes accepted for a user-uploaded profile picture.
+  PROFILE_AVATAR_MAX_BYTES: z.coerce.number().int().positive().default(1_000_000),
   // Sliding TTL for an unlocked-mailbox credential. Refreshed on each use, so
   // it expires after this many seconds of inactivity rather than living forever.
   WEBMAIL_CREDENTIAL_TTL_SECONDS: z.coerce.number().int().positive().default(3600),

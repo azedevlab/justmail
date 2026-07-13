@@ -36,9 +36,11 @@ import {
   WebmailService,
 } from "./webmail.service";
 import { PersonalizationService } from "./personalization.service";
+import { AvatarService } from "./avatar.service";
 import { SieveService } from "./sieve.service";
 
 const FlagBody = z.object({ action: FlagAction });
+const ProfileAvatarBody = z.object({ data_url: z.string().min(1).max(3_000_000) });
 
 const AUTH_THROTTLE = {
   limit: config.RATE_LIMIT_AUTH_MAX,
@@ -51,6 +53,7 @@ export class WebmailController {
   constructor(
     private readonly svc: WebmailService,
     private readonly personalization: PersonalizationService,
+    private readonly avatars: AvatarService,
     private readonly sieve: SieveService,
   ) {}
 
@@ -296,6 +299,39 @@ export class WebmailController {
     @Body(new ZodPipe(ComposeRequest)) body: ComposeRequest,
   ) {
     return this.svc.send(principal, orgId, mailboxId, body);
+  }
+
+  // Resolve a sender's (or the caller's own) display picture to an inline data
+  // URL. Authed by the caller's mailbox session; the email is just a lookup key.
+  @Get("avatar")
+  avatar(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Query("email") email: string,
+  ) {
+    return this.avatars.resolveForEmail(principal, orgId, mailboxId, email ?? "");
+  }
+
+  @Put("profile/avatar")
+  @HttpCode(204)
+  setAvatar(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Body(new ZodPipe(ProfileAvatarBody)) body: z.infer<typeof ProfileAvatarBody>,
+  ) {
+    return this.avatars.setProfileAvatar(principal, orgId, mailboxId, body.data_url);
+  }
+
+  @Delete("profile/avatar")
+  @HttpCode(204)
+  removeAvatar(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+  ) {
+    return this.avatars.removeProfileAvatar(principal, orgId, mailboxId);
   }
 
   @Get("attachment-limits")

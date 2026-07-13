@@ -130,6 +130,7 @@ import {
   X,
 } from "lucide-react";
 import { useLogout, useMe } from "@/lib/session";
+import { SenderAvatar, ProfilePictureModal } from "@/components/profile-avatar";
 import { api, API_BASE } from "@/lib/api";
 import { useMailboxRealtime } from "@/lib/realtime";
 import {
@@ -239,6 +240,7 @@ export default function MailboxView() {
   const [openUid, setOpenUid] = useState<number | null>(null);
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [pushOn, setPushOn] = useState(false);
@@ -686,12 +688,20 @@ export default function MailboxView() {
               className="rounded-full focus:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--color-accent-focus)]"
               aria-label="Account"
             >
-              <Avatar name={me.data?.email ?? "?"} size={28} />
+              <SenderAvatar
+                email={me.data?.email}
+                name={me.data?.email ?? "?"}
+                size={28}
+              />
             </button>
           }
         >
           {me.data && <DropdownLabel>{me.data.email}</DropdownLabel>}
           <DropdownSeparator />
+          <DropdownItem onSelect={() => setProfileOpen(true)}>
+            <ImageIcon size={14} />
+            Profile picture
+          </DropdownItem>
           <DropdownItem destructive onSelect={() => logout.mutate()}>
             <LogOut size={14} />
             Sign out
@@ -914,7 +924,11 @@ export default function MailboxView() {
                 {message.data.subject || "(no subject)"}
               </h2>
               <div className="mt-4 flex items-center gap-3 pb-4 border-b border-[var(--color-border)]">
-                <Avatar name={senderDisplay(message.data.from)} size={34} />
+                <SenderAvatar
+                  email={senderEmail(message.data.from)}
+                  name={senderDisplay(message.data.from)}
+                  size={34}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium truncate">
                     {message.data.from}
@@ -1033,6 +1047,15 @@ export default function MailboxView() {
           orgId={orgId}
           mailboxId={mailboxId}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {me.data?.email && (
+        <ProfilePictureModal
+          open={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          email={me.data.email}
+          name={me.data.email}
         />
       )}
 
@@ -1351,6 +1374,10 @@ function senderDisplay(from: string): string {
   return name || (from.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? from);
 }
 
+function senderEmail(from: string): string {
+  return from.match(/[\w.+-]+@[\w.-]+\.[\w.-]+/)?.[0] ?? "";
+}
+
 function MessageRow({
   m,
   count,
@@ -1372,6 +1399,7 @@ function MessageRow({
   const starred = m.flags.includes("\\Flagged");
   const sender =
     m.envelope.from?.[0]?.name ?? m.envelope.from?.[0]?.address ?? "?";
+  const senderAddr = m.envelope.from?.[0]?.address ?? "";
   return (
     <button
       onClick={onOpen}
@@ -1394,7 +1422,8 @@ function MessageRow({
         />
       )}
       <span className="flex items-start gap-2.5">
-        <Avatar
+        <SenderAvatar
+          email={senderAddr}
           name={senderDisplay(sender)}
           size={child ? 24 : 30}
           className="shrink-0 mt-0.5"
