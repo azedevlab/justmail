@@ -36,23 +36,25 @@ function compileCondition(cond: SieveCondition): string {
   return `header ${OP_TEST[cond.op]} ${headerList(cond.field)} ${quote(cond.value)}`;
 }
 
-// The Sieve `require` extensions an action pulls in, if any.
-function actionRequires(action: SieveAction): string | null {
+// The Sieve `require` extensions an action pulls in, if any. `fileinto` also
+// needs `mailbox` because we file with `:create` so a custom/nested target
+// folder is made on first delivery instead of silently falling back to INBOX.
+function actionRequires(action: SieveAction): string[] {
   switch (action.type) {
     case "fileinto":
-      return "fileinto";
+      return ["fileinto", "mailbox"];
     case "seen":
     case "flag":
-      return "imap4flags";
+      return ["imap4flags"];
     default:
-      return null;
+      return [];
   }
 }
 
 function compileAction(action: SieveAction): string {
   switch (action.type) {
     case "fileinto":
-      return `fileinto ${quote(action.arg ?? "")};`;
+      return `fileinto :create ${quote(action.arg ?? "")};`;
     case "keep":
       return "keep;";
     case "discard":
@@ -91,12 +93,11 @@ export function compileRule(rule: CompilableRule): string {
 // Collect the deduplicated, deterministically ordered require list for a set of
 // rules. `fileinto` before `imap4flags` keeps output stable for snapshotting.
 function collectRequires(rules: CompilableRule[]): string[] {
-  const order = ["fileinto", "imap4flags"];
+  const order = ["fileinto", "mailbox", "imap4flags"];
   const present = new Set<string>();
   for (const rule of rules) {
     for (const action of rule.actions) {
-      const req = actionRequires(action);
-      if (req) present.add(req);
+      for (const req of actionRequires(action)) present.add(req);
     }
   }
   return order.filter((r) => present.has(r));

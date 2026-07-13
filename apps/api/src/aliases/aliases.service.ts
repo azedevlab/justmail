@@ -38,8 +38,8 @@ export class AliasesService {
       `SELECT a.id, a.domain_id, a.source, a.destinations::text[] AS destinations,
               a.enabled, a.created_at, d.name AS domain_name, d.org_id
        FROM aliases a JOIN domains d ON d.id = a.domain_id
-       WHERE a.domain_id = $1 ORDER BY a.source`,
-      [domainId],
+       WHERE a.domain_id = $1 AND d.org_id = $2 ORDER BY a.source`,
+      [domainId, orgId],
     );
     return rows.map(toAlias);
   }

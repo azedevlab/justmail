@@ -171,6 +171,7 @@ export class DomainsService {
       if (req.max_mailboxes !== undefined) pushSet("max_mailboxes", req.max_mailboxes);
       if (req.max_quota_mb !== undefined) pushSet("max_quota_mb", req.max_quota_mb);
       if (req.outbound_mode !== undefined) pushSet("outbound_mode", req.outbound_mode);
+      if (req.retention_days !== undefined) pushSet("retention_days", req.retention_days);
       if (req.status !== undefined) pushSet("status", req.status);
       await tx.query(
         `UPDATE domains SET ${sets.join(", ")} WHERE id = $1`,

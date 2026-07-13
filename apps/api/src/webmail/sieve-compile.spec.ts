@@ -23,7 +23,7 @@ describe("compileRule", () => {
       }),
     );
     expect(out).toContain('if header :contains ["from"] "boss@x.com" {');
-    expect(out).toContain("  fileinto \"Work\";");
+    expect(out).toContain("  fileinto :create \"Work\";");
     expect(out).not.toContain("allof");
   });
 
@@ -88,7 +88,7 @@ describe("compileScript", () => {
       rule({ actions: [{ type: "fileinto", arg: "Work" }] }),
       rule({ actions: [{ type: "seen" }] }),
     ]);
-    expect(out).toContain('require ["fileinto", "imap4flags"];');
+    expect(out).toContain('require ["fileinto", "mailbox", "imap4flags"];');
   });
 
   it("omits require when no extension is needed", () => {

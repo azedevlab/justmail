@@ -125,6 +125,13 @@ export class DnsService {
   /** Check DNS: resolve every expected record and update check_status. */
   async check(orgId: string, domainId: string, userId: string) {
     await this.orgs.requireRole(orgId, userId, "viewer");
+    // requireRole proves the caller's role in orgId, not that the domain is in
+    // that org — confirm ownership before resolving/returning its records.
+    const { rows: owned } = await this.db.query(
+      "SELECT 1 FROM domains WHERE id = $1 AND org_id = $2",
+      [domainId, orgId],
+    );
+    if (!owned[0]) throw new NotFoundException({ title: "Domain not found" });
     await this.checkRecords(domainId);
     const { rows: updated } = await this.db.query(
       `SELECT id, purpose, type, name, content, ttl, priority, observed_content,

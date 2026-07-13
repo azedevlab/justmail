@@ -121,10 +121,13 @@ export class DkimService {
     await this.db
       .tx(async (tx) => {
         // Lock the target row so concurrent activations of the same key
-        // serialize, and confirm it belongs to the domain before mutating.
+        // serialize, and confirm it belongs to a domain in *this* org before
+        // mutating — requireRole only proves the caller's role in orgId, not
+        // that the domain/key belong to that org.
         const target = await tx.query(
-          "SELECT id FROM dkim_keys WHERE id = $1 AND domain_id = $2 FOR UPDATE",
-          [keyId, domainId],
+          `SELECT k.id FROM dkim_keys k JOIN domains d ON d.id = k.domain_id
+           WHERE k.id = $1 AND k.domain_id = $2 AND d.org_id = $3 FOR UPDATE OF k`,
+          [keyId, domainId, orgId],
         );
         if (!target.rowCount) throw new NotFoundException({ title: "Key not found" });
         // Retire the currently-active key BEFORE promoting the target so the
@@ -254,7 +257,7 @@ export class DkimService {
             [d.domain_id, recordName, dnsContent],
           );
         });
-        await this.publishTxt(d.domain_name, recordName, dnsContent);
+        await this.publishTxt(d.domain_id, d.domain_name, recordName, dnsContent);
         await this.writeKeyFile(d.domain_name, selector, privateKeyPem);
         await this.rebuildSelectorMap();
         this.audit.log({
@@ -347,7 +350,12 @@ export class DkimService {
     }
   }
 
-  private async publishTxt(domain: string, name: string, content: string) {
+  private async publishTxt(
+    domainId: string,
+    domain: string,
+    name: string,
+    content: string,
+  ) {
     const provider = getDnsProvider();
     const zoneId = await provider.findZoneId(domain);
     if (!zoneId) throw new Error(`no ${provider.name} zone for ${domain}`);
@@ -360,10 +368,10 @@ export class DkimService {
       ttl: 3600,
     });
     await this.db.query(
-      `UPDATE dns_records SET provider_record_id = $2, check_status = 'propagating',
+      `UPDATE dns_records SET provider_record_id = $3, check_status = 'propagating',
          updated_at = now()
-       WHERE type = 'TXT' AND name = $1`,
-      [name, rec.id],
+       WHERE domain_id = $1 AND type = 'TXT' AND name = $2`,
+      [domainId, name, rec.id],
     );
   }
 
