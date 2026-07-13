@@ -117,16 +117,17 @@ published for you later from the admin console (or exported as a zone file).
 
 ```bash
 docker compose -f services/compose/docker-compose.yml \
-  --profile core --profile mail --profile app up -d
+  --profile core --profile certs --profile mail --profile app up -d
 ```
 
 Profiles let you choose what runs:
 
 | Profile | Brings up |
 |---------|-----------|
-| `core` | Postgres, Redis, Traefik, certd, API |
+| `core` | Postgres, Redis, Traefik |
+| `certs` | certd (ACME/TLS certificate issuance) |
 | `mail` | Postfix, Dovecot, Rspamd, ClamAV |
-| `app` | admin, webmail, landing |
+| `app` | API, worker, admin, webmail, landing |
 | `obs` | Grafana, Loki, Vector (observability) |
 | `sec` | security tooling |
 

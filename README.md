@@ -58,7 +58,7 @@ cp services/compose/.env.example services/compose/.env
 #   generate secrets with:  openssl rand -hex 32
 
 docker compose -f services/compose/docker-compose.yml \
-  --profile core --profile mail --profile app up -d
+  --profile core --profile certs --profile mail --profile app up -d
 ```
 
 One-command install on Ubuntu 24.04+:

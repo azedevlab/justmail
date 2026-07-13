@@ -24,11 +24,11 @@ chmod 600 services/compose/.env
 # edit .env: domains, DNS token, and secrets (openssl rand -hex 32)
 
 docker compose -f services/compose/docker-compose.yml \
-  --profile core --profile mail --profile app up -d
+  --profile core --profile certs --profile mail --profile app up -d
 ```
 
-Profiles: `core` (Postgres/Redis/Traefik/certd/API), `mail`
-(Postfix/Dovecot/Rspamd/ClamAV), `app` (admin/webmail/landing), `obs`
+Profiles: `core` (Postgres/Redis/Traefik), `certs` (certd ACME/TLS), `mail`
+(Postfix/Dovecot/Rspamd/ClamAV), `app` (API/worker/admin/webmail/landing), `obs`
 (Grafana/Loki/Vector), `sec` (security tooling).
 
 ## Ubuntu one-command installer

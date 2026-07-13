@@ -38,6 +38,6 @@ fi
 
 cd "$INSTALL_DIR/app/services/compose"
 docker compose --env-file "$INSTALL_DIR/.env" \
-  --profile core --profile mail --profile obs --profile sec --profile app up -d
+  --profile core --profile certs --profile mail --profile obs --profile sec --profile app up -d
 
 echo "==> JustMail installed. Open the admin console at your JM_ADMIN_HOST."
