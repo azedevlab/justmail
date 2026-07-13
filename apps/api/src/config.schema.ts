@@ -44,6 +44,13 @@ export const Env = z.object({
   DKIM_ROTATION_OVERLAP_HOURS: z.coerce.number().int().positive().default(24),
   DKIM_ROTATION_POLL_SECONDS: z.coerce.number().int().positive().default(3600),
   MAIL_HOSTNAME: z.string().default("mail.localhost"),
+  // MTA-STS policy served at mta-sts.<domain>. Default `testing` so a wrong
+  // MX/cert can't black-hole inbound mail: remote senders report failures but
+  // still deliver. Switch to `enforce` only after TLS-RPT reports look clean.
+  // `none` disables the policy. max_age kept short in testing so mistakes
+  // expire in a day, not a week.
+  MTASTS_MODE: z.enum(["testing", "enforce", "none"]).default("testing"),
+  MTASTS_MAX_AGE: z.coerce.number().int().positive().default(86400),
 
   // Internal mail service discovery (compose service names by default).
   IMAP_HOST: z.string().default("dovecot"),
