@@ -1,10 +1,10 @@
 name: Deploy
 
+# Production deploys are manual-only: a green CI run no longer ships to prod
+# unattended (a bad merge would otherwise deploy with no human in the loop and
+# no rollback). Trigger deliberately via the Actions "Run workflow" button; the
+# `production` environment can additionally require reviewer approval.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -13,7 +13,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production
     steps:
