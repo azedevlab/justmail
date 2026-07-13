@@ -5,6 +5,7 @@ import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { getDnsProvider } from "./dns-provider";
+import { chooseExisting, staleDuplicates } from "./dns-reconcile";
 
 interface RecordRow {
   id: string;
@@ -60,21 +61,42 @@ export class DnsService {
     for (const r of records) {
       try {
         const existing = await provider.listRecords(zoneId, r.name, r.type);
-        const match = existing.find((e) => e.content === r.content);
-        const first = existing[0];
-        const cfRec = await provider.upsertRecord(zoneId, match ?? first, {
+        // Match the record by identity, not position: creating a fresh record
+        // when none of ours exists (rather than clobbering an unrelated TXT),
+        // and updating the one that is genuinely ours otherwise.
+        const chosen = chooseExisting(r, existing);
+        const exact =
+          chosen !== undefined && chosen.content.replace(/^"|"$/g, "").trim() ===
+            r.content.replace(/^"|"$/g, "").trim();
+        const cfRec = await provider.upsertRecord(zoneId, chosen, {
           type: r.type,
           name: r.name,
           content: r.content,
           ttl: r.ttl,
           priority: r.priority ?? undefined,
         });
+        // Remove duplicate SPF/DKIM/DMARC records that would otherwise make the
+        // record invalid (e.g. two SPF records => permerror, never green).
+        let removed = 0;
+        for (const dup of staleDuplicates(r, existing, cfRec)) {
+          await provider.deleteRecord(zoneId, dup.id);
+          removed += 1;
+        }
         await this.db.query(
           `UPDATE dns_records SET provider_record_id = $2, check_status = 'propagating',
              updated_at = now() WHERE id = $1`,
           [r.id, cfRec.id],
         );
-        applied.push({ purpose: r.purpose, action: match ? "kept" : "upserted" });
+        applied.push({
+          purpose: r.purpose,
+          action: removed
+            ? `fixed (${removed} stale removed)`
+            : chosen === undefined
+              ? "created"
+              : exact
+                ? "kept"
+                : "updated",
+        });
       } catch (err) {
         this.logger.warn(`sync ${r.purpose}: ${(err as Error).message}`);
         applied.push({ purpose: r.purpose, action: "error" });
