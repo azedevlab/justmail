@@ -2,12 +2,14 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
+  type OnApplicationBootstrap,
 } from "@nestjs/common";
 import * as argon2 from "argon2";
 import { generateSecret, generateURI, verifySync } from "otplib";
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type {
   BootstrapRequest,
   LoginRequest,
@@ -67,8 +69,17 @@ export interface SessionPrincipal {
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
+// Arbitrary constant so concurrent bootstrap requests serialize on the same
+// transaction-scoped advisory lock (prevents the count-then-insert race).
+const BOOTSTRAP_ADVISORY_LOCK = 0x6a6d_6273; // "jmbs"
+
 @Injectable()
-export class AuthService {
+export class AuthService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(AuthService.name);
+  // Fallback bootstrap token for production deployments that don't set one.
+  // Regenerated per process; logged while the instance is unbootstrapped.
+  private readonly generatedBootstrapToken = randomBytes(24).toString("base64url");
+
   constructor(
     private readonly db: Db,
     private readonly audit: AuditService,
@@ -76,6 +87,29 @@ export class AuthService {
     private readonly imapSessions: ImapSessionManager,
     private readonly imapIdle: ImapIdleWatcher,
   ) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    if (config.BOOTSTRAP_TOKEN || !this.bootstrapTokenRequired()) return;
+    const { rows } = await this.db.query<{ n: string }>(
+      "SELECT count(*) AS n FROM users",
+    );
+    if (Number(rows[0]?.n ?? 0) === 0) {
+      this.logger.warn(
+        `No accounts exist yet. First-admin bootstrap token: ${this.generatedBootstrapToken}`,
+      );
+    }
+  }
+
+  private bootstrapTokenRequired(): boolean {
+    return config.NODE_ENV === "production" || Boolean(config.BOOTSTRAP_TOKEN);
+  }
+
+  private bootstrapTokenMatches(provided: string): boolean {
+    const expected = config.BOOTSTRAP_TOKEN ?? this.generatedBootstrapToken;
+    const a = createHash("sha256").update(provided).digest();
+    const b = createHash("sha256").update(expected).digest();
+    return timingSafeEqual(a, b);
+  }
 
   async status() {
     const { rows } = await this.db.query<{ n: string }>(
@@ -90,14 +124,20 @@ export class AuthService {
     };
   }
 
-  async bootstrap(req: BootstrapRequest, ip?: string, userAgent?: string) {
-    const { rows } = await this.db.query<{ n: string }>(
-      "SELECT count(*) AS n FROM users",
-    );
-    if (Number(rows[0]?.n ?? 1) > 0) {
-      throw new ForbiddenException({
-        title: "Already bootstrapped",
-        detail: "An account already exists; log in instead.",
+  async bootstrap(
+    req: BootstrapRequest,
+    ip?: string,
+    userAgent?: string,
+    providedToken?: string,
+  ) {
+    if (
+      this.bootstrapTokenRequired() &&
+      !this.bootstrapTokenMatches(providedToken ?? "")
+    ) {
+      throw new UnauthorizedException({
+        title: "Invalid bootstrap token",
+        detail:
+          "Bootstrapping requires the one-time token from the server logs (X-Bootstrap-Token).",
       });
     }
 
@@ -105,6 +145,20 @@ export class AuthService {
     const slug = slugify(req.org_name);
 
     const { userId, orgId } = await this.db.tx(async (tx) => {
+      // Serialize concurrent bootstraps so the count-then-insert below can't
+      // race two callers into both becoming the first owner.
+      await tx.query("SELECT pg_advisory_xact_lock($1)", [
+        BOOTSTRAP_ADVISORY_LOCK,
+      ]);
+      const { rows } = await tx.query<{ n: string }>(
+        "SELECT count(*) AS n FROM users",
+      );
+      if (Number(rows[0]?.n ?? 1) > 0) {
+        throw new ForbiddenException({
+          title: "Already bootstrapped",
+          detail: "An account already exists; log in instead.",
+        });
+      }
       const org = await tx.query<{ id: string }>(
         "INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id",
         [req.org_name, slug],

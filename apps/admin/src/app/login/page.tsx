@@ -221,8 +221,14 @@ function BootstrapForm({ onDone }: { onDone: () => void }) {
     defaultValues: { email: "", name: "", org_name: "", password: "" },
   });
   const [err, setErr] = useState<string | null>(null);
+  const [bootstrapToken, setBootstrapToken] = useState("");
   const mut = useMutation({
-    mutationFn: (body: BootstrapRequest) => api.post("/v1/auth/bootstrap", body),
+    mutationFn: (body: BootstrapRequest) =>
+      api.post("/v1/auth/bootstrap", body, {
+        headers: bootstrapToken.trim()
+          ? { "x-bootstrap-token": bootstrapToken.trim() }
+          : undefined,
+      }),
     onSuccess: onDone,
     onError: (e) =>
       setErr(
@@ -259,6 +265,17 @@ function BootstrapForm({ onDone }: { onDone: () => void }) {
       </FormField>
       <FormField label="Organization name">
         <Input {...f.register("org_name")} />
+      </FormField>
+      <FormField
+        label="Bootstrap token"
+        hint="Required in production — printed in the server logs on first boot."
+      >
+        <Input
+          monospace
+          autoComplete="off"
+          value={bootstrapToken}
+          onChange={(e) => setBootstrapToken(e.target.value)}
+        />
       </FormField>
       {err && (
         <p className="text-xs text-[var(--color-bad)]" role="alert">

@@ -70,6 +70,7 @@ export class AuthController {
       body,
       req.ip,
       req.get("user-agent") ?? undefined,
+      req.get("x-bootstrap-token") ?? undefined,
     );
     this.setCookie(res, token, expiresAt);
     return { ok: true };

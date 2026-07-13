@@ -34,6 +34,11 @@ export const Env = z.object({
   REDIS_MAX_RETRIES_PER_REQUEST: z.coerce.number().int().min(0).default(2),
   ENCRYPTION_KEY: z.string().min(32),
   EVENTS_INGEST_TOKEN: z.string().min(16),
+  // One-time token gating first-account bootstrap. Required in production so a
+  // public instance can't be hijacked by whoever reaches it first. Leave unset
+  // in production and a random token is generated at boot and printed to the
+  // logs; the operator supplies it via the X-Bootstrap-Token header once.
+  BOOTSTRAP_TOKEN: z.string().min(16).optional(),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   DKIM_DIR: z.string().default("/var/lib/justmail/dkim"),
   // Automatic DKIM key rotation (worker). Opt-in: only rotates when Cloudflare

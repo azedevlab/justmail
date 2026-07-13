@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { useState } from "react";
 import type {
   ApiKey,
+  ApiKeyScope,
   CreateApiKeyRequest,
   CreatedApiKey,
 } from "@justmail/contracts";
@@ -199,10 +200,13 @@ function CreateModal({ orgId, onClose }: { orgId: string; onClose: () => void })
             loading={mut.isPending}
             onClick={f.handleSubmit((v) => {
               setErr(null);
+              const allowed: ApiKeyScope[] = ["read", "write", "admin"];
               const scopes = v.scopes_str
                 .split(/[,\s]+/)
-                .map((s) => s.trim())
-                .filter(Boolean);
+                .map((s) => s.trim().toLowerCase())
+                .filter((s): s is ApiKeyScope =>
+                  (allowed as string[]).includes(s),
+                );
               mut.mutate({ name: v.name, scopes });
             })}
           >
