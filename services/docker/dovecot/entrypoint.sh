@@ -10,6 +10,55 @@ chmod 600 /etc/dovecot/dovecot-sql.conf.ext
 
 mkdir -p /var/vmail && chown vmail:vmail /var/vmail
 
+# Shared/distributed maildir coherence. When the mail volume is backed by a
+# network/clustered filesystem, Dovecot needs index caching relaxed and a
+# lock method the filesystem actually honours, or IMAP index files corrupt
+# under concurrent access. See docs/deployment/shared-storage.md. Pin each
+# user to one backend (Dovecot Director) before serving the same mailbox from
+# multiple nodes — these settings make it safe, not free.
+render_shared_storage() {
+  local conf=/etc/dovecot/shared-storage.conf
+  case "${MAIL_STORAGE_BACKEND:-local}" in
+    nfs)
+      cat > "$conf" <<'EOF'
+mmap_disable = yes
+mail_fsync = always
+mail_nfs_index = yes
+mail_nfs_storage = yes
+lock_method = fcntl
+EOF
+      ;;
+    smb|cifs)
+      cat > "$conf" <<'EOF'
+mmap_disable = yes
+mail_fsync = always
+lock_method = dotlock
+EOF
+      ;;
+    cephfs|gluster)
+      cat > "$conf" <<'EOF'
+mmap_disable = yes
+mail_fsync = always
+lock_method = fcntl
+EOF
+      ;;
+    zfs)
+      cat > "$conf" <<'EOF'
+mmap_disable = yes
+mail_fsync = optimized
+EOF
+      ;;
+    local|"")
+      : > "$conf"
+      ;;
+    *)
+      echo "warning: unknown MAIL_STORAGE_BACKEND='${MAIL_STORAGE_BACKEND}', treating as local" >&2
+      : > "$conf"
+      ;;
+  esac
+}
+render_shared_storage
+
 # IMAPSieve → rspamd Bayes training. Install the learn scripts into a writable
 # dir (the templates mount is read-only), stash the controller password for the
 # pipe helpers, and precompile the sieve scripts so Dovecot doesn't need to.

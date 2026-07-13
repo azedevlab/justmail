@@ -48,7 +48,8 @@ export function createStorageAdapter(env: FactoryEnv): StorageAdapter {
     // filesystem. All share LocalAdapter; the kind just records which mount
     // type backs it (STORAGE_LOCAL_PATH points at the mount). NFS/SMB/CephFS
     // need Dovecot's index/lock settings tuned for shared storage — see
-    // docs/deployment for the required mail_location/lock_method guidance.
+    // docs/deployment/shared-storage.md (MAIL_STORAGE_BACKEND) for the required
+    // mmap_disable/mail_fsync/lock_method guidance.
     case "local":
     case "nfs":
     case "smb":

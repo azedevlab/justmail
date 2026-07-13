@@ -161,6 +161,8 @@ services:
       MAILPLANE_DB_PASSWORD: ${MAILPLANE_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
+      # Distributed maildir tuning: local|nfs|smb|cephfs|zfs (see docs/deployment/shared-storage.md)
+      MAIL_STORAGE_BACKEND: ${MAIL_STORAGE_BACKEND:-local}
     volumes:
       - ../mail/dovecot:/opt/justmail/templates:ro
       - vmail:/var/vmail

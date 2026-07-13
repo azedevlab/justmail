@@ -15,6 +15,11 @@ mail_gid = 5000
 first_valid_uid = 5000
 last_valid_uid = 5000
 
+# Shared/distributed maildir tuning (index + lock coherence). Rendered by the
+# entrypoint from MAIL_STORAGE_BACKEND; empty for local disk. See
+# docs/deployment/shared-storage.md.
+!include_try /etc/dovecot/shared-storage.conf
+
 ssl = required
 ssl_cert = </certs/mail/fullchain.pem
 ssl_key = </certs/mail/key.pem

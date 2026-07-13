@@ -87,6 +87,10 @@ The trickiest part. Two supported options:
    commercial gateway (JuiceFS, Weka). Cheaper at scale, higher latency; okay
    for IMAP if the working set fits in the local cache.
 
+Per-filesystem Dovecot index/lock tuning (NFS/SMB/CephFS/ZFS) is documented in
+[deployment/shared-storage.md](deployment/shared-storage.md) and driven by the
+`MAIL_STORAGE_BACKEND` env var.
+
 Either way: **one maildir per user, per shard**. If a mailbox moves shards we
 rsync the maildir with the user suspended (a five-second UX hiccup) — the
 plane's suspend flag is designed for exactly this.
