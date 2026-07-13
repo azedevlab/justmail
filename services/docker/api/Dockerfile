@@ -22,6 +22,7 @@ RUN pnpm -r --filter '@justmail/contracts...' \
       --filter '@justmail/mail-parser...' \
       --filter '@justmail/openapi...' \
       --filter '@justmail/plugin-sdk...' \
+      --filter '@justmail/theme-engine...' \
       --filter '@justmail/storage...' build \
     && pnpm --filter @justmail/api build
 
