@@ -173,7 +173,7 @@ export function BimiSection({
             {bimi.data.has_logo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={bimi.data.logo_url}
+                src={bimi.data.logo_data_url ?? bimi.data.logo_url}
                 alt="Brand logo preview"
                 className="h-12 w-12 rounded border border-[var(--color-neutral-400)] bg-white object-contain p-1"
               />

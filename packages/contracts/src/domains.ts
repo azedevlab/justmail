@@ -37,11 +37,14 @@ export type CreateDomainRequest = z.infer<typeof CreateDomainRequest>;
 
 // Brand logo (BIMI) state for a domain. `record` is the default._bimi TXT
 // value; `logo_url` is the public https URL its l= tag points at. BIMI only
-// renders when dmarc_ok (policy quarantine/reject).
+// renders when dmarc_ok (policy quarantine/reject). `logo_data_url` inlines the
+// stored SVG so the admin preview renders before the domain is active/published
+// (the public logo_url only serves once the domain is verified).
 export const BimiStatus = z.object({
   has_logo: z.boolean(),
   record: z.string(),
   logo_url: z.string(),
+  logo_data_url: z.string().nullable(),
   dmarc_policy: z.string().nullable(),
   dmarc_ok: z.boolean(),
 });

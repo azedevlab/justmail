@@ -12,6 +12,7 @@ import type {
   UpdateDomainRequest,
 } from "@justmail/contracts";
 import { resolveTxt } from "node:dns/promises";
+import type { Readable } from "node:stream";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
@@ -349,10 +350,24 @@ export class DomainsService {
       [domainId],
     );
     const policy = dmarcPolicy(dmarc[0]?.content ?? null);
+    const key = rows[0].bimi_logo_key;
+    // Inline the stored SVG as a data: URL. The public logo_url only serves once
+    // the domain is verified/active (and is routed to the mail host, not the
+    // apex webmail), so the admin preview would otherwise 404 pre-activation.
+    let logoDataUrl: string | null = null;
+    if (key) {
+      try {
+        const buf = await streamToBuffer(this.storage.stream(orgId, key), 256 * 1024);
+        logoDataUrl = `data:image/svg+xml;base64,${buf.toString("base64")}`;
+      } catch {
+        logoDataUrl = null;
+      }
+    }
     return {
-      has_logo: rows[0].bimi_logo_key !== null,
+      has_logo: key !== null,
       record: bimiRecordContent(rows[0].name),
       logo_url: bimiLogoUrl(rows[0].name),
+      logo_data_url: logoDataUrl,
       dmarc_policy: policy,
       dmarc_ok: bimiDmarcOk(policy),
     };
@@ -444,6 +459,22 @@ export class DomainsService {
 /** Deterministic per-domain storage key so re-upload overwrites in place. */
 function bimiStorageKey(domainId: string): string {
   return `bimi/${domainId}.svg`;
+}
+
+async function streamToBuffer(
+  stream: Readable | Promise<Readable>,
+  maxBytes: number,
+): Promise<Buffer> {
+  const s = await stream;
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of s) {
+    const b = chunk as Buffer;
+    total += b.length;
+    if (total > maxBytes) throw new Error("bimi logo exceeds max bytes");
+    chunks.push(b);
+  }
+  return Buffer.concat(chunks);
 }
 
 async function seedDnsRecords(
