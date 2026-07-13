@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { UnauthorizedException } from "@nestjs/common";
-import { SessionGuard, SESSION_COOKIE } from "./session.guard";
+import { SessionGuard } from "./session.guard";
+import { ADMIN_SESSION_COOKIE as SESSION_COOKIE } from "./session-cookie";
 import type { AuthService, SessionPrincipal } from "./auth.service";
 import type { ApiKeysService } from "../apikeys/apikeys.service";
 

@@ -19,7 +19,8 @@ import {
 import { config } from "../config";
 import { ZodPipe } from "../common/zod.pipe";
 import { Throttle } from "../common/throttle.decorator";
-import { Principal, SESSION_COOKIE, SessionGuard } from "../auth/session.guard";
+import { Principal, SessionGuard } from "../auth/session.guard";
+import { appFromRequest, setSessionCookie } from "../auth/session-cookie";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { InvitesService } from "./invites.service";
 
@@ -79,14 +80,7 @@ export class InvitesController {
       req.ip,
       req.get("user-agent") ?? undefined,
     );
-    res.cookie(SESSION_COOKIE, sessionToken, {
-      httpOnly: true,
-      secure: config.NODE_ENV === "production",
-      sameSite: "lax",
-      domain: config.NODE_ENV === "production" ? config.JM_WEB_HOST : undefined,
-      path: "/",
-      expires: expiresAt,
-    });
+    setSessionCookie(res, appFromRequest(req), sessionToken, expiresAt);
     return { ok: true };
   }
 }

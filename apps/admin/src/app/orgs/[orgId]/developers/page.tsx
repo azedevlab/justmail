@@ -39,7 +39,7 @@ export default function DeveloperPortal() {
           <CardBody className="space-y-3">
             <p className="text-sm text-[var(--color-neutral-900)]">
               Every request carries either the{" "}
-              <code className="mono">jm_session</code> cookie (browser) or a{" "}
+              <code className="mono">jm_admin_session</code> cookie (browser) or a{" "}
               <code className="mono">Bearer</code> token issued in the API keys
               screen.
             </p>

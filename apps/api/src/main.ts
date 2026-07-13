@@ -105,6 +105,9 @@ async function bootstrap(): Promise<void> {
         "Upload-Length",
         "Tus-Resumable",
         "X-Requested-With",
+        // Identifies the calling app (admin/webmail) so the API reads that
+        // app's session cookie and the two sessions stay isolated.
+        "X-JM-App",
       ],
       exposedHeaders: ["Upload-Offset", "Location"],
       maxAge: 86400,

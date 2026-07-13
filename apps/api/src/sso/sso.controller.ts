@@ -13,7 +13,7 @@ import {
 import { Request, Response } from "express";
 import { config } from "../config";
 import { Throttle } from "../common/throttle.decorator";
-import { SESSION_COOKIE } from "../auth/session.guard";
+import { appFromUrl, setSessionCookie } from "../auth/session-cookie";
 import { SsoService } from "./sso.service";
 
 const SSO_THROTTLE = {
@@ -25,15 +25,15 @@ const SSO_THROTTLE = {
 export class SsoController {
   constructor(private readonly sso: SsoService) {}
 
-  private setCookie(res: Response, token: string, expiresAt: Date): void {
-    res.cookie(SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: config.NODE_ENV === "production",
-      sameSite: "lax",
-      domain: config.NODE_ENV === "production" ? config.JM_WEB_HOST : undefined,
-      path: "/",
-      expires: expiresAt,
-    });
+  // The session cookie is scoped to the app the user is being relayed to, so an
+  // SSO login into webmail doesn't overwrite an active admin console session.
+  private setCookie(
+    res: Response,
+    relay: string,
+    token: string,
+    expiresAt: Date,
+  ): void {
+    setSessionCookie(res, appFromUrl(relay), token, expiresAt);
   }
 
   private errorRedirect(res: Response): void {
@@ -80,7 +80,7 @@ export class SsoController {
         req.ip,
         req.get("user-agent") ?? undefined,
       );
-      this.setCookie(res, out.token, out.expiresAt);
+      this.setCookie(res, out.relay, out.token, out.expiresAt);
       res.redirect(out.relay);
     } catch {
       this.errorRedirect(res);
@@ -105,7 +105,7 @@ export class SsoController {
         req.ip,
         req.get("user-agent") ?? undefined,
       );
-      this.setCookie(res, out.token, out.expiresAt);
+      this.setCookie(res, out.relay, out.token, out.expiresAt);
       res.redirect(out.relay);
     } catch {
       this.errorRedirect(res);

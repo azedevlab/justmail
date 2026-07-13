@@ -8,8 +8,7 @@ import {
 import { Request } from "express";
 import { AuthService, SessionPrincipal } from "./auth.service";
 import { ApiKeysService, ApiKeyPrincipal } from "../apikeys/apikeys.service";
-
-export const SESSION_COOKIE = "jm_session";
+import { appFromRequest, cookieName } from "./session-cookie";
 
 declare module "express" {
   interface Request {
@@ -19,9 +18,11 @@ declare module "express" {
 }
 
 /**
- * Accepts either a session cookie (jm_session) or a Bearer API token. When a
- * token authenticates, we synthesize a SessionPrincipal that carries the key's
- * scopes so downstream code has a uniform surface.
+ * Accepts either a per-app session cookie (jm_admin_session / jm_webmail_session)
+ * or a Bearer API token. The cookie read is scoped to the calling app so an
+ * admin and a webmail session can coexist without overwriting each other. When
+ * a token authenticates, we synthesize a SessionPrincipal that carries the
+ * key's scopes so downstream code has a uniform surface.
  */
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -32,12 +33,11 @@ export class SessionGuard implements CanActivate {
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<Request>();
-    // A browser can hold more than one jm_session cookie at different scopes
-    // (e.g. a stale host-only cookie left over from before the cookie was
-    // scoped to the parent domain). It then sends `jm_session=A; jm_session=B`
-    // and cookie-parser surfaces only the FIRST — which may be the stale one,
-    // making a perfectly valid login 401. Try every jm_session value present
-    // (capped) so a good token is never masked by a stale duplicate.
+    // A browser can hold more than one copy of the session cookie at different
+    // scopes (e.g. a stale host-only cookie left over from a prior scope). It
+    // then sends `<name>=A; <name>=B` and cookie-parser surfaces only the FIRST
+    // — which may be the stale one, making a valid login 401. Try every value
+    // for this app's cookie (capped) so a good token is never masked.
     for (const token of sessionTokens(req)) {
       const principal = await this.auth.resolveSession(token);
       if (principal) {
@@ -61,15 +61,16 @@ export class SessionGuard implements CanActivate {
   }
 }
 
-// Collect every distinct jm_session token the request carries: the one
+// Collect every distinct token for THIS app's session cookie: the one
 // cookie-parser exposed plus any additional duplicates in the raw Cookie
 // header (which cookie-parser drops). Order: parser value first, then header
 // order. Capped so a client can't force unbounded session lookups.
 const MAX_SESSION_TOKENS = 5;
 function sessionTokens(req: Request): string[] {
+  const name = cookieName(appFromRequest(req));
   const tokens: string[] = [];
   const parsed = (req as Request & { cookies?: Record<string, string> })
-    .cookies?.[SESSION_COOKIE];
+    .cookies?.[name];
   if (parsed) tokens.push(parsed);
 
   const raw = req.headers.cookie;
@@ -77,7 +78,7 @@ function sessionTokens(req: Request): string[] {
     for (const part of raw.split(";")) {
       const eq = part.indexOf("=");
       if (eq === -1) continue;
-      if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue;
+      if (part.slice(0, eq).trim() !== name) continue;
       const value = decodeCookieValue(part.slice(eq + 1).trim());
       if (value) tokens.push(value);
     }

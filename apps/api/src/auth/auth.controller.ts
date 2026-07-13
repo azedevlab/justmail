@@ -30,28 +30,24 @@ const AUTH_THROTTLE = {
   limit: config.RATE_LIMIT_AUTH_MAX,
   ttl: config.RATE_LIMIT_AUTH_TTL,
 };
-import { Principal, SESSION_COOKIE, SessionGuard } from "./session.guard";
+import { Principal, SessionGuard } from "./session.guard";
+import {
+  appFromRequest,
+  clearSessionCookie,
+  setSessionCookie,
+} from "./session-cookie";
 
 @Controller("auth")
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  private setCookie(res: Response, token: string, expiresAt: Date): void {
-    const domain =
-      config.NODE_ENV === "production" ? config.JM_WEB_HOST : undefined;
-    // A leftover host-only cookie (set before this cookie was scoped to the
-    // parent domain) would shadow the domain-scoped one — cookie-parser keeps
-    // the first duplicate — making authenticated requests 401 after a valid
-    // login. Clear the host-only variant so only the domain cookie survives.
-    if (domain) res.clearCookie(SESSION_COOKIE, { path: "/" });
-    res.cookie(SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: config.NODE_ENV === "production",
-      sameSite: "lax",
-      domain,
-      path: "/",
-      expires: expiresAt,
-    });
+  private setCookie(
+    req: Request,
+    res: Response,
+    token: string,
+    expiresAt: Date,
+  ): void {
+    setSessionCookie(res, appFromRequest(req), token, expiresAt);
   }
 
   @Get("status")
@@ -72,7 +68,7 @@ export class AuthController {
       req.get("user-agent") ?? undefined,
       req.get("x-bootstrap-token") ?? undefined,
     );
-    this.setCookie(res, token, expiresAt);
+    this.setCookie(req, res, token, expiresAt);
     return { ok: true };
   }
 
@@ -89,7 +85,7 @@ export class AuthController {
       req.ip,
       req.get("user-agent") ?? undefined,
     );
-    this.setCookie(res, token, expiresAt);
+    this.setCookie(req, res, token, expiresAt);
     return { ok: true };
   }
 
@@ -102,13 +98,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.auth.logout(principal, req.ip);
-    res.clearCookie(SESSION_COOKIE, {
-      path: "/",
-      domain:
-        config.NODE_ENV === "production" ? config.JM_WEB_HOST : undefined,
-    });
-    // Also drop any legacy host-only cookie so logout clears both scopes.
-    res.clearCookie(SESSION_COOKIE, { path: "/" });
+    clearSessionCookie(res, appFromRequest(req));
   }
 
   @Get("me")
@@ -234,7 +224,7 @@ export class AuthController {
       req.ip,
       req.get("user-agent") ?? undefined,
     );
-    this.setCookie(res, token, expiresAt);
+    this.setCookie(req, res, token, expiresAt);
     return { ok: true };
   }
 }

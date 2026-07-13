@@ -66,7 +66,7 @@ export class OpenApiBuilder {
       paths,
       components: {
         securitySchemes: {
-          CookieAuth: { type: "apiKey", in: "cookie", name: "jm_session" },
+          CookieAuth: { type: "apiKey", in: "cookie", name: "jm_admin_session" },
           BearerAuth: {
             type: "http",
             scheme: "bearer",
