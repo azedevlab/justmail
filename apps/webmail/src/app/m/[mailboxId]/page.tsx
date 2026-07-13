@@ -1701,6 +1701,14 @@ function RichTextEditor({
     exec("formatBlock", current === tag ? "<p>" : `<${tag}>`);
   };
   const addLink = async () => {
+    // Opening the prompt dialog moves focus out of the editor and collapses the
+    // selection, so createLink would have nothing to wrap. Snapshot the Range
+    // first and restore it before applying the command.
+    const sel = window.getSelection();
+    const savedRange =
+      sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)
+        ? sel.getRangeAt(0).cloneRange()
+        : null;
     const url = await prompt({
       title: "Insert link",
       label: "Link URL",
@@ -1708,7 +1716,14 @@ function RichTextEditor({
       inputType: "url",
       confirmLabel: "Insert",
     });
-    if (url) exec("createLink", url);
+    if (!url) return;
+    editorRef.current?.focus();
+    if (savedRange) {
+      const s = window.getSelection();
+      s?.removeAllRanges();
+      s?.addRange(savedRange);
+    }
+    exec("createLink", url);
   };
   const btn = (
     aria: string,
