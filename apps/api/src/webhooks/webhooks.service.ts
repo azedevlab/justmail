@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
@@ -14,6 +15,7 @@ import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { open, seal } from "../common/secretbox";
+import { SsrfError, assertPublicHttpUrl } from "../common/ssrf";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { config } from "../config";
 
@@ -62,6 +64,14 @@ export class WebhooksService {
     ip?: string,
   ): Promise<CreatedWebhook> {
     await this.orgs.requireRole(orgId, principal.userId, "admin");
+    try {
+      await assertPublicHttpUrl(req.url);
+    } catch (err) {
+      if (err instanceof SsrfError) {
+        throw new BadRequestException({ title: err.message });
+      }
+      throw err;
+    }
     const secret = `whsec_${randomBytes(24).toString("base64url")}`;
     const enc = seal(secret);
     const { rows } = await this.db.query<EndpointRow>(
@@ -205,6 +215,9 @@ export class WebhooksService {
       let status: number | null = null;
       let errMsg: string | null = null;
       try {
+        // Re-validate at delivery time, not just at creation: DNS may have been
+        // repointed at an internal host since the endpoint was registered.
+        await assertPublicHttpUrl(r.url);
         const res = await fetch(r.url, {
           method: "POST",
           headers: {
@@ -213,6 +226,9 @@ export class WebhooksService {
             "x-justmail-signature": `sha256=${sig}`,
           },
           body: bodyStr,
+          // Don't chase redirects into internal space; a 3xx counts as a failed
+          // delivery the receiver must fix.
+          redirect: "manual",
           signal: AbortSignal.timeout(
             config.WEBHOOK_DELIVERY_TIMEOUT_SECONDS * 1_000,
           ),
