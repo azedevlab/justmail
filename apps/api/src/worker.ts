@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "@nestjs/common";
+import { Pool } from "pg";
 import { AppModule } from "./app.module";
 import { Db } from "./db/db.service";
 import { runMigrations } from "./db/migrate";
@@ -61,23 +62,62 @@ async function main(): Promise<void> {
     { label: "dns-recheck", ms: DNS_RECHECK_MS, fn: () => dns.recheckDue() },
   ];
 
-  const timers = runners.map((r) =>
-    setInterval(async () => {
+  // Each loop mutates shared state, so with more than one worker replica a
+  // naive setInterval would double-fire (double-send, double-rotate, etc.).
+  // Guard every tick with a Postgres session advisory lock keyed by the loop:
+  // whichever replica grabs the lock runs the tick; others skip until next tick.
+  // A dedicated pool holds these locks so a held lock never starves the query
+  // pool the tick body itself needs.
+  const lockPool = new Pool({
+    connectionString: config.DATABASE_URL,
+    max: runners.length + 1,
+    ssl: config.DATABASE_SSL
+      ? { rejectUnauthorized: config.DATABASE_SSL_REJECT_UNAUTHORIZED }
+      : undefined,
+  });
+
+  const runLocked = async (r: (typeof runners)[number]) => {
+    const client = await lockPool.connect();
+    try {
+      const { rows } = await client.query<{ ok: boolean }>(
+        "SELECT pg_try_advisory_lock($1) AS ok",
+        [lockKey(r.label)],
+      );
+      if (!rows[0]?.ok) return; // another replica owns this loop this tick
       try {
         await r.fn();
-      } catch (err) {
-        logger.warn(`${r.label} tick failed: ${(err as Error).message}`);
+      } finally {
+        await client.query("SELECT pg_advisory_unlock($1)", [lockKey(r.label)]);
       }
+    } finally {
+      client.release();
+    }
+  };
+
+  const timers = runners.map((r) =>
+    setInterval(() => {
+      runLocked(r).catch((err) => {
+        logger.warn(`${r.label} tick failed: ${(err as Error).message}`);
+      });
     }, r.ms),
   );
 
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.on(signal, async () => {
       timers.forEach(clearInterval);
+      await lockPool.end();
       await app.close();
       process.exit(0);
     });
   }
+}
+
+// Stable 31-bit advisory-lock key for a loop label (deterministic across
+// replicas so they contend on the same key). djb2, masked to a positive int.
+function lockKey(label: string): number {
+  let h = 5381;
+  for (let i = 0; i < label.length; i++) h = ((h << 5) + h + label.charCodeAt(i)) | 0;
+  return (h & 0x7fffffff) || 1;
 }
 
 void main();

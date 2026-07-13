@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { NotFoundException } from "@nestjs/common";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DkimService } from "./dkim.service";
 import { config } from "../config";
 
@@ -50,5 +54,66 @@ describe("DkimService.rotateDue gating", () => {
     const { service, calls } = svc();
     await expect(service.rotateDue()).resolves.toEqual({ started: [], promoted: [] });
     expect(calls).toHaveLength(0);
+  });
+});
+
+// Captures the SQL issued inside the activate() transaction so we can assert the
+// invariant-preserving order (retire the outgoing key before promoting the new
+// one, so the one-active-per-domain unique index is never transiently violated).
+function activateSvc(targetExists: boolean) {
+  const txCalls: string[] = [];
+  const db = {
+    query: async () => ({ rows: [], rowCount: 0 }),
+    tx: (fn: (tx: { query: (sql: string) => Promise<unknown> }) => unknown) =>
+      Promise.resolve(
+        fn({
+          query: async (sql: string) => {
+            txCalls.push(sql);
+            if (sql.includes("FOR UPDATE")) {
+              return { rowCount: targetExists ? 1 : 0, rows: [] };
+            }
+            return { rowCount: 1, rows: [] };
+          },
+        }),
+      ),
+  };
+  const orgs = { requireRole: async () => "admin" };
+  const audit = { log: () => undefined };
+  return {
+    service: new DkimService(db as never, orgs as never, audit as never),
+    txCalls,
+  };
+}
+
+describe("DkimService.activate invariant", () => {
+  const origDir = config.DKIM_DIR;
+  afterEach(() => {
+    config.DKIM_DIR = origDir;
+  });
+
+  it("retires the outgoing active key before promoting the target", async () => {
+    config.DKIM_DIR = mkdtempSync(join(tmpdir(), "dkim-test-"));
+    const { service, txCalls } = activateSvc(true);
+    await service.activate(
+      { userId: "u1" } as never,
+      "org-1",
+      "dom-1",
+      "key-1",
+    );
+    const retireIdx = txCalls.findIndex((s) =>
+      s.includes("SET status = 'retired'"),
+    );
+    const activateIdx = txCalls.findIndex((s) =>
+      s.includes("SET status = 'active'"),
+    );
+    expect(retireIdx).toBeGreaterThanOrEqual(0);
+    expect(activateIdx).toBeGreaterThan(retireIdx);
+  });
+
+  it("throws NotFound when the key does not belong to the domain", async () => {
+    const { service } = activateSvc(false);
+    await expect(
+      service.activate({ userId: "u1" } as never, "org-1", "dom-1", "nope"),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

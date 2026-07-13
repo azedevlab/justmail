@@ -118,19 +118,34 @@ export class DkimService {
     ip?: string,
   ) {
     await this.orgs.requireRole(orgId, principal.userId, "admin");
-    await this.db.tx(async (tx) => {
-      const { rowCount } = await tx.query(
-        `UPDATE dkim_keys SET status = 'active', activated_at = now()
-         WHERE id = $1 AND domain_id = $2`,
-        [keyId, domainId],
-      );
-      if (!rowCount) throw new NotFoundException({ title: "Key not found" });
-      await tx.query(
-        `UPDATE dkim_keys SET status = 'retired', retired_at = now()
-         WHERE domain_id = $1 AND id <> $2 AND status = 'active'`,
-        [domainId, keyId],
-      );
-    });
+    await this.db
+      .tx(async (tx) => {
+        // Lock the target row so concurrent activations of the same key
+        // serialize, and confirm it belongs to the domain before mutating.
+        const target = await tx.query(
+          "SELECT id FROM dkim_keys WHERE id = $1 AND domain_id = $2 FOR UPDATE",
+          [keyId, domainId],
+        );
+        if (!target.rowCount) throw new NotFoundException({ title: "Key not found" });
+        // Retire the currently-active key BEFORE promoting the target so the
+        // dkim_one_active_per_domain unique index is never transiently violated.
+        await tx.query(
+          `UPDATE dkim_keys SET status = 'retired', retired_at = now()
+           WHERE domain_id = $1 AND id <> $2 AND status = 'active'`,
+          [domainId, keyId],
+        );
+        await tx.query(
+          `UPDATE dkim_keys SET status = 'active', activated_at = now()
+           WHERE id = $1 AND domain_id = $2`,
+          [keyId, domainId],
+        );
+      })
+      .catch((err: Error & { code?: string }) => {
+        if (err.code === "23505") {
+          throw new ConflictException({ title: "Another key is already active" });
+        }
+        throw err;
+      });
     // selectors.map only lists *active* keys — rebuild it now or the newly
     // activated key would not sign anything until the next process restart.
     await this.syncKeysToDisk();
@@ -280,17 +295,29 @@ export class DkimService {
         this.logger.warn(`rotate promote deferred: ${recordName} not resolving yet`);
         continue;
       }
-      await this.db.tx(async (tx) => {
-        await tx.query(
-          `UPDATE dkim_keys SET status = 'active', activated_at = now() WHERE id = $1`,
-          [k.id],
-        );
-        await tx.query(
-          `UPDATE dkim_keys SET status = 'retired', retired_at = now()
-            WHERE domain_id = $1 AND id <> $2 AND status = 'active'`,
-          [k.domain_id, k.id],
-        );
-      });
+      try {
+        await this.db.tx(async (tx) => {
+          await tx.query(
+            "SELECT id FROM dkim_keys WHERE id = $1 FOR UPDATE",
+            [k.id],
+          );
+          // Retire the outgoing active key before promoting so the
+          // one-active-per-domain unique index is never transiently violated.
+          await tx.query(
+            `UPDATE dkim_keys SET status = 'retired', retired_at = now()
+              WHERE domain_id = $1 AND id <> $2 AND status = 'active'`,
+            [k.domain_id, k.id],
+          );
+          await tx.query(
+            `UPDATE dkim_keys SET status = 'active', activated_at = now() WHERE id = $1`,
+            [k.id],
+          );
+        });
+      } catch (err) {
+        // A concurrent worker/replica won the promotion; skip this one.
+        this.logger.warn(`rotate promote ${recordName}: ${(err as Error).message}`);
+        continue;
+      }
       await this.syncKeysToDisk();
       this.audit.log({
         orgId: k.org_id,
