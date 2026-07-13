@@ -37,6 +37,53 @@ export function txtKind(content: string): string | null {
   return null;
 }
 
+// A CAA record reduced to the three fields that define its identity. Flags,
+// tag (issue/issuewild/iodef/…) and the quoted value, all case-folded so a
+// resolver answer can be compared against our BIND-style desired content.
+export interface CaaTuple {
+  flags: number;
+  tag: string;
+  value: string;
+}
+
+// Parse a CAA record from either BIND-style text (`0 issue "letsencrypt.org"`)
+// or a Node resolver object (`{ critical: 0, issue: "letsencrypt.org" }`).
+export function parseCaa(
+  input: string | Record<string, unknown>,
+): CaaTuple | null {
+  if (typeof input === "string") {
+    const m = input.trim().match(/^(\d+)\s+([a-z0-9]+)\s+"?([^"]*)"?\s*$/i);
+    if (!m) return null;
+    return {
+      flags: Number(m[1]),
+      tag: m[2]!.toLowerCase(),
+      value: m[3]!.trim().toLowerCase(),
+    };
+  }
+  const flags = Number((input as { critical?: unknown }).critical ?? 0);
+  for (const tag of ["issue", "issuewild", "iodef", "contactemail", "contactphone"]) {
+    const v = input[tag];
+    if (typeof v === "string") {
+      return { flags, tag, value: v.trim().toLowerCase() };
+    }
+  }
+  return null;
+}
+
+export function caaEqual(a: CaaTuple | null, b: CaaTuple | null): boolean {
+  return (
+    a !== null &&
+    b !== null &&
+    a.flags === b.flags &&
+    a.tag === b.tag &&
+    a.value === b.value
+  );
+}
+
+export function caaToString(t: CaaTuple): string {
+  return `${t.flags} ${t.tag} "${t.value}"`;
+}
+
 function mxHost(content: string): string {
   // "10 mail.example.com." → "mail.example.com"
   const parts = content.trim().split(/\s+/);

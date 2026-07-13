@@ -7,7 +7,15 @@
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
-    "./react": "./react.js"
+    "./react": "./react.js",
+    "./next": "./next.js"
+  },
+  "dependencies": {
+    "@next/eslint-plugin-next": "^16.0.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.20.0"
   },
   "peerDependencies": {
     "eslint": ">=9"

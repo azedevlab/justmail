@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -601,13 +602,13 @@ export default function MailboxView() {
       {/* Top chrome */}
       <header className="h-12 shrink-0 border-b border-[var(--color-border)] flex items-center gap-3 px-3 bg-[var(--color-surface-1)]">
         <Tooltip content="All mailboxes">
-          <a
+          <Link
             href="/"
             className="p-2 rounded-lg text-[var(--color-neutral-900)] hover:bg-[var(--hover-overlay)] hover:text-[var(--color-neutral-1100)] transition-colors"
             aria-label="Back to mailboxes"
           >
             <ArrowLeft size={15} />
-          </a>
+          </Link>
         </Tooltip>
         <Wordmark size={26} />
         <span className="text-[var(--color-neutral-600)] text-sm">/</span>

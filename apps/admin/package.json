@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@justmail/contracts": "workspace:*",
@@ -30,6 +30,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@justmail/eslint-config": "workspace:*",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^26.1.1",
     "@types/qrcode": "^1.5.6",

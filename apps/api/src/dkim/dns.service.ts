@@ -5,7 +5,13 @@ import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { getDnsProvider } from "./dns-provider";
-import { chooseExisting, staleDuplicates } from "./dns-reconcile";
+import {
+  caaEqual,
+  caaToString,
+  chooseExisting,
+  parseCaa,
+  staleDuplicates,
+} from "./dns-reconcile";
 
 interface RecordRow {
   id: string;
@@ -183,9 +189,27 @@ export class DnsService {
       let observed: string | null = null;
       let status: string;
       try {
-        observed = await this.resolveOne(r.type, r.name);
-        const matches = observed !== null && observed.includes(strip(r.content));
-        status = matches ? "ok" : observed ? "drifted" : "missing";
+        if (r.type === "CAA") {
+          // CAA can't be compared as raw text: the resolver returns structured
+          // objects while our desired content is BIND-style. Compare canonical
+          // (flags, tag, value) tuples so a correctly-published record isn't
+          // reported as drifted.
+          const recs = (await resolve(r.name, "CAA")) as unknown as Array<
+            Record<string, unknown>
+          >;
+          const parsed = recs
+            .map((x) => parseCaa(x))
+            .filter((x): x is NonNullable<typeof x> => x !== null);
+          observed = parsed.length ? parsed.map(caaToString).join(" | ") : null;
+          const expected = parseCaa(r.content);
+          const matches = parsed.some((p) => caaEqual(p, expected));
+          status = matches ? "ok" : observed ? "drifted" : "missing";
+        } else {
+          observed = await this.resolveOne(r.type, r.name);
+          const matches =
+            observed !== null && observed.includes(strip(r.content));
+          status = matches ? "ok" : observed ? "drifted" : "missing";
+        }
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
         // NXDOMAIN / no-data answers mean "not published", not a lookup fault.

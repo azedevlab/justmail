@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  caaEqual,
+  caaToString,
   chooseExisting,
+  parseCaa,
   staleDuplicates,
   txtKind,
   type ProviderRecord,
@@ -72,6 +75,38 @@ describe("chooseExisting", () => {
       existing,
     );
     expect(chosen?.id).toBe("b");
+  });
+});
+
+describe("CAA parsing + matching", () => {
+  it("treats BIND text and a resolver object as the same record", () => {
+    const desired = parseCaa('0 issue "letsencrypt.org"');
+    const resolved = parseCaa({ critical: 0, issue: "letsencrypt.org" });
+    expect(caaEqual(desired, resolved)).toBe(true);
+  });
+
+  it("is case- and quote-insensitive", () => {
+    const a = parseCaa('0 ISSUE "LetsEncrypt.org"');
+    const b = parseCaa({ critical: 0, issue: "letsencrypt.org" });
+    expect(caaEqual(a, b)).toBe(true);
+  });
+
+  it("distinguishes different flags, tags or values", () => {
+    const base = parseCaa('0 issue "letsencrypt.org"');
+    expect(caaEqual(base, parseCaa('128 issue "letsencrypt.org"'))).toBe(false);
+    expect(caaEqual(base, parseCaa('0 issuewild "letsencrypt.org"'))).toBe(false);
+    expect(caaEqual(base, parseCaa('0 issue "sectigo.com"'))).toBe(false);
+  });
+
+  it("renders a canonical BIND-style string", () => {
+    expect(caaToString(parseCaa({ critical: 0, issue: "letsencrypt.org" })!)).toBe(
+      '0 issue "letsencrypt.org"',
+    );
+  });
+
+  it("returns null for unparseable input", () => {
+    expect(parseCaa("not a caa record")).toBeNull();
+    expect(parseCaa({ critical: 0 })).toBeNull();
   });
 });
 
