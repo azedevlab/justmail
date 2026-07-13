@@ -1,11 +1,13 @@
 "use client";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import type {
   BlockedIp,
+  CountryBlock,
   CreateBlockedIpRequest,
+  IpWarmup,
   SecurityScore,
 } from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
@@ -16,6 +18,7 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Checkbox,
   Empty,
   FormField,
   Input,
@@ -156,6 +159,9 @@ export default function SecurityPage() {
             )}
           </CardBody>
         </Card>
+
+        <CountryBlockCard orgId={orgId} />
+        <WarmupCard orgId={orgId} />
       </PageBody>
       {showBlock && <BlockModal orgId={orgId} onClose={() => setShowBlock(false)} />}
     </>
@@ -227,5 +233,200 @@ function BlockModal({ orgId, onClose }: { orgId: string; onClose: () => void }) 
         )}
       </form>
     </Modal>
+  );
+}
+
+function CountryBlockCard({ orgId }: { orgId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const q = useQuery({
+    queryKey: ["country-block", orgId],
+    queryFn: () =>
+      api.get<CountryBlock>(`/v1/orgs/${orgId}/security/country-block`),
+  });
+  const [enabled, setEnabled] = useState(false);
+  const [countries, setCountries] = useState("");
+
+  useEffect(() => {
+    if (q.data) {
+      setEnabled(q.data.enabled);
+      setCountries(q.data.countries.join(", "));
+    }
+  }, [q.data]);
+
+  const save = useMutation({
+    mutationFn: (body: CountryBlock) =>
+      api.put(`/v1/orgs/${orgId}/security/country-block`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["country-block", orgId] });
+      toast({ title: "Country block saved", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        tone: "bad",
+      }),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Country block</CardTitle>
+      </CardHeader>
+      <CardBody className="space-y-4">
+        {q.isLoading && <SkeletonRows count={2} />}
+        {q.data && (
+          <>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+              Reject SMTP connections from the listed countries
+            </label>
+            <FormField
+              label="Country codes (ISO 3166-1 alpha-2, comma-separated)"
+              hint="Example: RU, KP, CN"
+            >
+              <Input
+                monospace
+                placeholder="RU, KP"
+                value={countries}
+                onChange={(e) => setCountries(e.target.value)}
+              />
+            </FormField>
+            <div>
+              <Button
+                variant="primary"
+                loading={save.isPending}
+                onClick={() =>
+                  save.mutate({
+                    enabled,
+                    countries: countries
+                      .split(/[\s,]+/)
+                      .map((c) => c.trim().toUpperCase())
+                      .filter(Boolean),
+                  })
+                }
+              >
+                Save country block
+              </Button>
+            </div>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function WarmupCard({ orgId }: { orgId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const q = useQuery({
+    queryKey: ["ip-warmup", orgId],
+    queryFn: () =>
+      api.get<IpWarmup | null>(`/v1/orgs/${orgId}/security/ip-warmup`),
+  });
+  const [enabled, setEnabled] = useState(false);
+  const [days, setDays] = useState(30);
+  const [start, setStart] = useState(50);
+  const [target, setTarget] = useState(50_000);
+
+  useEffect(() => {
+    if (q.data) {
+      setEnabled(q.data.enabled);
+      setDays(q.data.days);
+      setStart(q.data.daily_limit_start);
+      setTarget(q.data.daily_limit_target);
+    }
+  }, [q.data]);
+
+  const save = useMutation({
+    mutationFn: (body: IpWarmup) =>
+      api.put(`/v1/orgs/${orgId}/security/ip-warmup`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ip-warmup", orgId] });
+      toast({ title: "IP warmup saved", tone: "ok" });
+    },
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        tone: "bad",
+      }),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>IP warmup</CardTitle>
+      </CardHeader>
+      <CardBody className="space-y-4">
+        {q.isLoading && <SkeletonRows count={2} />}
+        {!q.isLoading && (
+          <>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+              Ramp the outbound daily send limit for a fresh sending IP
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <FormField label="Warmup period (days)">
+                <Input
+                  type="number"
+                  monospace
+                  min={1}
+                  max={90}
+                  value={days}
+                  onChange={(e) => setDays(Number(e.target.value))}
+                />
+              </FormField>
+              <FormField label="Starting daily limit">
+                <Input
+                  type="number"
+                  monospace
+                  min={1}
+                  value={start}
+                  onChange={(e) => setStart(Number(e.target.value))}
+                />
+              </FormField>
+              <FormField label="Target daily limit">
+                <Input
+                  type="number"
+                  monospace
+                  min={1}
+                  value={target}
+                  onChange={(e) => setTarget(Number(e.target.value))}
+                />
+              </FormField>
+            </div>
+            <div>
+              <Button
+                variant="primary"
+                loading={save.isPending}
+                onClick={() =>
+                  save.mutate({
+                    enabled,
+                    started_at: q.data?.started_at ?? new Date().toISOString(),
+                    days,
+                    daily_limit_start: start,
+                    daily_limit_target: target,
+                  })
+                }
+              >
+                Save warmup plan
+              </Button>
+            </div>
+          </>
+        )}
+      </CardBody>
+    </Card>
   );
 }

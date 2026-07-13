@@ -6,6 +6,7 @@ import { useState } from "react";
 import type {
   CreatedWebhook,
   CreateWebhookRequest,
+  WebhookDelivery,
   WebhookEndpoint,
 } from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
@@ -20,6 +21,7 @@ import {
   PageBody,
   PageHeader,
   SkeletonRows,
+  Spinner,
   StatusBadge,
   Table,
   TD,
@@ -51,6 +53,9 @@ export default function WebhooksPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
+  const [deliveriesFor, setDeliveriesFor] = useState<WebhookEndpoint | null>(
+    null,
+  );
   const list = useQuery({
     queryKey: ["webhooks", orgId],
     queryFn: () => api.get<WebhookEndpoint[]>(`/v1/orgs/${orgId}/webhooks`),
@@ -119,21 +124,29 @@ export default function WebhooksPage() {
                       <span className="mono text-xs">{w.failure_count}</span>
                     </TD>
                     <TD className="text-right">
-                      <button
-                        className="text-xs text-[var(--color-bad)] hover:underline"
-                        onClick={async () => {
-                          if (
-                            await confirm({
-                              title: "Delete this endpoint?",
-                              tone: "danger",
-                              confirmLabel: "Delete",
-                            })
-                          )
-                            remove.mutate(w.id);
-                        }}
-                      >
-                        Delete
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          className="text-xs text-[var(--color-accent)] hover:underline"
+                          onClick={() => setDeliveriesFor(w)}
+                        >
+                          Deliveries
+                        </button>
+                        <button
+                          className="text-xs text-[var(--color-bad)] hover:underline"
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                title: "Delete this endpoint?",
+                                tone: "danger",
+                                confirmLabel: "Delete",
+                              })
+                            )
+                              remove.mutate(w.id);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </TD>
                   </TR>
                 ))}
@@ -145,7 +158,103 @@ export default function WebhooksPage() {
       {showCreate && (
         <CreateModal orgId={orgId} onClose={() => setShowCreate(false)} />
       )}
+      {deliveriesFor && (
+        <DeliveriesModal
+          orgId={orgId}
+          endpoint={deliveriesFor}
+          onClose={() => setDeliveriesFor(null)}
+        />
+      )}
     </>
+  );
+}
+
+function DeliveriesModal({
+  orgId,
+  endpoint,
+  onClose,
+}: {
+  orgId: string;
+  endpoint: WebhookEndpoint;
+  onClose: () => void;
+}) {
+  const deliveries = useQuery({
+    queryKey: ["webhook-deliveries", orgId, endpoint.id],
+    queryFn: () =>
+      api.get<WebhookDelivery[]>(
+        `/v1/orgs/${orgId}/webhooks/${endpoint.id}/deliveries`,
+      ),
+  });
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Recent deliveries"
+      description={endpoint.url}
+      footer={
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      {deliveries.isLoading && (
+        <div className="flex justify-center py-6">
+          <Spinner />
+        </div>
+      )}
+      {deliveries.data && deliveries.data.length === 0 && (
+        <Empty title="No deliveries yet" />
+      )}
+      {deliveries.data && deliveries.data.length > 0 && (
+        <Table>
+          <THead>
+            <TR>
+              <TH>Event</TH>
+              <TH>Status</TH>
+              <TH>Attempts</TH>
+              <TH>When</TH>
+            </TR>
+          </THead>
+          <tbody>
+            {deliveries.data.map((d) => (
+              <TR key={d.id}>
+                <TD className="text-xs mono">{d.event}</TD>
+                <TD>
+                  {d.status ? (
+                    <StatusBadge
+                      status={
+                        d.status >= 200 && d.status < 300 ? "ok" : "error"
+                      }
+                    />
+                  ) : d.delivered_at ? (
+                    <StatusBadge status="ok" />
+                  ) : (
+                    <StatusBadge status="pending" />
+                  )}
+                </TD>
+                <TD>
+                  <span className="mono text-xs">{d.attempts}</span>
+                </TD>
+                <TD className="text-xs">
+                  {new Date(
+                    d.delivered_at ?? d.created_at,
+                  ).toLocaleString()}
+                </TD>
+              </TR>
+            ))}
+          </tbody>
+        </Table>
+      )}
+      {deliveries.data &&
+        deliveries.data.some((d) => d.last_error) && (
+          <p className="mt-3 text-xs text-[var(--color-bad)]">
+            Last error:{" "}
+            {
+              deliveries.data.find((d) => d.last_error)?.last_error
+            }
+          </p>
+        )}
+    </Modal>
   );
 }
 

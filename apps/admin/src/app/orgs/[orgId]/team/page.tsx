@@ -63,12 +63,32 @@ export default function TeamPage() {
   const updateRole = useMutation({
     mutationFn: (v: { userId: string; role: OrgRole }) =>
       api.patch(`/v1/orgs/${orgId}/members/${v.userId}`, { role: v.role }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["members", orgId] }),
+    onSuccess: () => toast({ title: "Role updated", tone: "ok" }),
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        tone: "bad",
+      }),
+    // Re-sync from the server whether we succeeded or not so the Select reverts
+    // when the API rejects the change (e.g. last owner, owner-grant guard).
+    onSettled: () => qc.invalidateQueries({ queryKey: ["members", orgId] }),
   });
   const removeMember = useMutation({
     mutationFn: (userId: string) =>
       api.del(`/v1/orgs/${orgId}/members/${userId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["members", orgId] }),
+    onSuccess: () => toast({ title: "Member removed", tone: "ok" }),
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        tone: "bad",
+      }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["members", orgId] }),
   });
 
   return (

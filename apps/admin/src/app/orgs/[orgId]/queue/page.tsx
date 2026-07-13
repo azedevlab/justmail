@@ -1,7 +1,14 @@
 "use client";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import type {
+  DeferredEntry,
+  QueueSnapshot,
+  TraceStep,
+} from "@justmail/contracts";
 import {
+  Badge,
   Card,
   CardBody,
   CardHeader,
@@ -15,35 +22,20 @@ import {
   THead,
   TR,
 } from "@justmail/shared-ui";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
-
-interface Snapshot {
-  active: number;
-  deferred: number;
-  hold: number;
-  oldest_age_s: number;
-  taken_at: string | null;
-}
-interface Deferred {
-  queue_id: string;
-  from_addr: string | null;
-  to_addr: string | null;
-  dsn: string | null;
-  last_seen: string;
-  attempts: number;
-}
 
 export default function QueuePage() {
   const { orgId } = useParams<{ orgId: string }>();
   const snap = useQuery({
     queryKey: ["queue", orgId],
-    queryFn: () => api.get<Snapshot>(`/v1/orgs/${orgId}/queue`),
+    queryFn: () => api.get<QueueSnapshot>(`/v1/orgs/${orgId}/queue`),
     refetchInterval: 15_000,
   });
   const deferred = useQuery({
     queryKey: ["queue-deferred", orgId],
     queryFn: () =>
-      api.get<Deferred[]>(`/v1/orgs/${orgId}/queue/deferred?limit=100`),
+      api.get<DeferredEntry[]>(`/v1/orgs/${orgId}/queue/deferred?limit=100`),
     refetchInterval: 30_000,
   });
 
@@ -82,6 +74,7 @@ export default function QueuePage() {
               <Table>
                 <THead>
                   <TR>
+                    <TH></TH>
                     <TH>Queue ID</TH>
                     <TH>From</TH>
                     <TH>To</TH>
@@ -92,24 +85,7 @@ export default function QueuePage() {
                 </THead>
                 <tbody>
                   {deferred.data.map((d) => (
-                    <TR key={d.queue_id}>
-                      <TD>
-                        <span className="mono">{d.queue_id}</span>
-                      </TD>
-                      <TD>
-                        <span className="mono text-xs">{d.from_addr ?? "—"}</span>
-                      </TD>
-                      <TD>
-                        <span className="mono text-xs">{d.to_addr ?? "—"}</span>
-                      </TD>
-                      <TD>
-                        <span className="mono text-xs">{d.dsn ?? "—"}</span>
-                      </TD>
-                      <TD>{d.attempts}</TD>
-                      <TD className="text-xs">
-                        {new Date(d.last_seen).toLocaleString()}
-                      </TD>
-                    </TR>
+                    <DeferredRow key={d.queue_id} orgId={orgId} entry={d} />
                   ))}
                 </tbody>
               </Table>
@@ -117,6 +93,114 @@ export default function QueuePage() {
           </CardBody>
         </Card>
       </PageBody>
+    </>
+  );
+}
+
+function DeferredRow({
+  orgId,
+  entry: d,
+}: {
+  orgId: string;
+  entry: DeferredEntry;
+}) {
+  const [open, setOpen] = useState(false);
+  const trace = useQuery({
+    queryKey: ["queue-trace", orgId, d.queue_id],
+    queryFn: () =>
+      api.get<TraceStep[]>(
+        `/v1/orgs/${orgId}/queue/trace/${encodeURIComponent(d.queue_id)}`,
+      ),
+    enabled: open,
+  });
+
+  return (
+    <>
+      <TR className="cursor-pointer" onClick={() => setOpen((v) => !v)}>
+        <TD className="w-6 text-[var(--color-neutral-800)]">
+          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </TD>
+        <TD>
+          <span className="mono">{d.queue_id}</span>
+        </TD>
+        <TD>
+          <span className="mono text-xs">{d.from_addr ?? "—"}</span>
+        </TD>
+        <TD>
+          <span className="mono text-xs">{d.to_addr ?? "—"}</span>
+        </TD>
+        <TD>
+          <span className="mono text-xs">{d.dsn ?? "—"}</span>
+        </TD>
+        <TD>{d.attempts}</TD>
+        <TD className="text-xs">{new Date(d.last_seen).toLocaleString()}</TD>
+      </TR>
+      {open && (
+        <tr>
+          <td colSpan={7} className="p-0">
+            <div className="bg-[var(--color-surface-2)] px-4 py-3">
+              {trace.isLoading && <SkeletonRows count={2} />}
+              {trace.data && trace.data.length === 0 && (
+                <p className="text-xs text-[var(--color-neutral-800)]">
+                  No recorded events for this queue id.
+                </p>
+              )}
+              {trace.data && trace.data.length > 0 && (
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>Event</TH>
+                      <TH>Relay</TH>
+                      <TH>DSN</TH>
+                      <TH>TLS</TH>
+                      <TH>Detail</TH>
+                      <TH>When</TH>
+                    </TR>
+                  </THead>
+                  <tbody>
+                    {trace.data.map((s, i) => (
+                      <TR key={`${s.event}-${i}`}>
+                        <TD>
+                          <Badge
+                            tone={
+                              s.event.includes("bounce")
+                                ? "bad"
+                                : s.event.includes("defer")
+                                  ? "warn"
+                                  : s.event.includes("sent")
+                                    ? "ok"
+                                    : "muted"
+                            }
+                          >
+                            {s.event}
+                          </Badge>
+                        </TD>
+                        <TD>
+                          <span className="mono text-xs">{s.relay ?? "—"}</span>
+                        </TD>
+                        <TD>
+                          <span className="mono text-xs">{s.dsn ?? "—"}</span>
+                        </TD>
+                        <TD>
+                          <span className="mono text-xs">
+                            {s.tls_version ?? "—"}
+                          </span>
+                        </TD>
+                        <TD>
+                          <span className="text-xs">{s.detail ?? "—"}</span>
+                        </TD>
+                        <TD className="text-xs">
+                          {new Date(s.occurred_at).toLocaleString()}
+                        </TD>
+                      </TR>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   );
 }

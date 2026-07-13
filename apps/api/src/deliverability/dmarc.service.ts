@@ -69,10 +69,12 @@ export class DmarcService {
       spf_pass: boolean;
       header_from: string | null;
     }>(
-      `SELECT source_ip, count, disposition, dkim_pass, spf_pass, header_from
-       FROM dmarc_report_records
-       WHERE report_id = $1 ORDER BY count DESC`,
-      [id],
+      `SELECT rec.source_ip, rec.count, rec.disposition, rec.dkim_pass,
+              rec.spf_pass, rec.header_from
+       FROM dmarc_report_records rec
+       JOIN dmarc_reports r ON r.id = rec.report_id
+       WHERE rec.report_id = $1 AND r.org_id = $2 ORDER BY rec.count DESC`,
+      [id, orgId],
     );
     return {
       ...toReport(rows[0]!),

@@ -7,12 +7,14 @@ import type {
   CreateMailboxRequest,
   Domain,
   Mailbox,
+  UpdateMailboxRequest,
 } from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
 import {
   Badge,
   Button,
   Card,
+  Checkbox,
   DropdownItem,
   DropdownMenu,
   Empty,
@@ -43,6 +45,8 @@ export default function MailboxesPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
+  const [editBox, setEditBox] = useState<Mailbox | null>(null);
+  const [pwBox, setPwBox] = useState<Mailbox | null>(null);
   const [filter, setFilter] = useState("");
   const list = useQuery({
     queryKey: ["mailboxes", orgId],
@@ -176,6 +180,12 @@ export default function MailboxesPage() {
                             </IconButton>
                           }
                         >
+                          <DropdownItem onSelect={() => setEditBox(m)}>
+                            Edit
+                          </DropdownItem>
+                          <DropdownItem onSelect={() => setPwBox(m)}>
+                            Reset password
+                          </DropdownItem>
                           <DropdownItem
                             onSelect={() =>
                               toggle.mutate({
@@ -217,6 +227,20 @@ export default function MailboxesPage() {
           orgId={orgId}
           domains={domains.data}
           onClose={() => setShowCreate(false)}
+        />
+      )}
+      {editBox && (
+        <EditModal
+          orgId={orgId}
+          mailbox={editBox}
+          onClose={() => setEditBox(null)}
+        />
+      )}
+      {pwBox && (
+        <PasswordModal
+          orgId={orgId}
+          mailbox={pwBox}
+          onClose={() => setPwBox(null)}
         />
       )}
     </>
@@ -331,6 +355,217 @@ function CreateModal({
             />
           </FormField>
         </div>
+        {err && (
+          <p className="text-xs text-[var(--color-bad)]" role="alert">
+            {err}
+          </p>
+        )}
+      </form>
+    </Modal>
+  );
+}
+
+function EditModal({
+  orgId,
+  mailbox,
+  onClose,
+}: {
+  orgId: string;
+  mailbox: Mailbox;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const f = useForm<{
+    name: string;
+    quota_mb: number;
+    imap_enabled: boolean;
+    pop3_enabled: boolean;
+    smtp_enabled: boolean;
+    sieve_enabled: boolean;
+    forward_to: string;
+    forward_keep_copy: boolean;
+  }>({
+    defaultValues: {
+      name: mailbox.name,
+      quota_mb: mailbox.quota_mb,
+      imap_enabled: mailbox.imap_enabled,
+      pop3_enabled: mailbox.pop3_enabled,
+      smtp_enabled: mailbox.smtp_enabled,
+      sieve_enabled: mailbox.sieve_enabled,
+      forward_to: mailbox.forward_to.join(", "),
+      forward_keep_copy: mailbox.forward_keep_copy,
+    },
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const mut = useMutation({
+    mutationFn: (body: UpdateMailboxRequest) =>
+      api.patch<Mailbox>(`/v1/orgs/${orgId}/mailboxes/${mailbox.id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mailboxes", orgId] });
+      toast({ title: "Mailbox updated", tone: "ok" });
+      onClose();
+    },
+    onError: (e) =>
+      setErr(
+        e instanceof ApiError
+          ? e.problem.detail ?? e.problem.title
+          : (e as Error).message,
+      ),
+  });
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Edit ${mailbox.address}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={mut.isPending}
+            onClick={f.handleSubmit((v) => {
+              setErr(null);
+              const forward_to = v.forward_to
+                .split(/[,\s]+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              mut.mutate({
+                name: v.name,
+                quota_mb: v.quota_mb,
+                imap_enabled: v.imap_enabled,
+                pop3_enabled: v.pop3_enabled,
+                smtp_enabled: v.smtp_enabled,
+                sieve_enabled: v.sieve_enabled,
+                forward_to,
+                forward_keep_copy: v.forward_keep_copy,
+              });
+            })}
+          >
+            Save changes
+          </Button>
+        </>
+      }
+    >
+      <form className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Display name">
+            <Input {...f.register("name")} />
+          </FormField>
+          <FormField label="Quota (MB)">
+            <Input
+              type="number"
+              monospace
+              min={0}
+              {...f.register("quota_mb", { valueAsNumber: true, min: 0 })}
+            />
+          </FormField>
+        </div>
+        <FormField label="Protocols">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
+              <Checkbox {...f.register("imap_enabled")} /> IMAP
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
+              <Checkbox {...f.register("pop3_enabled")} /> POP3
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
+              <Checkbox {...f.register("smtp_enabled")} /> SMTP
+            </label>
+            <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
+              <Checkbox {...f.register("sieve_enabled")} /> Sieve
+            </label>
+          </div>
+        </FormField>
+        <FormField
+          label="Forward to"
+          hint="Comma or space separated. Leave blank to disable forwarding."
+        >
+          <Input
+            monospace
+            placeholder="alice@example.com bob@example.com"
+            {...f.register("forward_to")}
+          />
+        </FormField>
+        <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
+          <Checkbox {...f.register("forward_keep_copy")} />
+          Keep a copy in this mailbox when forwarding
+        </label>
+        {err && (
+          <p className="text-xs text-[var(--color-bad)]" role="alert">
+            {err}
+          </p>
+        )}
+      </form>
+    </Modal>
+  );
+}
+
+function PasswordModal({
+  orgId,
+  mailbox,
+  onClose,
+}: {
+  orgId: string;
+  mailbox: Mailbox;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const f = useForm<{ password: string }>({
+    defaultValues: { password: "" },
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const mut = useMutation({
+    mutationFn: (password: string) =>
+      api.put(`/v1/orgs/${orgId}/mailboxes/${mailbox.id}/password`, {
+        password,
+      }),
+    onSuccess: () => {
+      toast({ title: "Password reset", tone: "ok" });
+      onClose();
+    },
+    onError: (e) =>
+      setErr(
+        e instanceof ApiError
+          ? e.problem.detail ?? e.problem.title
+          : (e as Error).message,
+      ),
+  });
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Reset password — ${mailbox.address}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={mut.isPending}
+            onClick={f.handleSubmit((v) => {
+              setErr(null);
+              mut.mutate(v.password);
+            })}
+          >
+            Set password
+          </Button>
+        </>
+      }
+    >
+      <form className="space-y-3">
+        <FormField label="New password (min 10)">
+          <Input
+            type="password"
+            autoFocus
+            {...f.register("password", { required: true, minLength: 10 })}
+          />
+        </FormField>
         {err && (
           <p className="text-xs text-[var(--color-bad)]" role="alert">
             {err}

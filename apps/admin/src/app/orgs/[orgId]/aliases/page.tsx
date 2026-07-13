@@ -3,11 +3,18 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import type { Alias, CreateAliasRequest, Domain } from "@justmail/contracts";
+import type {
+  Alias,
+  CreateAliasRequest,
+  Domain,
+  UpdateAliasRequest,
+} from "@justmail/contracts";
 import { ApiError } from "@justmail/shared-utils";
 import {
+  Badge,
   Button,
   Card,
+  Checkbox,
   Empty,
   FormField,
   Input,
@@ -34,6 +41,7 @@ export default function AliasesPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
+  const [editAlias, setEditAlias] = useState<Alias | null>(null);
   const list = useQuery({
     queryKey: ["aliases", orgId],
     queryFn: () => api.get<Alias[]>(`/v1/orgs/${orgId}/aliases`),
@@ -75,6 +83,7 @@ export default function AliasesPage() {
                 <TR>
                   <TH>Source</TH>
                   <TH>Destinations</TH>
+                  <TH>Status</TH>
                   <TH></TH>
                 </TR>
               </THead>
@@ -89,9 +98,20 @@ export default function AliasesPage() {
                         {a.destinations.join(", ")}
                       </span>
                     </TD>
-                    <TD className="text-right">
+                    <TD>
+                      <Badge tone={a.enabled ? "ok" : "muted"}>
+                        {a.enabled ? "enabled" : "disabled"}
+                      </Badge>
+                    </TD>
+                    <TD className="text-right whitespace-nowrap">
                       <button
-                        className="text-xs text-[var(--color-bad)] hover:underline"
+                        className="text-xs text-[var(--color-accent)] hover:underline"
+                        onClick={() => setEditAlias(a)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="ml-3 text-xs text-[var(--color-bad)] hover:underline"
                         onClick={async () => {
                           if (
                             await confirm({
@@ -121,7 +141,100 @@ export default function AliasesPage() {
           onClose={() => setShowCreate(false)}
         />
       )}
+      {editAlias && (
+        <EditModal
+          orgId={orgId}
+          alias={editAlias}
+          onClose={() => setEditAlias(null)}
+        />
+      )}
     </>
+  );
+}
+
+function EditModal({
+  orgId,
+  alias,
+  onClose,
+}: {
+  orgId: string;
+  alias: Alias;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const f = useForm<{ destinations_str: string; enabled: boolean }>({
+    defaultValues: {
+      destinations_str: alias.destinations.join(", "),
+      enabled: alias.enabled,
+    },
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const mut = useMutation({
+    mutationFn: (body: UpdateAliasRequest) =>
+      api.patch<Alias>(`/v1/orgs/${orgId}/aliases/${alias.id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["aliases", orgId] });
+      toast({ title: "Alias updated", tone: "ok" });
+      onClose();
+    },
+    onError: (e) =>
+      setErr(
+        e instanceof ApiError
+          ? e.problem.detail ?? e.problem.title
+          : (e as Error).message,
+      ),
+  });
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Edit ${alias.address}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={mut.isPending}
+            onClick={f.handleSubmit((v) => {
+              setErr(null);
+              const dests = v.destinations_str
+                .split(/[,\s]+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              if (dests.length === 0)
+                return setErr("At least one destination required.");
+              mut.mutate({ destinations: dests, enabled: v.enabled });
+            })}
+          >
+            Save changes
+          </Button>
+        </>
+      }
+    >
+      <form className="space-y-3">
+        <FormField label="Destinations" hint="Comma or space separated">
+          <Input
+            monospace
+            autoFocus
+            placeholder="alice@example.com bob@example.com"
+            {...f.register("destinations_str", { required: true })}
+          />
+        </FormField>
+        <label className="flex items-center gap-2 text-sm text-[var(--color-neutral-1000)]">
+          <Checkbox {...f.register("enabled")} />
+          Enabled
+        </label>
+        {err && (
+          <p className="text-xs text-[var(--color-bad)]" role="alert">
+            {err}
+          </p>
+        )}
+      </form>
+    </Modal>
   );
 }
 
