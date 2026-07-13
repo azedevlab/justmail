@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
+import { useForm } from "react-hook-form";
 import {
   Archive,
   Bell,
@@ -24,6 +25,7 @@ import {
   Menu,
   Network,
   Palette,
+  Plus,
   Search,
   Settings,
   ShieldCheck,
@@ -40,15 +42,19 @@ import {
   DropdownLabel,
   DropdownMenu,
   DropdownSeparator,
+  FormField,
   IconButton,
+  Input,
+  Modal,
   OfflineBanner,
   Spinner,
   ThemeToggle,
   Tooltip,
   Wordmark,
 } from "@justmail/shared-ui";
+import { ApiError } from "@justmail/shared-utils";
 import { compileTheme } from "@justmail/theme-engine";
-import type { Theme } from "@justmail/contracts";
+import type { CreateOrgRequest, Org, Theme } from "@justmail/contracts";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/session";
 
@@ -174,6 +180,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
   const me = useMe();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [createOrgOpen, setCreateOrgOpen] = useState(false);
 
   useEffect(() => {
     if (me.data === null) router.replace("/login");
@@ -307,6 +314,10 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
               {o.id === orgId && <Check size={14} className="text-[var(--color-accent)]" />}
             </DropdownItem>
           ))}
+          <DropdownSeparator />
+          <DropdownItem onSelect={() => setCreateOrgOpen(true)}>
+            <Plus size={14} /> New organization
+          </DropdownItem>
         </DropdownMenu>
       )}
 
@@ -351,6 +362,16 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-[var(--color-bg)] lg:flex" data-org={orgId}>
       {themeCss && <style dangerouslySetInnerHTML={{ __html: themeCss }} />}
       <OfflineBanner />
+      {createOrgOpen && (
+        <CreateOrgModal
+          onClose={() => setCreateOrgOpen(false)}
+          onCreated={async (org) => {
+            setCreateOrgOpen(false);
+            await me.refetch();
+            router.push(`/orgs/${org.id}`);
+          }}
+        />
+      )}
 
       {/* Floating sidebar (desktop) */}
       <aside className="hidden lg:flex flex-col w-[248px] shrink-0 sticky top-3 h-[calc(100vh-24px)] my-3 ml-3 rounded-2xl bg-[var(--color-surface-1)] border border-[var(--color-border)] shadow-[var(--shadow-2)] px-3 py-4 overflow-y-auto">
@@ -456,5 +477,66 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
         items={paletteItems}
       />
     </div>
+  );
+}
+
+function CreateOrgModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (org: Org) => void;
+}) {
+  const f = useForm<CreateOrgRequest>({ defaultValues: { name: "" } });
+  const [err, setErr] = useState<string | null>(null);
+  const mut = useMutation({
+    mutationFn: (body: CreateOrgRequest) => api.post<Org>("/v1/orgs", body),
+    onSuccess: onCreated,
+    onError: (e) =>
+      setErr(
+        e instanceof ApiError
+          ? e.problem.detail ?? e.problem.title
+          : (e as Error).message,
+      ),
+  });
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="New organization"
+      description="Create a separate workspace with its own domains, mailboxes, and members."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={mut.isPending}
+            onClick={f.handleSubmit((v) => {
+              setErr(null);
+              mut.mutate({ name: v.name.trim() });
+            })}
+          >
+            Create organization
+          </Button>
+        </>
+      }
+    >
+      <form className="space-y-3">
+        <FormField label="Name">
+          <Input
+            autoFocus
+            placeholder="Acme Inc."
+            {...f.register("name", { required: true })}
+          />
+        </FormField>
+        {err && (
+          <p className="text-xs text-[var(--color-bad)]" role="alert">
+            {err}
+          </p>
+        )}
+      </form>
+    </Modal>
   );
 }

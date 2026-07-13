@@ -1,8 +1,8 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { SettingRow } from "@justmail/contracts";
+import type { Org, SettingRow } from "@justmail/contracts";
 import {
   Button,
   Card,
@@ -12,12 +12,15 @@ import {
   Empty,
   FormField,
   Input,
+  Modal,
   PageBody,
   PageHeader,
   SkeletonRows,
   useToast,
 } from "@justmail/shared-ui";
+import { ApiError } from "@justmail/shared-utils";
 import { api } from "@/lib/api";
+import { useMe } from "@/lib/session";
 
 const ATTACHMENT_LIMITS_KEY = (orgId: string) => `org:${orgId}.attachments`;
 
@@ -35,12 +38,14 @@ export default function SettingsPage() {
         description="Preferences for this organization. Values are stored in the database, not in config files."
       />
       <PageBody>
+        <GeneralCard orgId={orgId} />
         <AttachmentLimitsCard orgId={orgId} rows={list.data} />
         <AdvancedSettingsCard
           orgId={orgId}
           rows={list.data}
           loading={list.isLoading}
         />
+        <DangerZoneCard orgId={orgId} />
       </PageBody>
     </>
   );
@@ -114,6 +119,134 @@ function AdvancedSettingsCard({
           </ul>
         )}
       </CardBody>
+    </Card>
+  );
+}
+
+function GeneralCard({ orgId }: { orgId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const org = useQuery({
+    queryKey: ["org", orgId],
+    queryFn: () => api.get<Org>(`/v1/orgs/${orgId}`),
+  });
+  const [name, setName] = useState("");
+  useEffect(() => {
+    if (org.data) setName(org.data.name);
+  }, [org.data]);
+
+  const save = useMutation({
+    mutationFn: () => api.patch<Org>(`/v1/orgs/${orgId}`, { name: name.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org", orgId] });
+      qc.invalidateQueries({ queryKey: ["me"] });
+      toast({ title: "Organization renamed", tone: "ok" });
+    },
+    onError: (e) => toast({ title: (e as Error).message, tone: "bad" }),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>General</CardTitle>
+      </CardHeader>
+      <CardBody>
+        <div className="flex flex-wrap items-end gap-4">
+          <FormField label="Organization name">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Acme Inc."
+            />
+          </FormField>
+          <Button
+            variant="primary"
+            loading={save.isPending}
+            disabled={!name.trim() || name.trim() === org.data?.name}
+            onClick={() => save.mutate()}
+          >
+            Save
+          </Button>
+        </div>
+        {org.data && (
+          <p className="mt-3 text-xs text-[var(--color-neutral-700)]">
+            Slug <code className="mono">{org.data.slug}</code> · created{" "}
+            {new Date(org.data.created_at).toLocaleDateString()}
+          </p>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function DangerZoneCard({ orgId }: { orgId: string }) {
+  const router = useRouter();
+  const me = useMe();
+  const { toast } = useToast();
+  const [confirm, setConfirm] = useState(false);
+  const role = me.data?.orgs.find((o) => o.id === orgId)?.role;
+  const del = useMutation({
+    mutationFn: () => api.del(`/v1/orgs/${orgId}`),
+    onSuccess: async () => {
+      setConfirm(false);
+      await me.refetch();
+      router.replace("/");
+    },
+    onError: (e) =>
+      toast({
+        title:
+          e instanceof ApiError
+            ? e.problem.detail ?? e.problem.title
+            : (e as Error).message,
+        tone: "bad",
+      }),
+  });
+
+  // Only owners can delete; hide the destructive action from everyone else.
+  if (role !== "owner") return null;
+
+  return (
+    <Card className="border-[var(--color-bad)]">
+      <CardHeader>
+        <CardTitle>Danger zone</CardTitle>
+      </CardHeader>
+      <CardBody>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="text-xs text-[var(--color-neutral-800)] max-w-md">
+            Permanently delete this organization and its members. Remove all of
+            its domains first — mail data cannot be recovered.
+          </p>
+          <Button variant="danger" onClick={() => setConfirm(true)}>
+            Delete organization
+          </Button>
+        </div>
+      </CardBody>
+      {confirm && (
+        <Modal
+          open
+          onClose={() => setConfirm(false)}
+          title="Delete organization?"
+          description="This cannot be undone. Members lose access immediately."
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirm(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                loading={del.isPending}
+                onClick={() => del.mutate()}
+              >
+                Delete permanently
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-[var(--color-neutral-900)]">
+            All settings and memberships for this organization will be removed.
+          </p>
+        </Modal>
+      )}
     </Card>
   );
 }
