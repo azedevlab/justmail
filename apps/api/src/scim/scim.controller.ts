@@ -14,6 +14,8 @@ import {
 import { Response } from "express";
 import { Scim, ScimGuard } from "./scim.guard";
 import { ScimService, type ListParams, type ScimContext } from "./scim.service";
+import { ZodPipe } from "../common/zod.pipe";
+import { ScimGroupBody, ScimPatchBody, ScimUserBody } from "./scim.schemas";
 
 const SCIM_JSON = "application/scim+json";
 
@@ -74,7 +76,7 @@ export class ScimController {
   @Post("Users")
   async createUser(
     @Scim() ctx: ScimContext,
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodPipe(ScimUserBody)) body: Record<string, unknown>,
     @Res() res: Response,
   ) {
     ok(res, await this.scim.createUser(ctx, body), 201);
@@ -84,7 +86,7 @@ export class ScimController {
   async replaceUser(
     @Scim() ctx: ScimContext,
     @Param("id") id: string,
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodPipe(ScimUserBody)) body: Record<string, unknown>,
     @Res() res: Response,
   ) {
     ok(res, await this.scim.replaceUser(ctx, id, body));
@@ -94,7 +96,7 @@ export class ScimController {
   async patchUser(
     @Scim() ctx: ScimContext,
     @Param("id") id: string,
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodPipe(ScimPatchBody)) body: Record<string, unknown>,
     @Res() res: Response,
   ) {
     ok(res, await this.scim.patchUser(ctx, id, body));
@@ -132,7 +134,7 @@ export class ScimController {
   @Post("Groups")
   async createGroup(
     @Scim() ctx: ScimContext,
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodPipe(ScimGroupBody)) body: Record<string, unknown>,
     @Res() res: Response,
   ) {
     ok(res, await this.scim.createGroup(ctx, body), 201);
@@ -142,7 +144,7 @@ export class ScimController {
   async replaceGroup(
     @Scim() ctx: ScimContext,
     @Param("id") id: string,
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodPipe(ScimGroupBody)) body: Record<string, unknown>,
     @Res() res: Response,
   ) {
     ok(res, await this.scim.replaceGroup(ctx, id, body));
@@ -152,7 +154,7 @@ export class ScimController {
   async patchGroup(
     @Scim() ctx: ScimContext,
     @Param("id") id: string,
-    @Body() body: Record<string, unknown>,
+    @Body(new ZodPipe(ScimPatchBody)) body: Record<string, unknown>,
     @Res() res: Response,
   ) {
     ok(res, await this.scim.patchGroup(ctx, id, body));
