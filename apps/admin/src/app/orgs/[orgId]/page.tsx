@@ -12,8 +12,11 @@ import {
   PageBody,
   PageHeader,
   Skeleton,
+  Stat,
+  type StatTone,
   StatusBadge,
 } from "@justmail/shared-ui";
+import { Globe2, HardDrive, Mail, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 
 export default function Overview() {
@@ -52,6 +55,7 @@ export default function Overview() {
             label="Domains"
             value={d?.domains.active}
             hint={d ? `${d.domains.total} total` : undefined}
+            icon={<Globe2 size={15} />}
             loading={!d}
           />
           <StatCard
@@ -62,17 +66,29 @@ export default function Overview() {
                 ? `${d.mailboxes.total} total · ${d.mailboxes.suspended} suspended`
                 : undefined
             }
+            icon={<Mail size={15} />}
             loading={!d}
           />
           <StatCard
             label="Storage used"
             value={d ? fmtBytes(d.quota.used_bytes) : undefined}
             hint={d ? `of ${fmtMb(d.quota.allocated_mb)}` : undefined}
+            icon={<HardDrive size={15} />}
             loading={!d}
           />
           <StatCard
             label="Security score"
             value={score.data ? `${score.data.score}/100` : undefined}
+            icon={<ShieldCheck size={15} />}
+            tone={
+              score.data
+                ? score.data.score >= 80
+                  ? "ok"
+                  : score.data.score >= 50
+                    ? "warn"
+                    : "bad"
+                : "neutral"
+            }
             loading={!score.data}
           />
         </div>
@@ -142,31 +158,27 @@ function StatCard({
   label,
   value,
   hint,
+  icon,
+  tone,
   loading,
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
+  icon?: React.ReactNode;
+  tone?: StatTone;
   loading?: boolean;
 }) {
   return (
-    <Card className="p-4">
-      <div className="text-[11px] font-medium text-[var(--color-neutral-800)]">
-        {label}
-      </div>
-      {loading ? (
-        <Skeleton className="h-7 w-24 mt-2" />
-      ) : (
-        <div className="mt-2 text-2xl font-semibold tracking-[-0.02em] tabular-nums leading-none">
-          {value ?? "—"}
-        </div>
-      )}
-      {hint && (
-        <div className="mt-2 text-xs text-[var(--color-neutral-900)]">
-          {hint}
-        </div>
-      )}
-    </Card>
+    <Stat
+      label={label}
+      icon={icon}
+      tone={tone}
+      value={
+        loading ? <Skeleton className="h-6 w-20" /> : (value ?? "—")
+      }
+      hint={hint}
+    />
   );
 }
 
