@@ -103,7 +103,7 @@ export class SecurityService {
       tls_rpt: string;
     }>(
       `SELECT
-         count(*) FILTER (WHERE d.status IN ('active','verifying')) AS domains,
+         count(*) FILTER (WHERE d.status <> 'suspended') AS domains,
          count(*) FILTER (WHERE d.status = 'active') AS verified,
          count(DISTINCT d.id) FILTER (WHERE r.purpose = 'spf' AND r.check_status = 'ok') AS spf,
          count(DISTINCT d.id) FILTER (WHERE r.purpose = 'dkim' AND r.check_status = 'ok') AS dkim,
