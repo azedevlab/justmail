@@ -213,6 +213,15 @@ export const Env = z.object({
   JM_LANDING_HOST: z.string().optional(),
   JM_API_HOST: z.string().optional(),
 
+  // Public IPv4 of the mail host. When set, the platform-root domain seeds A
+  // records for the shared mail endpoints (mail/autoconfig/autodiscover/mta-sts)
+  // so MX and client autoconfig actually resolve. Leave unset and those A
+  // records must be created by hand at the DNS provider.
+  JM_PUBLIC_IP4: z
+    .string()
+    .regex(/^\d{1,3}(?:\.\d{1,3}){3}$/, "must be a dotted IPv4 address")
+    .optional(),
+
   // WebAuthn / passkeys. RP ID must be a registrable suffix shared by the admin
   // and webmail origins; defaults to the parent cookie domain (JM_WEB_HOST) or
   // "localhost" in dev. Extra allowed browser origins can be listed

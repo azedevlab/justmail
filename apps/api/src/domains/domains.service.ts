@@ -54,6 +54,18 @@ const SEED_RECORDS: Array<{
   { purpose: "caa", type: "CAA", name: "${DOMAIN}", content: "0 issue \"letsencrypt.org\"", ttl: 3600 },
 ];
 
+// A records for the shared mail endpoints every tenant points at (MX →
+// mail.${MAIL_ROOT}, client autoconfig, MTA-STS policy host). These live in the
+// platform-root zone only, so they're seeded solely on the domain whose name
+// equals mailRoot, and only when JM_PUBLIC_IP4 is configured. Without them the
+// MX target and autoconfig hosts don't resolve and Gmail/IMAP can't connect.
+const MAIL_HOST_A_RECORDS: Array<{ purpose: string; name: string }> = [
+  { purpose: "custom", name: "mail.${MAIL_ROOT}" },
+  { purpose: "autoconfig", name: "autoconfig.${MAIL_ROOT}" },
+  { purpose: "autodiscover", name: "autodiscover.${MAIL_ROOT}" },
+  { purpose: "mta_sts", name: "mta-sts.${MAIL_ROOT}" },
+];
+
 interface DomainRow {
   id: string;
   org_id: string;
@@ -297,7 +309,12 @@ export class DomainsService {
 
   async getDns(orgId: string, domainId: string, userId: string) {
     await this.orgs.requireRole(orgId, userId, "viewer");
-    await this.get(orgId, domainId, userId); // 404 guard
+    const domain = await this.get(orgId, domainId, userId); // 404 guard
+    // Backfill the shared mail-host A records for an existing platform-root
+    // domain (seeding otherwise only runs on create).
+    if (domain.name === this.mailRoot && config.JM_PUBLIC_IP4) {
+      await seedMailHostRecords(this.db, domainId, this.mailRoot);
+    }
     const { rows } = await this.db.query(
       `SELECT id, purpose, type, name, content, ttl, priority, observed_content,
               check_status, last_checked_at
@@ -452,6 +469,30 @@ async function seedDnsRecords(
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT DO NOTHING`,
       [domainId, r.purpose, r.type, subst(r.name), content, r.ttl, r.priority ?? null],
+    );
+  }
+
+  if (name === mailRoot) {
+    await seedMailHostRecords(tx, domainId, mailRoot);
+  }
+}
+
+// Idempotently insert the shared mail-host A records into the platform-root
+// zone. Safe to call repeatedly (ON CONFLICT DO NOTHING) — used both when the
+// root domain is first created and to backfill an existing one on read.
+async function seedMailHostRecords(
+  tx: { query: (sql: string, values?: unknown[]) => Promise<unknown> },
+  domainId: string,
+  mailRoot: string,
+): Promise<void> {
+  const ip = config.JM_PUBLIC_IP4;
+  if (!ip) return;
+  for (const r of MAIL_HOST_A_RECORDS) {
+    await tx.query(
+      `INSERT INTO dns_records (domain_id, purpose, type, name, content, ttl)
+       VALUES ($1, $2, 'A', $3, $4, 3600)
+       ON CONFLICT DO NOTHING`,
+      [domainId, r.purpose, r.name.replace(/\$\{MAIL_ROOT\}/g, mailRoot), ip],
     );
   }
 }
