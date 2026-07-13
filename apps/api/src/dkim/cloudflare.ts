@@ -3,6 +3,7 @@
  * Reads token from CLOUDFLARE_API_TOKEN — never falls back to hardcoded values.
  */
 import { config } from "../config";
+import { parseCaa } from "./dns-reconcile";
 
 const BASE = "https://api.cloudflare.com/client/v4";
 
@@ -79,7 +80,23 @@ export async function upsertRecord(
     proxied?: boolean;
   },
 ): Promise<CfRecord> {
-  const body = JSON.stringify({ ...payload, proxied: payload.proxied ?? false });
+  const record: Record<string, unknown> = {
+    type: payload.type,
+    name: payload.name,
+    ttl: payload.ttl,
+    proxied: payload.proxied ?? false,
+  };
+  if (payload.type === "CAA") {
+    // Cloudflare rejects CAA sent as a plain content string; it must be the
+    // structured { flags, tag, value } form.
+    const caa = parseCaa(payload.content);
+    if (!caa) throw new Error(`Invalid CAA record content: ${payload.content}`);
+    record.data = { flags: caa.flags, tag: caa.tag, value: caa.value };
+  } else {
+    record.content = payload.content;
+    if (payload.priority !== undefined) record.priority = payload.priority;
+  }
+  const body = JSON.stringify(record);
   if (existing) {
     return cf<CfRecord>(`/zones/${zoneId}/dns_records/${existing.id}`, {
       method: "PUT",
