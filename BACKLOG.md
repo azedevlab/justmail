@@ -120,8 +120,8 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 |---|---|---|---|---|---|
 | M11-1 | P1 | Strongly-typed config system: sources (env/file/admin-UI/secrets/CLI/API), zod-validated at startup, fail-fast with meaningful errors, auto-generate sample config | M | — | done — zod schema in `config.schema.ts`, fail-fast `load()`, `.env.example` auto-generated from the schema via `pnpm --filter @justmail/api config:sample`. |
 | M11-2 | P1 | Object-storage adapter completeness: extend `@justmail/storage` to R2/MinIO/B2/Ceph/Wasabi/DO Spaces/Scaleway; capability probe + health check | L | M5-1 | todo |
-| M11-3 | P1 | Database adapter: remote/HA Postgres, read-replicas, PgBouncer, connection-pool + failover config; no code coupling | M | — | todo |
-| M11-4 | P1 | Cache adapter: standalone/Sentinel/Cluster/Valkey/remote, TLS + auth + auto-reconnect | M | — | todo |
+| M11-3 | P1 | Database adapter: remote/HA Postgres, read-replicas, PgBouncer, connection-pool + failover config; no code coupling | M | — | done — `Db` builds pools from config (pool max, idle/connect timeouts, TLS); `DATABASE_READONLY_URL` now drives a read pool + `queryRead`. Live replica/PgBouncer setup unverified. |
+| M11-4 | P1 | Cache adapter: standalone/Sentinel/Cluster/Valkey/remote, TLS + auth + auto-reconnect | M | — | done — `planRedis` selects standalone/Sentinel/Cluster from config with TLS + auth; ioredis auto-reconnects. Sentinel/cluster paths unverified against live HA. |
 | M11-5 | P2 | Search adapter interface: PG FTS default, pluggable OpenSearch/Elasticsearch/Meilisearch/Typesense | L | M6-3 | todo |
 | M11-6 | P2 | DNS provider plugins: Cloudflare/Route53/Google/Azure/DO/Hetzner/Namecheap/GoDaddy/Porkbun/manual behind one interface | L | — | in-progress — Cloudflare + deSEC shipped behind `DnsProvider` interface (`DESEC_TOKEN`); others selectable but fail loudly until credentialed. deSEC path unverified against a live account. |
 | M11-7 | P1 | Distributed mail storage support (NFS/SMB/CephFS/ZFS) via config; document Dovecot index/lock constraints | M | — | todo |

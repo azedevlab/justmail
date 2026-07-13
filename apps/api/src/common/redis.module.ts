@@ -1,26 +1,35 @@
 import { Global, Logger, Module } from "@nestjs/common";
-import Redis from "ioredis";
+import Redis, { Cluster } from "ioredis";
 import { config } from "../config";
+import { planRedis } from "./redis-options";
 
-/** Injection token for the shared Redis client. Resolves to `null` when
- *  REDIS_URL is unset so the API still boots in dev without Redis. */
+/** Injection token for the shared Redis client. Resolves to `null` when no
+ *  Redis is configured so the API still boots in dev without Redis. */
 export const REDIS = Symbol("REDIS");
 
-export type RedisClient = Redis | null;
+export type RedisClient = Redis | Cluster | null;
 
 const logger = new Logger("redis");
 
 function createClient(): RedisClient {
-  if (!config.REDIS_URL) {
-    logger.warn(
-      "REDIS_URL not set — Redis-backed features degrade to in-process fallback",
-    );
-    return null;
+  const plan = planRedis(config);
+  let client: Redis | Cluster;
+  switch (plan.kind) {
+    case "none":
+      logger.warn(
+        "no Redis configured — Redis-backed features degrade to in-process fallback",
+      );
+      return null;
+    case "cluster":
+      client = new Cluster(plan.nodes, { redisOptions: plan.options });
+      break;
+    case "sentinel":
+      client = new Redis({ sentinels: plan.sentinels, name: plan.name, ...plan.options });
+      break;
+    case "standalone":
+      client = new Redis(plan.url, plan.options);
+      break;
   }
-  const client = new Redis(config.REDIS_URL, {
-    maxRetriesPerRequest: config.REDIS_MAX_RETRIES_PER_REQUEST,
-    enableReadyCheck: true,
-  });
   client.on("error", (err) => logger.error(`redis error: ${err.message}`));
   return client;
 }

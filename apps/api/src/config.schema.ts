@@ -7,8 +7,30 @@ export const Env = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().default(4000),
   DATABASE_URL: z.string().url(),
+  // Optional read-replica DSN. When set, read-only queries (`Db.queryRead`) go
+  // here and writes stay on DATABASE_URL; unset, reads fall back to the primary.
   DATABASE_READONLY_URL: z.string().url().optional(),
+  // Connection pool + timeouts. Sized for a small deployment; raise POOL_MAX to
+  // match a remote/HA Postgres (or a PgBouncer transaction pool) fronting it.
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(0).default(10_000),
+  DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(0).default(10_000),
+  // TLS for managed/remote Postgres (RDS/Cloud SQL/Supabase). REJECT_UNAUTHORIZED
+  // off lets a self-signed CA through; keep it on with a trusted chain.
+  DATABASE_SSL: z.coerce.boolean().default(false),
+  DATABASE_SSL_REJECT_UNAUTHORIZED: z.coerce.boolean().default(true),
+
+  // Redis/Valkey. Standalone via REDIS_URL; for HA set either a comma-separated
+  // REDIS_SENTINELS (host:port) with REDIS_SENTINEL_NAME, or REDIS_CLUSTER_NODES.
+  // Sentinel/cluster take precedence over REDIS_URL when set.
   REDIS_URL: z.string().url().optional(),
+  REDIS_SENTINELS: z.string().optional(),
+  REDIS_SENTINEL_NAME: z.string().optional(),
+  REDIS_CLUSTER_NODES: z.string().optional(),
+  REDIS_USERNAME: z.string().optional(),
+  REDIS_PASSWORD: z.string().optional(),
+  REDIS_TLS: z.coerce.boolean().default(false),
+  REDIS_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(true),
   REDIS_MAX_RETRIES_PER_REQUEST: z.coerce.number().int().min(0).default(2),
   ENCRYPTION_KEY: z.string().min(32),
   EVENTS_INGEST_TOKEN: z.string().min(16),
