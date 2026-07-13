@@ -13,9 +13,14 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Empty,
+  ErrorState,
   PageBody,
   PageHeader,
+  Skeleton,
   SkeletonRows,
+  Stat,
+  type StatTone,
   Table,
   TD,
   TH,
@@ -46,10 +51,20 @@ export default function QueuePage() {
         description="Live postfix queue snapshot and recent deferred deliveries."
       />
       <PageBody>
-        <div className="grid grid-cols-4 gap-4">
-          <QueueStat label="Active" value={snap.data?.active} />
-          <QueueStat label="Deferred" value={snap.data?.deferred} tone="warn" />
-          <QueueStat label="Hold" value={snap.data?.hold} tone="bad" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <QueueStat label="Active" value={snap.data?.active} loading={!snap.data} />
+          <QueueStat
+            label="Deferred"
+            value={snap.data?.deferred}
+            tone="warn"
+            loading={!snap.data}
+          />
+          <QueueStat
+            label="Hold"
+            value={snap.data?.hold}
+            tone="bad"
+            loading={!snap.data}
+          />
           <QueueStat
             label="Oldest"
             value={
@@ -57,6 +72,7 @@ export default function QueuePage() {
                 ? `${Math.round(snap.data.oldest_age_s / 60)}m`
                 : "—"
             }
+            loading={!snap.data}
           />
         </div>
         <Card>
@@ -65,10 +81,14 @@ export default function QueuePage() {
           </CardHeader>
           <CardBody>
             {deferred.isLoading && <SkeletonRows count={3} />}
+            {deferred.isError && (
+              <ErrorState onRetry={() => deferred.refetch()} />
+            )}
             {deferred.data && deferred.data.length === 0 && (
-              <p className="text-sm text-[var(--color-neutral-900)]">
-                Nothing deferred.
-              </p>
+              <Empty
+                title="Nothing deferred"
+                description="All recent deliveries went out on the first attempt."
+              />
             )}
             {deferred.data && deferred.data.length > 0 && (
               <Table>
@@ -140,6 +160,11 @@ function DeferredRow({
           <td colSpan={7} className="p-0">
             <div className="bg-[var(--color-surface-2)] px-4 py-3">
               {trace.isLoading && <SkeletonRows count={2} />}
+              {trace.isError && (
+                <p className="text-xs text-[var(--color-bad)]" role="alert">
+                  Couldn’t load the delivery trace for this queue id.
+                </p>
+              )}
               {trace.data && trace.data.length === 0 && (
                 <p className="text-xs text-[var(--color-neutral-800)]">
                   No recorded events for this queue id.
@@ -209,30 +234,18 @@ function QueueStat({
   label,
   value,
   tone,
+  loading,
 }: {
   label: string;
   value: React.ReactNode;
-  tone?: "warn" | "bad";
+  tone?: StatTone;
+  loading?: boolean;
 }) {
   return (
-    <Card>
-      <CardBody>
-        <div className="text-[11px] font-medium text-[var(--color-neutral-900)]">
-          {label}
-        </div>
-        <div
-          className={
-            "mt-2 text-2xl font-semibold font-mono " +
-            (tone === "warn"
-              ? "text-[var(--color-warn)]"
-              : tone === "bad"
-                ? "text-[var(--color-bad)]"
-                : "")
-          }
-        >
-          {value ?? "—"}
-        </div>
-      </CardBody>
-    </Card>
+    <Stat
+      label={label}
+      tone={tone}
+      value={loading ? <Skeleton className="h-6 w-14" /> : (value ?? "—")}
+    />
   );
 }

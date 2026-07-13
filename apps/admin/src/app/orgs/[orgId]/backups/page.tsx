@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
+  Empty,
   FormField,
   Input,
   Modal,
@@ -189,10 +190,10 @@ export default function BackupsPage() {
           <CardBody>
             {runs.isLoading && <SkeletonRows count={3} />}
             {runs.data && runs.data.length === 0 && (
-              <p className="text-sm text-[var(--color-neutral-900)]">
-                No runs yet — trigger one with “Back up now” or wait for the next
-                scheduled run.
-              </p>
+              <Empty
+                title="No runs yet"
+                description="Trigger one with “Back up now” or wait for the next scheduled run."
+              />
             )}
             {runs.data && runs.data.length > 0 && (
               <Table>
