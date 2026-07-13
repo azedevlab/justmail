@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import type {
+  DkimAlgorithm,
+  DkimKey,
   DnsRecord,
   Domain,
   DomainVerifyResponse,
@@ -35,6 +37,7 @@ import {
   Check,
   Copy,
   Download,
+  KeyRound,
   RefreshCw,
   ShieldCheck,
   Trash2,
@@ -370,11 +373,184 @@ export default function DomainDetailPage() {
               )}
             </Section>
 
+            <DkimSection orgId={orgId} domainId={domainId} />
+
             <SettingsForm domain={domain.data} orgId={orgId} />
           </>
         )}
       </PageBody>
     </>
+  );
+}
+
+// Signing keys live in dkim_keys and only sign once *active* (the worker writes
+// the private key to disk and lists the selector in rspamd's map on activate).
+// Without this UI an operator has no way to create or activate a key, so
+// outbound mail ships unsigned and lands in spam.
+function DkimSection({ orgId, domainId }: { orgId: string; domainId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const confirm = useConfirm();
+  const [algorithm, setAlgorithm] = useState<DkimAlgorithm>("rsa2048");
+
+  const keys = useQuery({
+    queryKey: ["dkim-keys", orgId, domainId],
+    queryFn: () =>
+      api.get<DkimKey[]>(`/v1/orgs/${orgId}/domains/${domainId}/dkim`),
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["dkim-keys", orgId, domainId] });
+    qc.invalidateQueries({ queryKey: ["domain-dns", orgId, domainId] });
+  };
+  const onError = (verb: string) => (e: unknown) =>
+    toast({
+      title: `Could not ${verb} key`,
+      description:
+        e instanceof ApiError ? e.problem.detail ?? e.problem.title : String(e),
+      tone: "bad",
+    });
+
+  const generate = useMutation({
+    mutationFn: () =>
+      api.post(`/v1/orgs/${orgId}/domains/${domainId}/dkim`, { algorithm }),
+    onSuccess: () => {
+      invalidate();
+      toast({
+        title: "DKIM key generated",
+        description:
+          "Publish the DNS records, then activate the key to start signing.",
+        tone: "ok",
+      });
+    },
+    onError: onError("generate"),
+  });
+
+  const activate = useMutation({
+    mutationFn: (keyId: string) =>
+      api.post(
+        `/v1/orgs/${orgId}/domains/${domainId}/dkim/${keyId}/activate`,
+        {},
+      ),
+    onSuccess: () => {
+      invalidate();
+      toast({
+        title: "Key activated — outbound mail is now signed",
+        tone: "ok",
+      });
+    },
+    onError: onError("activate"),
+  });
+
+  const retire = useMutation({
+    mutationFn: (keyId: string) =>
+      api.post(`/v1/orgs/${orgId}/domains/${domainId}/dkim/${keyId}/retire`, {}),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Key retired", tone: "ok" });
+    },
+    onError: onError("retire"),
+  });
+
+  return (
+    <Section
+      title="DKIM signing keys"
+      description="Generate a key, publish its DNS record, then activate it so outbound mail is signed. Only one key signs at a time; keep the previous key published until receivers pick up the new one."
+      actions={
+        <div className="flex items-center gap-2">
+          <Select
+            value={algorithm}
+            onChange={(e) => setAlgorithm(e.target.value as DkimAlgorithm)}
+            className="w-auto"
+          >
+            <option value="rsa2048">RSA 2048</option>
+            <option value="ed25519">Ed25519</option>
+          </Select>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={generate.isPending}
+            onClick={() => generate.mutate()}
+            leadingIcon={<KeyRound size={14} />}
+          >
+            Generate key
+          </Button>
+        </div>
+      }
+    >
+      {keys.isLoading && <SkeletonRows count={2} />}
+      {keys.data && keys.data.length === 0 && (
+        <Card className="p-6 text-sm text-[var(--color-neutral-900)]">
+          No signing key yet. Generate one, publish its DNS record, then activate
+          it — until then outbound mail is unsigned and likely to be marked spam.
+        </Card>
+      )}
+      {keys.data && keys.data.length > 0 && (
+        <Card className="overflow-hidden">
+          <Table>
+            <THead>
+              <TR>
+                <TH>Selector</TH>
+                <TH>Algorithm</TH>
+                <TH>Status</TH>
+                <TH>Created</TH>
+                <TH></TH>
+              </TR>
+            </THead>
+            <tbody>
+              {keys.data.map((k) => (
+                <TR key={k.id}>
+                  <TD>
+                    <span className="mono text-xs">{k.selector}</span>
+                  </TD>
+                  <TD>
+                    <span className="mono text-xs uppercase">
+                      {k.algorithm}
+                    </span>
+                  </TD>
+                  <TD>
+                    <StatusBadge status={k.status} />
+                  </TD>
+                  <TD className="text-xs">
+                    {new Date(k.created_at).toLocaleDateString()}
+                  </TD>
+                  <TD className="text-right">
+                    <div className="flex justify-end gap-3">
+                      {k.status !== "active" && k.status !== "retired" && (
+                        <button
+                          className="text-xs text-[var(--color-accent)] hover:underline"
+                          onClick={() => activate.mutate(k.id)}
+                        >
+                          Activate
+                        </button>
+                      )}
+                      {k.status !== "retired" && (
+                        <button
+                          className="text-xs text-[var(--color-neutral-900)] hover:underline"
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                title: `Retire selector ${k.selector}?`,
+                                body: "The key stops signing mail. Retire a key only after a newer key is active and receivers have picked it up.",
+                                tone: "danger",
+                                confirmLabel: "Retire",
+                              })
+                            )
+                              retire.mutate(k.id);
+                          }}
+                        >
+                          Retire
+                        </button>
+                      )}
+                    </div>
+                  </TD>
+                </TR>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
+      )}
+    </Section>
   );
 }
 
