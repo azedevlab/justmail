@@ -1,10 +1,24 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { resolveTxt, resolveMx, resolveCname, resolve } from "node:dns/promises";
+import { Resolver } from "node:dns/promises";
 import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import type { SessionPrincipal } from "../auth/auth.service";
+import { config } from "../config";
 import { getDnsProvider } from "./dns-provider";
+
+// Drift/verification checks resolve against public recursive resolvers rather
+// than the process default. Inside Docker the default resolver (127.0.0.11)
+// answers names that collide with service hostnames — e.g. mail.<domain>
+// resolves to the postfix/dovecot container IP — which would flag a correctly
+// published A record as drifted. Public resolvers show what senders see.
+const verifyResolver = new Resolver();
+{
+  const servers = config.DNS_VERIFY_RESOLVERS.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (servers.length) verifyResolver.setServers(servers);
+}
 import {
   caaEqual,
   caaToString,
@@ -201,7 +215,7 @@ export class DnsService {
           // objects while our desired content is BIND-style. Compare canonical
           // (flags, tag, value) tuples so a correctly-published record isn't
           // reported as drifted.
-          const recs = (await resolve(r.name, "CAA")) as unknown as Array<
+          const recs = (await verifyResolver.resolve(r.name, "CAA")) as unknown as Array<
             Record<string, unknown>
           >;
           const parsed = recs
@@ -237,18 +251,18 @@ export class DnsService {
 
   private async resolveOne(type: string, name: string): Promise<string | null> {
     if (type === "TXT") {
-      const txt = await resolveTxt(name);
+      const txt = await verifyResolver.resolveTxt(name);
       return txt.map((chunks) => chunks.join("")).join(" | ");
     }
     if (type === "MX") {
-      const mx = await resolveMx(name);
+      const mx = await verifyResolver.resolveMx(name);
       return mx.map((m) => `${m.priority} ${m.exchange}`).join(" | ");
     }
     if (type === "CNAME") {
-      const c = await resolveCname(name);
+      const c = await verifyResolver.resolveCname(name);
       return c.join(" | ");
     }
-    const generic = await resolve(name, type as "A" | "AAAA" | "CAA");
+    const generic = await verifyResolver.resolve(name, type as "A" | "AAAA" | "CAA");
     return JSON.stringify(generic);
   }
 }

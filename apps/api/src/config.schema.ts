@@ -240,6 +240,12 @@ export const Env = z.object({
     .describe("one of: cloudflare, desec, none"),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   DESEC_TOKEN: z.string().optional(),
+  // Recursive resolvers (comma-separated IPs) used for DNS drift/verification
+  // checks. Defaults to public resolvers so checks reflect what external
+  // senders see — the local in-container resolver (Docker embedded DNS) can
+  // shadow mail hostnames like mail.<domain> with the internal container IP,
+  // wrongly flagging a correctly-published record as drifted.
+  DNS_VERIFY_RESOLVERS: z.string().default("1.1.1.1,8.8.8.8"),
 
   // Storage adapter
   STORAGE_KIND: z
