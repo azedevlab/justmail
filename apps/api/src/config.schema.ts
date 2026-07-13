@@ -6,7 +6,15 @@ import { z } from "zod";
 export const Env = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().default(4000),
-  DATABASE_URL: z.string().url(),
+  // Postgres connection DSN. Host, port, user, password, and database name all
+  // live inside this single URL — there is no separate PG_HOST/PG_USER. In
+  // Docker Compose it is assembled from POSTGRES_USER/PASSWORD/DB against the
+  // `postgres` service; to use an external/managed Postgres, replace the whole
+  // string (host included).
+  DATABASE_URL: z
+    .string()
+    .url()
+    .describe("Postgres DSN, e.g. postgres://user:pass@host:5432/justmail"),
   // Optional read-replica DSN. When set, read-only queries (`Db.queryRead`) go
   // here and writes stay on DATABASE_URL; unset, reads fall back to the primary.
   DATABASE_READONLY_URL: z.string().url().optional(),
@@ -32,8 +40,20 @@ export const Env = z.object({
   REDIS_TLS: z.coerce.boolean().default(false),
   REDIS_TLS_REJECT_UNAUTHORIZED: z.coerce.boolean().default(true),
   REDIS_MAX_RETRIES_PER_REQUEST: z.coerce.number().int().min(0).default(2),
-  ENCRYPTION_KEY: z.string().min(32),
-  EVENTS_INGEST_TOKEN: z.string().min(16),
+  // Symmetric key that encrypts secrets at rest (stored SMTP credentials, OAuth
+  // tokens, etc.). 32+ characters — generate with `openssl rand -hex 32`. Set it
+  // once before first boot: rotating it makes existing ciphertext undecryptable.
+  ENCRYPTION_KEY: z
+    .string()
+    .min(32)
+    .describe("At-rest encryption key, 32+ chars (openssl rand -hex 32)"),
+  // Shared secret that authenticates internal ingest callers — the Vector log
+  // shipper, the DMARC aggregate collector, and the CalDAV bridge — when they
+  // POST to /internal/*. 16+ chars; any random string the collectors also carry.
+  EVENTS_INGEST_TOKEN: z
+    .string()
+    .min(16)
+    .describe("Shared secret for internal /internal/* ingest callers"),
   // One-time token gating first-account bootstrap. Required in production so a
   // public instance can't be hijacked by whoever reaches it first. Leave unset
   // in production and a random token is generated at boot and printed to the
@@ -101,7 +121,6 @@ export const Env = z.object({
   CLAMAV_HOST: z.string().default("clamav"),
   CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
   CLAMAV_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
-  CLAMAV_CHUNK_BYTES: z.coerce.number().int().positive().default(65_536),
 
   // Webmail limits (bytes / counts). Defaults are conservative; raise per deploy.
   WEBMAIL_ATTACHMENT_MAX_TOTAL_BYTES: z.coerce.number().int().positive().default(15_000_000),
@@ -190,8 +209,13 @@ export const Env = z.object({
   WEBAUTHN_ORIGINS: z.string().optional(),
   WEBAUTHN_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
 
-  // DNS provider
-  DNS_PROVIDER: z.enum(["cloudflare", "route53", "desec", "none"]).default("cloudflare"),
+  // DNS provider for one-click record publishing (SPF/DKIM/DMARC/MX). Cloudflare
+  // and deSEC ship with a working backend; `none` disables auto-publishing and
+  // you manage records by hand.
+  DNS_PROVIDER: z
+    .enum(["cloudflare", "desec", "none"])
+    .default("cloudflare")
+    .describe("one of: cloudflare, desec, none"),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   DESEC_TOKEN: z.string().optional(),
 

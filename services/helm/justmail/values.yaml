@@ -48,5 +48,8 @@ ingress:
     enabled: true
     clusterIssuer: letsencrypt
 
+# Prometheus ServiceMonitor. Disabled by default: the app does not yet expose a
+# /metrics endpoint, so enabling this would scrape nothing. Turn it on only once
+# an app-level metrics exporter is deployed.
 serviceMonitor:
-  enabled: true
+  enabled: false

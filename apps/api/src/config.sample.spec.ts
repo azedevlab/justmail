@@ -21,7 +21,7 @@ describe("buildEnvSample", () => {
   });
 
   it("annotates enum keys with their allowed values", () => {
-    expect(sample).toMatch(/DNS_PROVIDER=.*one of: cloudflare, route53, desec, none/);
+    expect(sample).toMatch(/DNS_PROVIDER=.*one of: cloudflare, desec, none/);
   });
 
   it("keeps optional-no-default keys commented with an empty value", () => {

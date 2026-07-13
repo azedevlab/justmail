@@ -2,11 +2,10 @@
  * DNS provider abstraction for the DNS Center reconciler + DKIM rotation.
  *
  * The reconciler is zone-oriented: resolve the managing zone for a domain, then
- * list/upsert/delete records within it. Cloudflare is the only shipped backend;
- * Route53/deSEC are selectable via DNS_PROVIDER but need their own credentials,
- * so they surface a clear "not configured" error until wired up rather than
- * silently no-oping — a publish that appears to succeed but doesn't would break
- * DKIM/SPF alignment.
+ * list/upsert/delete records within it. Cloudflare and deSEC ship with working
+ * backends; deSEC only activates once DESEC_TOKEN is set, otherwise it surfaces
+ * a clear "not configured" error rather than silently no-oping — a publish that
+ * appears to succeed but doesn't would break DKIM/SPF alignment.
  */
 import { config } from "../config";
 import * as cf from "./cloudflare";

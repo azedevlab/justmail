@@ -13,9 +13,13 @@ interface JsonProp {
   enum?: unknown[];
   format?: string;
   minLength?: number;
+  description?: string;
 }
 
 function hint(p: JsonProp): string {
+  // Prefer the schema's human description (`.describe(...)`) when present so the
+  // sample carries operator guidance, not just the machine-derived type hint.
+  if (p.description) return p.description;
   const bits: string[] = [];
   if (p.enum) {
     bits.push(`one of: ${p.enum.join(", ")}`);
