@@ -123,7 +123,7 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 | M11-3 | P1 | Database adapter: remote/HA Postgres, read-replicas, PgBouncer, connection-pool + failover config; no code coupling | M | — | todo |
 | M11-4 | P1 | Cache adapter: standalone/Sentinel/Cluster/Valkey/remote, TLS + auth + auto-reconnect | M | — | todo |
 | M11-5 | P2 | Search adapter interface: PG FTS default, pluggable OpenSearch/Elasticsearch/Meilisearch/Typesense | L | M6-3 | todo |
-| M11-6 | P2 | DNS provider plugins: Cloudflare/Route53/Google/Azure/DO/Hetzner/Namecheap/GoDaddy/Porkbun/manual behind one interface | L | — | todo |
+| M11-6 | P2 | DNS provider plugins: Cloudflare/Route53/Google/Azure/DO/Hetzner/Namecheap/GoDaddy/Porkbun/manual behind one interface | L | — | in-progress — Cloudflare + deSEC shipped behind `DnsProvider` interface (`DESEC_TOKEN`); others selectable but fail loudly until credentialed. deSEC path unverified against a live account. |
 | M11-7 | P1 | Distributed mail storage support (NFS/SMB/CephFS/ZFS) via config; document Dovecot index/lock constraints | M | — | todo |
 | M11-8 | P2 | Admin storage-migration tool: move attachments between providers with no downtime + progress/health | M | M11-2 | todo |
 | M11-9 | P0 | No-personalization audit: grep out every hardcoded domain/host/IP/port/path/email/brand/secret/maintainer id → placeholders/config; repo reusable with zero edits | M | M11-1 | done |

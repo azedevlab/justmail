@@ -156,6 +156,7 @@ const Env = z.object({
   // DNS provider
   DNS_PROVIDER: z.enum(["cloudflare", "route53", "desec", "none"]).default("cloudflare"),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
+  DESEC_TOKEN: z.string().optional(),
 
   // Storage adapter
   STORAGE_KIND: z

@@ -10,6 +10,7 @@
  */
 import { config } from "../config";
 import * as cf from "./cloudflare";
+import * as desec from "./desec";
 
 export interface DnsRecord {
   id: string;
@@ -62,6 +63,26 @@ class CloudflareProvider implements DnsProvider {
   }
 }
 
+class DesecProvider implements DnsProvider {
+  readonly name = "desec";
+  findZoneId(domain: string) {
+    return desec.findZoneId(domain);
+  }
+  listRecords(zoneId: string, name: string, type: string) {
+    return desec.listRecords(zoneId, name, type);
+  }
+  upsertRecord(
+    zoneId: string,
+    existing: DnsRecord | undefined,
+    payload: DnsRecordInput,
+  ) {
+    return desec.upsertRecord(zoneId, existing, payload);
+  }
+  deleteRecord(zoneId: string, id: string) {
+    return desec.deleteRecord(zoneId, id);
+  }
+}
+
 // Selected but not yet credentialed: every operation fails loudly so a caller
 // never mistakes an unconfigured backend for a successful publish.
 class UnconfiguredProvider implements DnsProvider {
@@ -86,11 +107,15 @@ class UnconfiguredProvider implements DnsProvider {
 }
 
 const cloudflare = new CloudflareProvider();
+const desecProvider = new DesecProvider();
 
 export function getDnsProvider(): DnsProvider {
   switch (config.DNS_PROVIDER) {
     case "cloudflare":
       return cloudflare;
+    case "desec":
+      if (config.DESEC_TOKEN) return desecProvider;
+      return new UnconfiguredProvider(config.DNS_PROVIDER);
     default:
       return new UnconfiguredProvider(config.DNS_PROVIDER);
   }
@@ -100,6 +125,8 @@ export function getDnsProvider(): DnsProvider {
 // "Publish to <provider>" only when it will work rather than fail loudly.
 export function dnsProviderStatus(): { name: string; configured: boolean } {
   const name = config.DNS_PROVIDER;
-  const configured = name === "cloudflare" && Boolean(config.CLOUDFLARE_API_TOKEN);
+  const configured =
+    (name === "cloudflare" && Boolean(config.CLOUDFLARE_API_TOKEN)) ||
+    (name === "desec" && Boolean(config.DESEC_TOKEN));
   return { name, configured };
 }
