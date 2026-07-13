@@ -118,7 +118,7 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 
 | ID | P | Task | Effort | Deps | Status |
 |---|---|---|---|---|---|
-| M11-1 | P1 | Strongly-typed config system: sources (env/file/admin-UI/secrets/CLI/API), zod-validated at startup, fail-fast with meaningful errors, auto-generate sample config | M | — | todo |
+| M11-1 | P1 | Strongly-typed config system: sources (env/file/admin-UI/secrets/CLI/API), zod-validated at startup, fail-fast with meaningful errors, auto-generate sample config | M | — | done — zod schema in `config.schema.ts`, fail-fast `load()`, `.env.example` auto-generated from the schema via `pnpm --filter @justmail/api config:sample`. |
 | M11-2 | P1 | Object-storage adapter completeness: extend `@justmail/storage` to R2/MinIO/B2/Ceph/Wasabi/DO Spaces/Scaleway; capability probe + health check | L | M5-1 | todo |
 | M11-3 | P1 | Database adapter: remote/HA Postgres, read-replicas, PgBouncer, connection-pool + failover config; no code coupling | M | — | todo |
 | M11-4 | P1 | Cache adapter: standalone/Sentinel/Cluster/Valkey/remote, TLS + auth + auto-reconnect | M | — | todo |
@@ -127,7 +127,7 @@ buttons, no TODO functionality, no admin-template feel. Premium, handcrafted bar
 | M11-7 | P1 | Distributed mail storage support (NFS/SMB/CephFS/ZFS) via config; document Dovecot index/lock constraints | M | — | todo |
 | M11-8 | P2 | Admin storage-migration tool: move attachments between providers with no downtime + progress/health | M | M11-2 | todo |
 | M11-9 | P0 | No-personalization audit: grep out every hardcoded domain/host/IP/port/path/email/brand/secret/maintainer id → placeholders/config; repo reusable with zero edits | M | M11-1 | done |
-| M11-10 | P1 | Multi-arch (ARM64 + AMD64) image builds in CI | S | — | todo |
+| M11-10 | P1 | Multi-arch (ARM64 + AMD64) image builds in CI | S | — | done — `release.yml` builds `linux/amd64,linux/arm64` via buildx+QEMU. Registry push happens on `v*` tags; cross-arch push unverified until a tagged release runs. |
 
 ## M12 — Packaging & deployment targets
 
