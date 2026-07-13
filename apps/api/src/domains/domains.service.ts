@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import type {
+  BimiStatus,
   CreateDomainRequest,
   Domain,
   DomainVerifyResponse,
@@ -14,8 +16,16 @@ import { Db } from "../db/db.service";
 import { AuditService } from "../audit/audit.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { WebhooksService } from "../webhooks/webhooks.service";
+import { StorageService } from "../storage/storage.service";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { config } from "../config";
+import {
+  bimiDmarcOk,
+  bimiLogoUrl,
+  bimiRecordContent,
+  dmarcPolicy,
+  validateBimiSvg,
+} from "./bimi";
 
 // Expected DNS records seeded on domain create. `content` uses ${DOMAIN} and
 // ${TOKEN} placeholders substituted when we insert into dns_records.
@@ -35,10 +45,10 @@ const SEED_RECORDS: Array<{
   { purpose: "tls_rpt", type: "TXT", name: "_smtp._tls.${DOMAIN}", content: "v=TLSRPTv1; rua=mailto:tls-rpt@${DOMAIN}", ttl: 3600 },
   { purpose: "autoconfig", type: "CNAME", name: "autoconfig.${DOMAIN}", content: "autoconfig.${MAIL_ROOT}", ttl: 3600 },
   { purpose: "autodiscover", type: "CNAME", name: "autodiscover.${DOMAIN}", content: "autodiscover.${MAIL_ROOT}", ttl: 3600 },
-  // BIMI default selector — l= points at an org-hosted logo SVG; a= (Verified
-  // Mark Certificate URL) is left empty until the customer uploads one via
-  // the Deliverability screen.
-  { purpose: "bimi", type: "TXT", name: "default._bimi.${DOMAIN}", content: "v=BIMI1; l=https://${DOMAIN}/.well-known/bimi-logo.svg;", ttl: 3600 },
+  // BIMI default selector — l= points at the domain-hosted logo SVG served by
+  // BimiController; a= (Verified Mark Certificate URL) is left empty. Kept in
+  // sync with bimiRecordContent() in ./bimi.ts.
+  { purpose: "bimi", type: "TXT", name: "default._bimi.${DOMAIN}", content: "v=BIMI1; l=https://${DOMAIN}/.well-known/bimi-logo.svg; a=", ttl: 3600 },
   // CAA locks down issuance to Let's Encrypt so a hijacked DNS account can't
   // mint rogue certs from another CA.
   { purpose: "caa", type: "CAA", name: "${DOMAIN}", content: "0 issue \"letsencrypt.org\"", ttl: 3600 },
@@ -68,6 +78,7 @@ export class DomainsService {
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
     private readonly webhooks: WebhooksService,
+    private readonly storage: StorageService,
   ) {
     // Derive the platform's own root (e.g. api.mail.example.com → example.com).
     // Falls back to whatever's after the second dot; users can override in settings.
@@ -306,6 +317,116 @@ export class DomainsService {
       last_checked_at: r.last_checked_at ? (r.last_checked_at as Date).toISOString() : null,
     }));
   }
+
+  /** BIMI brand-logo state for a domain: whether a logo is set, the record and
+   * public URL, and whether the DMARC policy is strong enough for it to work. */
+  async getBimi(orgId: string, domainId: string, userId: string): Promise<BimiStatus> {
+    await this.orgs.requireRole(orgId, userId, "viewer");
+    const { rows } = await this.db.query<{ name: string; bimi_logo_key: string | null }>(
+      "SELECT name, bimi_logo_key FROM domains WHERE id = $1 AND org_id = $2",
+      [domainId, orgId],
+    );
+    if (!rows[0]) throw new NotFoundException({ title: "Domain not found" });
+    const { rows: dmarc } = await this.db.query<{ content: string }>(
+      "SELECT content FROM dns_records WHERE domain_id = $1 AND purpose = 'dmarc'",
+      [domainId],
+    );
+    const policy = dmarcPolicy(dmarc[0]?.content ?? null);
+    return {
+      has_logo: rows[0].bimi_logo_key !== null,
+      record: bimiRecordContent(rows[0].name),
+      logo_url: bimiLogoUrl(rows[0].name),
+      dmarc_policy: policy,
+      dmarc_ok: bimiDmarcOk(policy),
+    };
+  }
+
+  /** Store (or replace) the domain's BIMI SVG logo. Validates the SVG P/S
+   * profile constraints before persisting to org-prefixed storage. */
+  async uploadBimi(
+    principal: SessionPrincipal,
+    orgId: string,
+    domainId: string,
+    body: Buffer,
+    contentType: string | undefined,
+    ip?: string,
+  ): Promise<BimiStatus> {
+    await this.orgs.requireRole(orgId, principal.userId, "admin");
+    await this.get(orgId, domainId, principal.userId); // 404 guard
+    const invalid = validateBimiSvg(body, contentType);
+    if (invalid) throw new BadRequestException({ title: "Invalid BIMI logo", detail: invalid.reason });
+
+    const key = bimiStorageKey(domainId);
+    await this.storage.put(orgId, key, body, "image/svg+xml");
+    await this.db.query(
+      "UPDATE domains SET bimi_logo_key = $2, updated_at = now() WHERE id = $1",
+      [domainId, key],
+    );
+    this.audit.log({
+      orgId,
+      actorType: "user",
+      actorId: principal.userId,
+      action: "domain.bimi.upload",
+      targetType: "domain",
+      targetId: domainId,
+      ip,
+      meta: { bytes: body.length },
+    });
+    return this.getBimi(orgId, domainId, principal.userId);
+  }
+
+  /** Remove the domain's BIMI logo (record stays seeded but resolves to 404). */
+  async removeBimi(
+    principal: SessionPrincipal,
+    orgId: string,
+    domainId: string,
+    ip?: string,
+  ): Promise<BimiStatus> {
+    await this.orgs.requireRole(orgId, principal.userId, "admin");
+    const { rows } = await this.db.query<{ bimi_logo_key: string | null }>(
+      "SELECT bimi_logo_key FROM domains WHERE id = $1 AND org_id = $2",
+      [domainId, orgId],
+    );
+    if (!rows[0]) throw new NotFoundException({ title: "Domain not found" });
+    if (rows[0].bimi_logo_key) {
+      await this.storage.remove(orgId, rows[0].bimi_logo_key).catch(() => undefined);
+      await this.db.query(
+        "UPDATE domains SET bimi_logo_key = NULL, updated_at = now() WHERE id = $1",
+        [domainId],
+      );
+      this.audit.log({
+        orgId,
+        actorType: "user",
+        actorId: principal.userId,
+        action: "domain.bimi.remove",
+        targetType: "domain",
+        targetId: domainId,
+        ip,
+      });
+    }
+    return this.getBimi(orgId, domainId, principal.userId);
+  }
+
+  /** Resolve a domain's stored BIMI logo for the public streaming route. Looks
+   * up by hostname (no auth) the way MtaStsController does. Returns the org and
+   * storage key, or null when unknown/unset. */
+  async bimiLogoForHost(host: string): Promise<{ orgId: string; key: string } | null> {
+    const { rows } = await this.db.query<{ org_id: string; bimi_logo_key: string | null }>(
+      "SELECT org_id, bimi_logo_key FROM domains WHERE name = $1 AND status = 'active'",
+      [host.toLowerCase()],
+    );
+    if (!rows[0] || !rows[0].bimi_logo_key) return null;
+    return { orgId: rows[0].org_id, key: rows[0].bimi_logo_key };
+  }
+
+  bimiStream(orgId: string, key: string) {
+    return this.storage.stream(orgId, key);
+  }
+}
+
+/** Deterministic per-domain storage key so re-upload overwrites in place. */
+function bimiStorageKey(domainId: string): string {
+  return `bimi/${domainId}.svg`;
 }
 
 async function seedDnsRecords(

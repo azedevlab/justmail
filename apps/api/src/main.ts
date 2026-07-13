@@ -88,6 +88,7 @@ async function bootstrap(): Promise<void> {
       "internal/dmarc/ingest",
       "internal/caldav/auth",
       ".well-known/mta-sts.txt",
+      ".well-known/bimi-logo.svg",
       // Mail-client autoconfig lives at fixed, unversioned paths clients probe.
       "mail/config-v1.1.xml",
       ".well-known/autoconfig/mail/config-v1.1.xml",

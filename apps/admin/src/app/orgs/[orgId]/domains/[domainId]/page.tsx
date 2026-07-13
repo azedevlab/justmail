@@ -44,6 +44,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { BimiSection } from "./BimiSection";
 
 export default function DomainDetailPage() {
   const { orgId, domainId } = useParams<{ orgId: string; domainId: string }>();
@@ -374,6 +375,8 @@ export default function DomainDetailPage() {
             </Section>
 
             <DkimSection orgId={orgId} domainId={domainId} />
+
+            <BimiSection orgId={orgId} domainId={domainId} />
 
             <SettingsForm domain={domain.data} orgId={orgId} />
           </>
