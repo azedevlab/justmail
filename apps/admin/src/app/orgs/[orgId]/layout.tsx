@@ -48,6 +48,8 @@ import {
   Tooltip,
   Wordmark,
 } from "@justmail/shared-ui";
+import { compileTheme } from "@justmail/theme-engine";
+import type { Theme } from "@justmail/contracts";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/session";
 
@@ -190,6 +192,19 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
       router.replace("/login");
     },
   });
+
+  // Org branding: pull the saved theme and compile it into CSS custom
+  // properties scoped to [data-org], so the whole console re-skins to the
+  // org's brand (--color-accent resolves through the overridden brand ramp).
+  const theme = useQuery({
+    queryKey: ["org-theme", orgId],
+    queryFn: () =>
+      api.get<Theme | null>(`/v1/orgs/${orgId}/themes`).catch(() => null),
+    enabled: !!orgId,
+  });
+  const themeCss = theme.data
+    ? `${compileTheme(theme.data.tokens, { kind: "org", id: orgId })}\n${theme.data.css_extra ?? ""}`
+    : "";
 
   if (me.isError) {
     return (
@@ -335,7 +350,8 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] lg:flex">
+    <div className="min-h-screen bg-[var(--color-bg)] lg:flex" data-org={orgId}>
+      {themeCss && <style dangerouslySetInnerHTML={{ __html: themeCss }} />}
       <OfflineBanner />
 
       {/* Floating sidebar (desktop) */}
