@@ -14,6 +14,7 @@ import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
 import { StorageService } from "../storage/storage.service";
+import { SettingsService } from "../settings/settings.service";
 import { ThumbnailService } from "./thumbnail.service";
 import type { SessionPrincipal } from "../auth/auth.service";
 
@@ -53,6 +54,7 @@ export class AttachmentsService {
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly settings: SettingsService,
     private readonly thumbnails: ThumbnailService,
   ) {}
 
@@ -63,6 +65,19 @@ export class AttachmentsService {
     ip?: string,
   ): Promise<Upload> {
     await this.orgs.requireOrgAccess(principal, orgId, "member");
+    // Reject the upload before allocating storage if its declared size already
+    // exceeds the org's admin-configured ceiling. A single attachment can never
+    // exceed the total-size budget, so maxTotalBytes is the per-file cap too.
+    // Admins change this live via org settings; it is not a static config value.
+    const limits = await this.settings.attachmentLimits(orgId);
+    if (req.size_bytes > limits.maxTotalBytes) {
+      throw new BadRequestException({
+        title: "Attachment too large",
+        detail: `Attachments must stay under ${Math.floor(
+          limits.maxTotalBytes / 1_000_000,
+        )} MB.`,
+      });
+    }
     const id = randomUUID();
     const key = `uploads/${id}`;
     const expiresAt = new Date(Date.now() + UPLOAD_TTL_MS);
