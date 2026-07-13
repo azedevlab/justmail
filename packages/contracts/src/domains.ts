@@ -35,6 +35,25 @@ export const CreateDomainRequest = z.object({
 });
 export type CreateDomainRequest = z.infer<typeof CreateDomainRequest>;
 
+// Brand logo (BIMI) state for a domain. `record` is the default._bimi TXT
+// value; `logo_url` is the public https URL its l= tag points at. BIMI only
+// renders when dmarc_ok (policy quarantine/reject).
+export const BimiStatus = z.object({
+  has_logo: z.boolean(),
+  record: z.string(),
+  logo_url: z.string(),
+  dmarc_policy: z.string().nullable(),
+  dmarc_ok: z.boolean(),
+});
+export type BimiStatus = z.infer<typeof BimiStatus>;
+
+// SVG uploaded as base64 (the JSON API client can't send raw binary).
+export const UploadBimiRequest = z.object({
+  content_type: z.string(),
+  data_base64: z.string().min(1),
+});
+export type UploadBimiRequest = z.infer<typeof UploadBimiRequest>;
+
 export const UpdateDomainRequest = z.object({
   is_primary: z.boolean().optional(),
   catch_all_target: Email.nullable().optional(),

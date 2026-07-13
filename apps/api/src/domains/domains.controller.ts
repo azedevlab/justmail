@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -15,6 +16,7 @@ import { Request } from "express";
 import {
   CreateDomainRequest,
   UpdateDomainRequest,
+  UploadBimiRequest,
 } from "@justmail/contracts";
 import { ZodPipe } from "../common/zod.pipe";
 import { Principal, SessionGuard } from "../auth/session.guard";
@@ -92,5 +94,42 @@ export class DomainsController {
     @Req() req: Request,
   ) {
     return this.svc.verify(principal, orgId, id, req.ip);
+  }
+
+  @Get(":id/bimi")
+  getBimi(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.getBimi(orgId, id, principal.userId);
+  }
+
+  @Put(":id/bimi")
+  uploadBimi(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(UploadBimiRequest)) body: UploadBimiRequest,
+    @Req() req: Request,
+  ) {
+    return this.svc.uploadBimi(
+      principal,
+      orgId,
+      id,
+      Buffer.from(body.data_base64, "base64"),
+      body.content_type,
+      req.ip,
+    );
+  }
+
+  @Delete(":id/bimi")
+  removeBimi(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ) {
+    return this.svc.removeBimi(principal, orgId, id, req.ip);
   }
 }

@@ -78,6 +78,7 @@ async function bootstrap(): Promise<void> {
       "internal/dmarc/ingest",
       "internal/caldav/auth",
       ".well-known/mta-sts.txt",
+      ".well-known/bimi-logo.svg",
     ],
   });
   app.useGlobalFilters(new ProblemFilter());
