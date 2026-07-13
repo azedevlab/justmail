@@ -46,4 +46,5 @@ jobs:
           cp services/compose/.env.example services/compose/.env
           docker compose --env-file services/compose/.env \
             -f services/compose/docker-compose.yml \
-            --profile core --profile certs --profile mail --profile obs --profile sec config -q
+            --profile core --profile certs --profile mail --profile obs \
+            --profile sec --profile app --profile storage config -q

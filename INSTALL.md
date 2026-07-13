@@ -77,7 +77,6 @@ REDIS_PASSWORD=…
 RSPAMD_CONTROLLER_PASSWORD=…
 
 # App secrets — generate each with: openssl rand -hex 32
-APP_SECRET=…
 ENCRYPTION_KEY=…
 EVENTS_INGEST_TOKEN=…
 
@@ -94,7 +93,7 @@ STORAGE_LOCAL_PATH=/opt/justmail/attachments
 Generate secrets quickly:
 
 ```bash
-for k in APP_SECRET ENCRYPTION_KEY EVENTS_INGEST_TOKEN; do
+for k in ENCRYPTION_KEY EVENTS_INGEST_TOKEN; do
   echo "$k=$(openssl rand -hex 32)"
 done
 ```

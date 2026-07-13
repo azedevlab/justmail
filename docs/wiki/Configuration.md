@@ -38,7 +38,6 @@ Standalone via URL, or `REDIS_SENTINELS` + `REDIS_SENTINEL_NAME`, or
 
 | Variable | Purpose |
 |----------|---------|
-| `APP_SECRET` | Session/signing secret |
 | `ENCRYPTION_KEY` | Encrypts stored credentials |
 | `EVENTS_INGEST_TOKEN` | Guards the internal events ingest |
 
