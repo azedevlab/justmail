@@ -1141,7 +1141,12 @@ function HtmlViewer({ html }: { html: string }) {
   const [height, setHeight] = useState(480);
   // Rendered inside an isolated srcDoc iframe, so app theme vars cannot cascade
   // in — base readability styles are interpolated from the token constants.
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>
+  // Per-iframe CSP as defence-in-depth behind the server-side sanitiser: deny
+  // everything by default, permit only inline presentational styles and images.
+  // No script-src, so message JS can never execute even if a tag slips through.
+  const csp =
+    "default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>
 body{margin:16px;font:14px/1.6 ${fontFamily.sans};color:${neutralLight[10]};word-break:break-word}
 img{max-width:100%;height:auto}
 a{color:${brand[6]}}

@@ -446,10 +446,14 @@ export class WebmailService {
         const raw = await client.download(String(uid), undefined, { uid: true });
         if (!raw) throw new NotFoundException({ title: "Message not found" });
         const parsed = await this.parseMimeSafe(raw.content);
-        // Inline cid: images as data URIs so the sandboxed viewer can render
-        // them without a credentialed cross-origin request.
-        let html = parsed.html;
+        // Inbound mail HTML is attacker-controlled, so sanitise it on the read
+        // path before it ever reaches the viewer's srcDoc — the same allowlist
+        // used for composed bodies strips scripts, event handlers and unsafe
+        // URL schemes while preserving cid:/data: image refs for inlining below.
+        let html = parsed.html ? sanitizeMailHtml(parsed.html) : parsed.html;
         if (html) {
+          // Inline cid: images as data URIs so the sandboxed viewer can render
+          // them without a credentialed cross-origin request.
           for (const a of parsed.attachments) {
             if (!a.contentId || a.size > config.WEBMAIL_ATTACHMENT_INLINE_MAX_BYTES)
               continue;
