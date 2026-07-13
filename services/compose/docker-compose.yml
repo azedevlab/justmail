@@ -245,6 +245,13 @@ services:
       traefik.http.routers.mtasts.entrypoints: websecure
       traefik.http.routers.mtasts.tls.certresolver: cloudflare
       traefik.http.routers.mtasts.service: api
+      # Mail-client autoconfig (Thunderbird) and autodiscover (Outlook) are also
+      # served by the API; DNS points autoconfig.<domain>/autodiscover.<domain>
+      # at the mail host and the shared cert covers both names.
+      traefik.http.routers.autoconfig.rule: HostRegexp(`^(autoconfig|autodiscover)\..+$`)
+      traefik.http.routers.autoconfig.entrypoints: websecure
+      traefik.http.routers.autoconfig.tls.certresolver: cloudflare
+      traefik.http.routers.autoconfig.service: api
     logging: *default-logging
 
   worker:

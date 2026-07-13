@@ -44,6 +44,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
 import { WorkerModule } from "./worker/worker.module";
 import { HealthController } from "./health/health.controller";
 import { MtaStsController } from "./mtasts/mtasts.controller";
+import { AutoconfigController } from "./autoconfig/autoconfig.controller";
 
 @Module({
   imports: [
@@ -91,7 +92,7 @@ import { MtaStsController } from "./mtasts/mtasts.controller";
     RealtimeModule,
     WorkerModule,
   ],
-  controllers: [HealthController, MtaStsController],
+  controllers: [HealthController, MtaStsController, AutoconfigController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

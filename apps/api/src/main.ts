@@ -6,6 +6,7 @@ import { WsAdapter } from "@nestjs/platform-ws";
 import cookieParser from "cookie-parser";
 import {
   json,
+  text,
   urlencoded,
   type NextFunction,
   type Request,
@@ -35,7 +36,16 @@ async function bootstrap(): Promise<void> {
     type: ["application/json", "application/scim+json"],
     limit: "2mb",
   });
+  // Outlook autodiscover posts its request as an XML document; capture it as
+  // raw text so the controller can read the <EMailAddress> out of req.body.
+  const xmlParser = text({
+    type: ["application/xml", "text/xml"],
+    limit: "64kb",
+  });
   app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "POST" && /\/autodiscover\/autodiscover\.xml$/i.test(req.path)) {
+      return xmlParser(req, res, next);
+    }
     if (
       req.method === "POST" &&
       /\/webmail\/mailboxes\/[^/]+\/send$/.test(req.path)
@@ -78,6 +88,10 @@ async function bootstrap(): Promise<void> {
       "internal/dmarc/ingest",
       "internal/caldav/auth",
       ".well-known/mta-sts.txt",
+      // Mail-client autoconfig lives at fixed, unversioned paths clients probe.
+      "mail/config-v1.1.xml",
+      ".well-known/autoconfig/mail/config-v1.1.xml",
+      "autodiscover/autodiscover.xml",
     ],
   });
   app.useGlobalFilters(new ProblemFilter());
