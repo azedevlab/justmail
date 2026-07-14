@@ -158,6 +158,9 @@ services:
     ports: ["993:993", "995:995", "4190:4190"]
     environment:
       JM_HOSTNAME: ${JM_HOSTNAME}
+      # Rendered into postmaster_address; an empty value makes Pigeonhole reject
+      # `postmaster@` and abort Sieve at LMTP, so every filter silently no-ops.
+      JM_DOMAIN: ${JM_DOMAIN}
       MAILPLANE_DB_PASSWORD: ${MAILPLANE_DB_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
