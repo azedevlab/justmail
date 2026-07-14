@@ -32,6 +32,7 @@ import {
 import {
   CreateFolderRequest,
   MoveRequest,
+  RenameFolderRequest,
   SearchRequest,
   UnlockRequest,
   WebmailService,
@@ -96,6 +97,39 @@ export class WebmailController {
     @Body(new ZodPipe(CreateFolderRequest)) body: z.infer<typeof CreateFolderRequest>,
   ) {
     return this.svc.createFolder(principal, orgId, mailboxId, body.name);
+  }
+
+  @Put("folders/:folder")
+  renameFolder(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("folder") folder: string,
+    @Body(new ZodPipe(RenameFolderRequest)) body: z.infer<typeof RenameFolderRequest>,
+  ) {
+    return this.svc.renameFolder(
+      principal,
+      orgId,
+      mailboxId,
+      decodeURIComponent(folder),
+      body.name,
+    );
+  }
+
+  @Delete("folders/:folder")
+  @HttpCode(204)
+  deleteFolder(
+    @Principal() principal: SessionPrincipal,
+    @Param("orgId", ParseUUIDPipe) orgId: string,
+    @Param("mailboxId", ParseUUIDPipe) mailboxId: string,
+    @Param("folder") folder: string,
+  ) {
+    return this.svc.deleteFolder(
+      principal,
+      orgId,
+      mailboxId,
+      decodeURIComponent(folder),
+    );
   }
 
   @Get("folders/:folder/messages")

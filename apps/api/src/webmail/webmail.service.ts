@@ -676,6 +676,50 @@ export class WebmailService {
     return { path: resolved };
   }
 
+  async renameFolder(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    path: string,
+    name: string,
+  ): Promise<{ path: string }> {
+    const next = name.trim();
+    if (!next || next.length > 255) {
+      throw new BadRequestException({ title: "Invalid folder name" });
+    }
+    assertMutableFolder(path);
+    const creds = await this.creds(principal, orgId, mailboxId);
+    const renamed = await this.withImap(
+      principal.sessionId,
+      mailboxId,
+      creds,
+      async (client) => client.mailboxRename(path, next),
+    );
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
+    const resolved =
+      renamed && typeof renamed === "object" && "newPath" in renamed
+        ? String((renamed as { newPath: unknown }).newPath)
+        : next;
+    return { path: resolved };
+  }
+
+  async deleteFolder(
+    principal: SessionPrincipal,
+    orgId: string,
+    mailboxId: string,
+    path: string,
+  ): Promise<void> {
+    assertMutableFolder(path);
+    const creds = await this.creds(principal, orgId, mailboxId);
+    await this.withImap(
+      principal.sessionId,
+      mailboxId,
+      creds,
+      async (client) => client.mailboxDelete(path),
+    );
+    await this.cache.bustMailbox(principal.sessionId, mailboxId);
+  }
+
   /**
    * A send is never dispatched inline: it is written to scheduled_sends with a
    * send_at that is either now+undo-window (so the user can cancel during the
@@ -1365,6 +1409,20 @@ export const MoveRequest = z.object({
 export const CreateFolderRequest = z.object({
   name: z.string().min(1).max(255),
 });
+
+export const RenameFolderRequest = z.object({
+  name: z.string().min(1).max(255),
+});
+
+// The special-use system folders are load-bearing for delivery, Sieve, and the
+// client's fixed rails — renaming or deleting them would orphan mail. Only
+// user-created folders are mutable.
+const PROTECTED_FOLDERS = new Set(["inbox", "sent", "drafts", "trash", "junk"]);
+function assertMutableFolder(path: string): void {
+  if (PROTECTED_FOLDERS.has(path.trim().toLowerCase())) {
+    throw new BadRequestException({ title: "System folders can't be changed" });
+  }
+}
 
 // Query params for folder search. has_attachment arrives as a query string, so
 // it is parsed from the literal "true"/"false" rather than coerced (any non-

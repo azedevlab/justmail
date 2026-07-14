@@ -269,6 +269,13 @@ export default function MailboxView() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const prompt = usePrompt();
+  const confirm = useConfirm();
+  const [folderMenu, setFolderMenu] = useState<{
+    x: number;
+    y: number;
+    path: string;
+    name: string;
+  } | null>(null);
   const [folder, setFolder] = useState("INBOX");
   const [openUid, setOpenUid] = useState<number | null>(null);
   const [compose, setCompose] = useState<ComposeInit | null>(null);
@@ -566,6 +573,57 @@ export default function MailboxView() {
     if (trimmed) createFolder.mutate(trimmed);
   };
 
+  const renameFolder = useMutation({
+    mutationFn: (vars: { path: string; name: string }) =>
+      api.put<{ path: string }>(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(vars.path)}`,
+        { name: vars.name },
+      ),
+    onSuccess: (res, vars) => {
+      qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+      if (folder === vars.path) setFolder(res.path);
+      toast({ title: "Folder renamed", tone: "ok" });
+    },
+    onError: () => toast({ title: "Could not rename folder", tone: "bad" }),
+  });
+
+  const deleteFolder = useMutation({
+    mutationFn: (path: string) =>
+      api.del(
+        `/v1/orgs/${orgId}/webmail/mailboxes/${mailboxId}/folders/${encodeURIComponent(path)}`,
+      ),
+    onSuccess: (_res, path) => {
+      qc.invalidateQueries({ queryKey: ["folders", orgId, mailboxId] });
+      if (folder === path) {
+        setFolder("INBOX");
+        setOpenUid(null);
+      }
+      toast({ title: "Folder deleted", tone: "ok" });
+    },
+    onError: () => toast({ title: "Could not delete folder", tone: "bad" }),
+  });
+
+  const renameFolderPrompt = async (path: string, current: string) => {
+    const name = await prompt({
+      title: "Rename folder",
+      label: "Folder name",
+      confirmLabel: "Rename",
+      defaultValue: current,
+    });
+    const trimmed = name?.trim();
+    if (trimmed && trimmed !== current) renameFolder.mutate({ path, name: trimmed });
+  };
+
+  const deleteFolderConfirm = async (path: string, name: string) => {
+    const ok = await confirm({
+      title: `Delete "${name}"?`,
+      body: "The folder and everything in it is permanently removed.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (ok) deleteFolder.mutate(path);
+  };
+
   const replyTo = (m: Message) => {
     const addr = m.from.match(/[\w.+-]+@[\w.-]+/)?.[0] ?? m.from;
     const subject = /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`;
@@ -798,6 +856,7 @@ export default function MailboxView() {
             ) : folders.data && folders.data.length > 0 ? (
               folders.data.map((f) => {
                 const active = folder === f.path;
+                const isSystem = !!f.special_use || f.path === "INBOX";
                 return (
                   <button
                     key={f.path}
@@ -805,6 +864,19 @@ export default function MailboxView() {
                       setFolder(f.path);
                       setOpenUid(null);
                     }}
+                    onContextMenu={
+                      isSystem
+                        ? undefined
+                        : (e) => {
+                            e.preventDefault();
+                            setFolderMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              path: f.path,
+                              name: f.name,
+                            });
+                          }
+                    }
                     className={
                       "w-full flex items-center gap-2.5 h-8 px-2 rounded-[7px] text-[13px] transition-colors " +
                       (active
@@ -855,6 +927,50 @@ export default function MailboxView() {
             </div>
           </div>
         </nav>
+
+        {folderMenu && (
+          <div
+            className="fixed inset-0 z-50"
+            onClick={() => setFolderMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setFolderMenu(null);
+            }}
+          >
+            <div
+              role="menu"
+              className="absolute min-w-[160px] rounded-[8px] border border-[var(--color-border)] bg-[var(--color-surface-1)] shadow-lg py-1 text-[13px]"
+              style={{
+                top: Math.min(folderMenu.y, window.innerHeight - 96),
+                left: Math.min(folderMenu.x, window.innerWidth - 172),
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                role="menuitem"
+                className="w-full flex items-center gap-2 px-3 h-8 text-left text-[var(--color-neutral-1000)] hover:bg-[var(--hover-overlay)]"
+                onClick={() => {
+                  const { path, name } = folderMenu;
+                  setFolderMenu(null);
+                  void renameFolderPrompt(path, name);
+                }}
+              >
+                <Edit3 size={13} /> Rename
+              </button>
+              <button
+                role="menuitem"
+                className="w-full flex items-center gap-2 px-3 h-8 text-left text-[var(--color-bad)] hover:bg-[var(--hover-overlay)]"
+                onClick={() => {
+                  const { path, name } = folderMenu;
+                  setFolderMenu(null);
+                  void deleteFolderConfirm(path, name);
+                }}
+              >
+                <Trash2 size={13} /> Delete
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Message list */}
         <section
