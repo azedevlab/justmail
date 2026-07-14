@@ -63,10 +63,24 @@ if [[ -n "$FAILED" ]]; then
   exit 1
 fi
 
-echo "==> SIEVE-DIAG effective config"
-compose exec -T dovecot doveconf -n 2>&1 | grep -iE 'protocol|mail_plugins|sieve|submission_host|postmaster|mail_home|mail_location' || true
-echo "==> SIEVE-DIAG recent dovecot log"
-compose logs --tail=200 --no-color dovecot 2>&1 | grep -iE 'sieve|lmtp|error|warn|deprecat|permission|plugin' | tail -80 || true
+echo "==> SIEVE-DIAG comprehensive"
+MBOX=$(compose exec -T dovecot sh -c 'ls -d /var/vmail/*/* 2>/dev/null | head -1' | tr -d "\r")
+echo "SIEVE-DIAG mailbox dir: [$MBOX]"
+if [[ -n "$MBOX" ]]; then
+  DOM=$(basename "$(dirname "$MBOX")")
+  LP=$(basename "$MBOX")
+  ADDR="$LP@$DOM"
+  echo "SIEVE-DIAG test recipient: $ADDR"
+  echo "SIEVE-DIAG --- active-script filesystem state ---"
+  compose exec -T dovecot sh -c "ls -la '$MBOX/.dovecot.sieve' 2>&1; echo '-- sieve dir --'; ls -la '$MBOX/sieve/' 2>&1" || true
+  echo "SIEVE-DIAG --- sieve-test engine run on active script ---"
+  compose exec -T dovecot sh -c "printf 'Subject: SIEVEDIAG\r\n\r\nbody\r\n' > /tmp/d.eml; sieve-test '$MBOX/.dovecot.sieve' /tmp/d.eml 2>&1 | tail -25" || true
+  echo "SIEVE-DIAG --- live LMTP delivery test ---"
+  compose exec -T postfix sh -c "printf 'From: diag@$DOM\r\nTo: $ADDR\r\nSubject: SIEVEDIAG-live\r\n\r\nbody\r\n' | sendmail -f 'diag@$DOM' '$ADDR'" || true
+  sleep 5
+  echo "SIEVE-DIAG --- dovecot lmtp log lines ---"
+  compose logs --tail=250 --no-color dovecot 2>&1 | grep -iE 'lmtp\(|sieve:' | tail -25 || true
+fi
 
 docker image prune -f >/dev/null
 echo "==> Deploy OK"
