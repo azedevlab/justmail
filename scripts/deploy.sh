@@ -63,7 +63,7 @@ if [[ -n "$FAILED" ]]; then
   exit 1
 fi
 
-echo "==> SIEVE-DIAG comprehensive"
+echo "==> SIEVE-DIAG controlled delivery test"
 MBOX=$(compose exec -T dovecot sh -c 'ls -d /var/vmail/*/* 2>/dev/null | head -1' | tr -d "\r")
 echo "SIEVE-DIAG mailbox dir: [$MBOX]"
 if [[ -n "$MBOX" ]]; then
@@ -71,15 +71,41 @@ if [[ -n "$MBOX" ]]; then
   LP=$(basename "$MBOX")
   ADDR="$LP@$DOM"
   echo "SIEVE-DIAG test recipient: $ADDR"
-  echo "SIEVE-DIAG --- active-script filesystem state ---"
-  compose exec -T dovecot sh -c "ls -la '$MBOX/.dovecot.sieve' 2>&1; echo '-- sieve dir --'; ls -la '$MBOX/sieve/' 2>&1" || true
-  echo "SIEVE-DIAG --- sieve-test engine run on active script ---"
-  compose exec -T dovecot sh -c "printf 'Subject: SIEVEDIAG\r\n\r\nbody\r\n' > /tmp/d.eml; sieve-test '$MBOX/.dovecot.sieve' /tmp/d.eml 2>&1 | tail -25" || true
-  echo "SIEVE-DIAG --- live LMTP delivery test ---"
-  compose exec -T postfix sh -c "printf 'From: diag@$DOM\r\nTo: $ADDR\r\nSubject: SIEVEDIAG-live\r\n\r\nbody\r\n' | sendmail -f 'diag@$DOM' '$ADDR'" || true
-  sleep 5
-  echo "SIEVE-DIAG --- dovecot lmtp log lines ---"
-  compose logs --tail=250 --no-color dovecot 2>&1 | grep -iE 'lmtp\(|sieve:' | tail -25 || true
+  # Install a known flag+fileinto script directly on the filesystem (root in the
+  # container, chown to vmail) so the test does not depend on any user's filters
+  # or password. Back up any existing active symlink.
+  compose exec -T dovecot sh -c '
+    MBOX="'"$MBOX"'"
+    mkdir -p "$MBOX/sieve"
+    [ -L "$MBOX/.dovecot.sieve" ] && mv "$MBOX/.dovecot.sieve" /tmp/bk.link 2>/dev/null || true
+    cat > "$MBOX/sieve/diag.sieve" <<SEOF
+require ["imap4flags","fileinto","mailbox"];
+if header :contains "subject" "SIEVEDIAG" {
+  addflag "\\\\Flagged";
+  fileinto :create "SieveDiag";
+}
+SEOF
+    ln -sf sieve/diag.sieve "$MBOX/.dovecot.sieve"
+    chown -R vmail:vmail "$MBOX/sieve"; chown -h vmail:vmail "$MBOX/.dovecot.sieve"
+    su -s /bin/sh vmail -c "sievec \"$MBOX/sieve/diag.sieve\"" 2>&1 || echo "sievec failed"
+    echo "-- active symlink --"; ls -la "$MBOX/.dovecot.sieve"
+  ' || true
+  echo "SIEVE-DIAG --- delivering via Postfix->LMTP ---"
+  compose exec -T postfix sh -c "printf 'From: diag@$DOM\r\nTo: $ADDR\r\nSubject: SIEVEDIAG probe\r\n\r\nbody\r\n' | sendmail -f 'diag@$DOM' '$ADDR'" || true
+  sleep 7
+  echo "SIEVE-DIAG --- result (SieveDiag folder = engine ran; INBOX = did not) ---"
+  compose exec -T dovecot sh -c '
+    MBOX="'"$MBOX"'"
+    echo "SieveDiag/new: $(ls "$MBOX/Maildir/.SieveDiag/new/" 2>/dev/null | wc -l) msg(s)"
+    echo "INBOX matches: $(grep -rl SIEVEDIAG "$MBOX/Maildir/new/" 2>/dev/null | wc -l)"
+    # cleanup: remove test artifacts and restore prior sieve state
+    rm -rf "$MBOX/Maildir/.SieveDiag"
+    grep -rl SIEVEDIAG "$MBOX/Maildir/new/" 2>/dev/null | xargs -r rm -f
+    rm -f "$MBOX/sieve/diag.sieve" "$MBOX/sieve/diag.svbin" "$MBOX/.dovecot.sieve"
+    [ -e /tmp/bk.link ] && mv /tmp/bk.link "$MBOX/.dovecot.sieve" 2>/dev/null || true
+  ' || true
+  echo "SIEVE-DIAG --- dovecot lmtp/sieve log lines ---"
+  compose logs --tail=300 --no-color dovecot 2>&1 | grep -iE 'lmtp\(|sieve' | grep -ivE '_capability|mail_plugins|imapsieve|sieve_plugins|sieve_global|sieve_pipe|= file:|effective config|end sieve|starting up' | tail -25 || true
 fi
 
 docker image prune -f >/dev/null
