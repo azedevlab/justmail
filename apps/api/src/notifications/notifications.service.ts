@@ -135,6 +135,32 @@ export class NotificationsService {
     return notification;
   }
 
+  // Fired from the log-ingest stream when Postfix reports a successful LMTP
+  // hand-off to a local mailbox. The webmail identity row is keyed by the
+  // mailbox address, so an unknown recipient means the account never signed
+  // into webmail — nothing to notify, and no push subscription can exist.
+  async notifyInboundDelivery(
+    toAddr: string,
+    fromAddr: string | null,
+  ): Promise<void> {
+    const email = toAddr.trim();
+    if (!email.includes("@")) return;
+    const { rows } = await this.db.query<{ id: string }>(
+      "SELECT id FROM users WHERE email = $1",
+      [email],
+    );
+    const userId = rows[0]?.id;
+    if (!userId) return;
+    const sender = fromAddr?.trim() || "";
+    await this.publish({
+      userId,
+      kind: "mail",
+      title: "New message",
+      body: sender ? `From ${sender}` : "You have new mail",
+      url: "/",
+    });
+  }
+
   async subscribeWebPush(
     principal: SessionPrincipal,
     sub: WebPushSubscription,
