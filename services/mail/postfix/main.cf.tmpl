@@ -5,7 +5,11 @@ myhostname = ${JM_HOSTNAME}
 mydomain = ${JM_DOMAIN}
 myorigin = $mydomain
 mydestination = localhost
-mynetworks = 127.0.0.0/8
+# Localhost plus the private Docker address pools (10/8, 172.16/12) so Dovecot's
+# Sieve `redirect` re-injection is trusted for relay. These ranges are
+# non-routable publicly, so exposing port 25 does not let external clients
+# spoof into mynetworks.
+mynetworks = 127.0.0.0/8 [::1]/128 10.0.0.0/8 172.16.0.0/12
 inet_interfaces = all
 inet_protocols = ipv4
 compatibility_level = 3.6

@@ -10,6 +10,11 @@ disable_plaintext_auth = yes
 
 mail_home = /var/vmail/%d/%n
 mail_location = maildir:/var/vmail/%d/%n/Maildir
+
+# How often an IDLE/NOTIFY session rescans the mailbox for delivered mail.
+# Dovecot's 30s default is what makes new mail feel laggy in clients that IDLE
+# (webmail's watcher, iOS push); 2s makes new mail surface almost immediately.
+mailbox_idle_check_interval = 2 secs
 mail_uid = 5000
 mail_gid = 5000
 first_valid_uid = 5000
@@ -82,6 +87,10 @@ protocol imap {
 protocol lmtp {
   mail_plugins = $mail_plugins sieve
   postmaster_address = postmaster@${JM_DOMAIN}
+  # Sieve `redirect`/forward hands the message back to Postfix for outbound
+  # relay. Without this the LDA has no way to re-inject and forwards silently
+  # vanish. Postfix trusts the mail-network source via mynetworks.
+  submission_host = postfix:25
 }
 protocol pop3 {
   pop3_uidl_format = %08Xu%08Xv

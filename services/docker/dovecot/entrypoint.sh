@@ -105,4 +105,13 @@ watch_certs() {
 }
 watch_certs &
 
+# One-shot boot diagnostic: surface the effective Sieve/LMTP wiring into the
+# container log so delivery-time filtering problems are debuggable without shell
+# access. Non-fatal — never blocks startup.
+{
+  echo "=== dovecot sieve/lmtp effective config ==="
+  doveconf -n 2>/dev/null | grep -iE 'sieve|mail_plugins|submission_host|postmaster' || true
+  echo "=== end sieve/lmtp diagnostic ==="
+} >&2 || true
+
 exec dovecot -F

@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -15,6 +16,7 @@ import type {
 import { Db } from "../db/db.service";
 import { OrgsService } from "../orgs/orgs.service";
 import { AuditService } from "../audit/audit.service";
+import { REDIS, type RedisClient } from "../common/redis.module";
 import { config } from "../config";
 import type { SessionPrincipal } from "../auth/auth.service";
 import { WebmailCredentialStore } from "./credential.store";
@@ -45,6 +47,12 @@ function toRule(row: SieveRuleRow): SieveRule {
   };
 }
 
+// How long to wait before re-pushing a mailbox's active script from listRules.
+// Bounds ManageSieve traffic when the Filters panel refetches (window focus,
+// remount) while still healing drift shortly after it appears.
+const RECONCILE_TTL_SECONDS = 600;
+const reconcileKey = (mailboxId: string) => `webmail:sieve:synced:${mailboxId}`;
+
 @Injectable()
 export class SieveService {
   private readonly logger = new Logger(SieveService.name);
@@ -54,6 +62,7 @@ export class SieveService {
     private readonly orgs: OrgsService,
     private readonly audit: AuditService,
     private readonly credStore: WebmailCredentialStore,
+    @Inject(REDIS) private readonly redis: RedisClient,
   ) {}
 
   async listRules(
@@ -61,8 +70,10 @@ export class SieveService {
     orgId: string,
     mailboxId: string,
   ): Promise<SieveRule[]> {
-    await this.resolveMailbox(orgId, mailboxId, principal);
-    return (await this.loadRules(mailboxId)).map(toRule);
+    const address = await this.resolveMailbox(orgId, mailboxId, principal);
+    const rows = await this.loadRules(mailboxId);
+    await this.reconcile(principal, mailboxId, address, rows);
+    return rows.map(toRule);
   }
 
   async createRule(
@@ -196,6 +207,66 @@ export class SieveService {
     }
     const enabled = (await this.loadRules(mailboxId)).filter((r) => r.enabled);
     const script = compileScript(enabled);
+    try {
+      await this.pushScript(address, creds.password, script);
+    } catch (err) {
+      const message = (err as Error).message;
+      this.logger.error(`sieve sync failed for ${address}: ${message}`);
+      throw new BadGatewayException({
+        title: "Filter saved, but activating it on the mail server failed",
+        detail: message,
+      });
+    }
+    await this.markReconciled(mailboxId);
+  }
+
+  // Heal drift between the stored rules and the server's active script. A rule
+  // saved while ManageSieve was unreachable lives in the DB but was never
+  // uploaded, so mail is never filed. Re-push on Filters-panel load, at most
+  // once per RECONCILE_TTL and only when the mailbox is unlocked. Best-effort:
+  // listing never fails because activation did.
+  private async reconcile(
+    principal: SessionPrincipal,
+    mailboxId: string,
+    address: string,
+    rows: SieveRuleRow[],
+  ): Promise<void> {
+    const enabled = rows.filter((r) => r.enabled);
+    if (enabled.length === 0) return;
+    const creds = await this.credStore.get(principal.sessionId, mailboxId);
+    if (!creds) return;
+    if (this.redis) {
+      const lease = await this.redis.set(
+        reconcileKey(mailboxId),
+        "1",
+        "EX",
+        RECONCILE_TTL_SECONDS,
+        "NX",
+      );
+      if (lease !== "OK") return;
+    }
+    try {
+      await this.pushScript(address, creds.password, compileScript(enabled));
+    } catch (err) {
+      this.logger.warn(
+        `sieve reconcile skipped for ${address}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private async markReconciled(mailboxId: string): Promise<void> {
+    if (!this.redis) return;
+    await this.redis
+      .set(reconcileKey(mailboxId), "1", "EX", RECONCILE_TTL_SECONDS)
+      .catch(() => {});
+  }
+
+  // Upload the compiled script as the mailbox's single active Sieve script.
+  private async pushScript(
+    address: string,
+    password: string,
+    script: string,
+  ): Promise<void> {
     const client = await ManageSieveClient.connect({
       host: config.SIEVE_HOST,
       port: config.SIEVE_PORT,
@@ -204,18 +275,13 @@ export class SieveService {
     });
     try {
       await client.startTls(config.SIEVE_TLS_REJECT_UNAUTHORIZED);
-      await client.authenticate(address, creds.password);
+      await client.authenticate(address, password);
       await client.putScript(config.SIEVE_SCRIPT_NAME, script);
       await client.setActive(config.SIEVE_SCRIPT_NAME);
       await client.logout();
     } catch (err) {
       client.close();
-      const message = (err as Error).message;
-      this.logger.error(`sieve sync failed for ${address}: ${message}`);
-      throw new BadGatewayException({
-        title: "Filter saved, but activating it on the mail server failed",
-        detail: message,
-      });
+      throw err;
     }
   }
 
