@@ -91,8 +91,11 @@ SEOF
     echo "-- active symlink --"; ls -la "$MBOX/.dovecot.sieve"
   ' || true
   echo "SIEVE-DIAG --- delivering via Postfix->LMTP ---"
-  compose exec -T postfix sh -c "printf 'From: diag@$DOM\r\nTo: $ADDR\r\nSubject: SIEVEDIAG probe\r\n\r\nbody\r\n' | sendmail -f 'diag@$DOM' '$ADDR'" || true
-  sleep 7
+  compose exec -T postfix sh -c "printf 'From: diag@$DOM\r\nTo: $ADDR\r\nSubject: SIEVEDIAG probe\r\n\r\nbody\r\n' | sendmail -v -f 'diag@$DOM' '$ADDR'" || true
+  sleep 12
+  echo "SIEVE-DIAG --- postfix queue + delivery log ---"
+  compose exec -T postfix sh -c 'postqueue -p 2>&1 | head -20' || true
+  compose logs --tail=120 --no-color postfix 2>&1 | grep -iE 'SIEVEDIAG|lmtp|status=|dovecot|reject|defer|bounce|diag@' | tail -20 || true
   echo "SIEVE-DIAG --- result (SieveDiag folder = engine ran; INBOX = did not) ---"
   compose exec -T dovecot sh -c '
     MBOX="'"$MBOX"'"
