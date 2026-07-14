@@ -63,5 +63,10 @@ if [[ -n "$FAILED" ]]; then
   exit 1
 fi
 
+echo "==> SIEVE-DIAG effective config"
+compose exec -T dovecot doveconf -n 2>&1 | grep -iE 'protocol|mail_plugins|sieve|submission_host|postmaster|mail_home|mail_location' || true
+echo "==> SIEVE-DIAG recent dovecot log"
+compose logs --tail=200 --no-color dovecot 2>&1 | grep -iE 'sieve|lmtp|error|warn|deprecat|permission|plugin' | tail -80 || true
+
 docker image prune -f >/dev/null
 echo "==> Deploy OK"
