@@ -1399,7 +1399,13 @@ function AttachmentItem({
   const [previewLoading, setPreviewLoading] = useState(false);
   const isImage = att.mime.startsWith("image/") && att.size < 5_000_000;
   const isPdf = att.mime === "application/pdf";
-  const canPreview = isImage || isPdf;
+  const isVideo = att.mime.startsWith("video/");
+  const isAudio = att.mime.startsWith("audio/");
+  const isText =
+    att.mime.startsWith("text/") ||
+    att.mime === "application/json" ||
+    att.mime === "application/xml";
+  const canPreview = isImage || isPdf || isVideo || isAudio || isText;
 
   useEffect(() => {
     if (!isImage) return;
@@ -1521,10 +1527,21 @@ function AttachmentItem({
               alt={att.filename}
               className="mx-auto max-h-[70vh] w-auto object-contain"
             />
+          ) : isVideo ? (
+            <video
+              src={preview}
+              controls
+              className="mx-auto max-h-[70vh] w-auto rounded-md bg-black"
+            />
+          ) : isAudio ? (
+            <audio src={preview} controls className="w-full" />
           ) : (
+            // PDF uses the browser's native viewer; text/other is sandboxed so
+            // an HTML attachment can't run scripts in our origin.
             <iframe
               src={preview}
               title={att.filename}
+              sandbox={isPdf ? undefined : ""}
               className="h-[70vh] w-full rounded-md border border-[var(--color-border)] bg-white"
             />
           ))}

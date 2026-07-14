@@ -28,9 +28,11 @@ export class ManageSieveClient {
   private buffer = Buffer.alloc(0);
   private wake: (() => void) | null = null;
   private failure: Error | null = null;
+  private readonly host: string;
 
-  private constructor(socket: net.Socket) {
+  private constructor(socket: net.Socket, host: string) {
     this.socket = socket;
+    this.host = host;
     this.attach(socket);
   }
 
@@ -48,7 +50,7 @@ export class ManageSieveClient {
       socket.once("connect", () => {
         socket.setTimeout(0);
         socket.removeListener("error", onError);
-        const client = new ManageSieveClient(socket);
+        const client = new ManageSieveClient(socket, opts.host);
         // Consume the initial capability greeting.
         client.readResponse().then(
           () => resolve(client),
@@ -156,10 +158,13 @@ export class ManageSieveClient {
 
   async startTls(rejectUnauthorized: boolean): Promise<void> {
     await this.command("STARTTLS");
-    const host = (this.socket as net.Socket).remoteAddress;
+    // SNI must be a DNS host, never an IP (RFC 6066); Node warns and drops an
+    // IP servername, and an IP breaks cert-name validation when rejecting is on.
+    const host = this.host;
+    const isIp = !host || /^[0-9.]+$/.test(host) || host.includes(":");
     const tlsSocket = tls.connect({
       socket: this.socket,
-      servername: typeof host === "string" ? host : undefined,
+      servername: isIp ? undefined : host,
       rejectUnauthorized,
     });
     await new Promise<void>((resolve, reject) => {
@@ -177,14 +182,13 @@ export class ManageSieveClient {
     await this.command(`AUTHENTICATE "PLAIN" ${quote(initial)}`);
   }
 
-  // Upload a script under `name` using a synchronizing literal.
+  // Upload a script under `name`. Uses a non-synchronizing literal ({n+}) as
+  // recommended by RFC 5804 §1.6.1: the payload follows immediately with no
+  // continuation handshake, so it does not depend on how the server signals
+  // "+ go ahead" (a source of hangs/errors across ManageSieve implementations).
   async putScript(name: string, body: string): Promise<void> {
     const payload = Buffer.from(body, "utf8");
-    this.write(`PUTSCRIPT ${quote(name)} {${payload.length}}\r\n`);
-    const cont = await this.readLogicalLine();
-    if (!cont.startsWith("+")) {
-      throw new Error(`ManageSieve PUTSCRIPT rejected: ${cont}`);
-    }
+    this.write(`PUTSCRIPT ${quote(name)} {${payload.length}+}\r\n`);
     this.socket.write(payload);
     this.write("\r\n");
     const res = await this.readResponse();

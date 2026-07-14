@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -209,10 +210,12 @@ export class SieveService {
       await client.logout();
     } catch (err) {
       client.close();
-      this.logger.error(
-        `sieve sync failed for ${address}: ${(err as Error).message}`,
-      );
-      throw err;
+      const message = (err as Error).message;
+      this.logger.error(`sieve sync failed for ${address}: ${message}`);
+      throw new BadGatewayException({
+        title: "Filter saved, but activating it on the mail server failed",
+        detail: message,
+      });
     }
   }
 
