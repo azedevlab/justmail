@@ -67,4 +67,13 @@ watch_certs() {
 }
 watch_certs &
 
+# One-shot boot diagnostic: surface the relay/trust wiring into the container
+# log so delivery and Sieve-redirect problems are debuggable without shell
+# access. Non-fatal — never blocks startup.
+{
+  echo "=== postfix relay/trust effective config ==="
+  postconf mynetworks virtual_transport relayhost 2>/dev/null || true
+  echo "=== end postfix diagnostic ==="
+} >&2 || true
+
 exec /usr/sbin/postfix start-fg
