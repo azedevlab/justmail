@@ -20,12 +20,12 @@
   },
   "devDependencies": {
     "@justmail/eslint-config": "workspace:*",
-    "@tailwindcss/postcss": "^4.1.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.1.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "postcss": "^8.5.17",
-    "tailwindcss": "^4.1.0",
+    "postcss": "^8.5.19",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.8.0"
   }
 }
