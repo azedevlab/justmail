@@ -27,11 +27,11 @@
     "@nestjs/websockets": "^11.1.0",
     "@node-saml/node-saml": "^5.1.0",
     "@simplewebauthn/server": "^13.3.2",
-    "argon2": "^0.44.0",
+    "argon2": "^0.45.1",
     "cookie-parser": "^1.4.7",
     "express": "^5.1.0",
-    "fast-xml-parser": "^5.10.0",
-    "imapflow": "^1.4.7",
+    "fast-xml-parser": "^5.10.1",
+    "imapflow": "^1.5.0",
     "ioredis": "^5.4.1",
     "ldapts": "^9.0.0",
     "nodemailer": "^9.0.3",
@@ -42,7 +42,7 @@
     "sanitize-html": "^2.17.6",
     "sharp": "^0.35.3",
     "web-push": "^3.6.7",
-    "ws": "^8.18.0",
+    "ws": "^8.21.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
