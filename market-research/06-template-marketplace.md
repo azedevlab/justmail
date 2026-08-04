@@ -64,7 +64,7 @@ Design for a template marketplace: sellable individually (one-time), bundled int
 | 39 | SLA Breach Radar | Tracks first-response/resolution SLAs across channels, daily breach report | Cron | Query inbox data → compute SLAs → Slack/WA digest | Chatwoot/B24, Sheets | Support managers | E | ✔/✔/– |
 | 40 | Multilingual Reply Assistant | Drafts replies in customer's language (AZ/RU/EN), agent approves with one tap | Agent request | LLM draft → approval → send | WA, LLM, Slack | Support/sales teams | E | ✔/✔/– |
 | 41 | FAQ Auto-Learner | Mines resolved conversations weekly, proposes new FAQ/KB entries for approval | Weekly cron | Cluster questions → LLM draft KB → approval flow | LLM, DB, Notion/Sheets | Growing support teams | M | ✔/✔/– |
-| 42 | VIP Customer Flagger | Recognizes high-LTV customers in any channel, alerts a senior agent | Inbound msg | CRM lookup → VIP路由 route → agent alert | WA, B24 | Banks-adjacent, premium retail | E | ✔/✔/– |
+| 42 | VIP Customer Flagger | Recognizes high-LTV customers in any channel, alerts a senior agent | Inbound msg | CRM lookup → VIP route → agent alert | WA, B24 | Banks-adjacent, premium retail | E | ✔/✔/– |
 | 43 | Telegram Support Bot for ISPs | Balance check, tariff info, outage reports, ticket creation for internet providers | TG inbound | Menu/LLM → billing API → ticket | TG, LLM, billing API | Regional ISPs | M | ✔/✔/✔ |
 
 ## 6.4 Marketing & SMM (15 templates)
@@ -294,7 +294,7 @@ Design for a template marketplace: sellable individually (one-time), bundled int
 
 | # | Template | Description | Trigger | Actions | Integrations | Target | Diff | Sell T/M/S |
 |---|---|---|---|---|---|---|---|---|
-| 196 | Approval Matrix Engine | Any request (purchase, discount, leave) routed по amount/type through approval chain in WhatsApp | Form/WA | Route → approvals → execute → log | WA, Sheets | All companies | M | ✔/✔/✔ |
+| 196 | Approval Matrix Engine | Any request (purchase, discount, leave) routed by amount/type through approval chain in WhatsApp | Form/WA | Route → approvals → execute → log | WA, Sheets | All companies | M | ✔/✔/✔ |
 | 197 | Meeting Minutes Agent | Recorded meetings → transcript, decisions, action items assigned with deadlines | Recording upload | STT → LLM minutes → tasks → distribution | STT, LLM, TG/Jira | All companies | M | ✔/✔/✔ |
 | 198 | Document Expiry Registry | Corporate docs (POAs, certificates, insurance) tracked with renewal alerts | Cron | Registry → alerts → renewal tasks | Sheets, WA | All companies | E | ✔/✔/✔ |
 | 199 | Scanned Archive Digitizer | Legacy paper archives OCR'd, named, indexed, searchable | Batch upload | OCR → LLM classify/name → index → store | OCR, LLM, S3/Drive | Law, accounting, government | M | –/✔/– |
