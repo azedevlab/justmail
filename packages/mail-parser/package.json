@@ -18,7 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "mailparser": "^3.7.1"
+    "mailparser": "^3.9.15"
   },
   "devDependencies": {
     "@types/mailparser": "^3.4.5",
