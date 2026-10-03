@@ -18,10 +18,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "mailparser": "^3.7.1"
+    "mailparser": "^3.9.32"
   },
   "devDependencies": {
-    "@types/mailparser": "^3.4.5",
+    "@types/mailparser": "^3.9.0",
     "@types/node": "^26.1.1",
     "typescript": "^5.8.0",
     "vite": "^8.1.4",
